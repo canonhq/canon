@@ -10,7 +10,7 @@ Specs define **intent** — what should be built. Code reveals **reality** — w
 
 ## Key Concepts
 
-### [OpenSpec Framework](./openspec)
+### [Spec-Driven Development](./spec-driven-development)
 
 The structured artifact model that makes specs machine-readable. Proposals, sections, acceptance criteria, and tasks — all in markdown, all tracked.
 

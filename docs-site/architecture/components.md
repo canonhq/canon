@@ -5,7 +5,7 @@ Per-module documentation for the Canon codebase.
 ## Project Structure
 
 ```
-src/specwright/
+src/canon/
   main.py              # FastAPI app: webhook routes, health checks
   settings.py          # Pydantic Settings (env vars)
   github/              # GitHub App webhook handling
@@ -38,7 +38,7 @@ src/specwright/
   mcp/                 # MCP server
 frontend/              # Vue 3 SPA (Vite + Tailwind + Pinia)
 tests/                 # pytest tests (mirrors src structure)
-chart/specwright/      # Helm chart for K8s deployment
+chart/canon/      # Helm chart for K8s deployment
 ```
 
 ## `github/` — GitHub Integration

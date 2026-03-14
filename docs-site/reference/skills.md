@@ -10,14 +10,14 @@ claude plugin add canonhq/canon
 
 ## Commands
 
-### `/sw:context` — Load Spec Context
+### `/canon-context` — Load Spec Context
 
 Load spec context for your current task. Automatically identifies relevant specs from git changes or a user-provided topic.
 
 **Usage:**
 ```
-/sw:context
-/sw:context auth migration
+/canon-context
+/canon-context auth migration
 ```
 
 **What it does:**
@@ -25,13 +25,13 @@ Load spec context for your current task. Automatically identifies relevant specs
 - Matches changes against spec sections
 - Loads relevant specs, ACs, and ticket links into context
 
-### `/sw:task` — Work on a Task
+### `/canon-task` — Work on a Task
 
 Pick up a spec-driven task, work through its acceptance criteria, and mark it done.
 
 **Usage:**
 ```
-/sw:task
+/canon-task
 ```
 
 **What it does:**
@@ -40,14 +40,14 @@ Pick up a spec-driven task, work through its acceptance criteria, and mark it do
 - Marks ACs as realized with code evidence
 - Updates spec status when all ACs are done
 
-### `/sw:verify` — Verify Implementation
+### `/canon-verify` — Verify Implementation
 
 Verify code against spec acceptance criteria. Use after implementing a feature or during code review.
 
 **Usage:**
 ```
-/sw:verify
-/sw:verify docs/specs/auth-hardening.md
+/canon-verify
+/canon-verify docs/specs/auth-hardening.md
 ```
 
 **What it does:**
@@ -55,14 +55,14 @@ Verify code against spec acceptance criteria. Use after implementing a feature o
 - Reports evidence (file, line numbers) for each evaluation
 - Suggests spec or code updates for conflicts
 
-### `/sw:new` — Create a Spec
+### `/canon-new` — Create a Spec
 
 Create a new spec document from a template.
 
 **Usage:**
 ```
-/sw:new
-/sw:new "User Notifications"
+/canon-new
+/canon-new "User Notifications"
 ```
 
 **What it does:**
@@ -70,13 +70,13 @@ Create a new spec document from a template.
 - Creates spec file from template
 - Optionally commits to git
 
-### `/sw:review` — Review Against Docs
+### `/canon-review` — Review Against Docs
 
 Review code changes against all documentation — specs, ADRs, READMEs, architecture docs.
 
 **Usage:**
 ```
-/sw:review
+/canon-review
 ```
 
 **What it does:**
@@ -84,13 +84,13 @@ Review code changes against all documentation — specs, ADRs, READMEs, architec
 - Flags stale documentation
 - Suggests doc updates
 
-### `/sw:status` — Coverage Dashboard
+### `/canon-status` — Coverage Dashboard
 
 Show spec coverage dashboard.
 
 **Usage:**
 ```
-/sw:status
+/canon-status
 ```
 
 **What it does:**
@@ -98,13 +98,13 @@ Show spec coverage dashboard.
 - Shows realized vs. total acceptance criteria
 - Highlights stale or blocked sections
 
-### `/sw:plan` — Spec-Driven Planning
+### `/canon-plan` — Spec-Driven Planning
 
 Start a spec-driven planning workflow from exploration through spec creation to implementation tasks.
 
 **Usage:**
 ```
-/sw:plan
+/canon-plan
 ```
 
 **What it does:**
@@ -113,14 +113,14 @@ Start a spec-driven planning workflow from exploration through spec creation to 
 - Creates spec with sections and ACs
 - Generates implementation tasks
 
-### `/sw:update` — Update Spec Statuses
+### `/canon-update` — Update Spec Statuses
 
 Update spec statuses based on code implementation evidence.
 
 **Usage:**
 ```
-/sw:update
-/sw:update docs/specs/auth-hardening.md
+/canon-update
+/canon-update docs/specs/auth-hardening.md
 ```
 
 **What it does:**
@@ -128,13 +128,13 @@ Update spec statuses based on code implementation evidence.
 - Proposes status transitions for spec sections
 - Applies updates with realization evidence
 
-### `/sw:audit` — Full Spec Audit
+### `/canon-audit` — Full Spec Audit
 
-Full audit workflow: scan all specs against the codebase, update statuses, sync to ticket system, and commit. Combines `/sw:update` + `canon sync` into a single command.
+Full audit workflow: scan all specs against the codebase, update statuses, sync to ticket system, and commit. Combines `/canon-update` + `canon sync` into a single command.
 
 **Usage:**
 ```
-/sw:audit
+/canon-audit
 ```
 
 **What it does:**

@@ -39,12 +39,12 @@ graph TB
 
 | Component | Role | Key Files |
 |-----------|------|-----------|
-| [FastAPI App](./system-design#fastapi-app) | Webhook routes, health checks | `src/specwright/main.py` |
-| [Spec Parser](./system-design#spec-parser) | Markdown parsing, frontmatter extraction | `src/specwright/parser/` |
-| [Claude Agent](./system-design#agent-runtime) | PR analysis, realization checking | `src/specwright/agent/` |
-| [Ticket Sync](./system-design#ticket-sync) | Bidirectional ticket synchronization | `src/specwright/sync/` |
-| [GitHub Client](./system-design#github-client) | GitHub API, webhook verification | `src/specwright/github/` |
-| [Config Parser](./system-design#config-parser) | CANON.yaml validation | `src/specwright/config/` |
+| [FastAPI App](./system-design#fastapi-app) | Webhook routes, health checks | `src/canon/main.py` |
+| [Spec Parser](./system-design#spec-parser) | Markdown parsing, frontmatter extraction | `src/canon/parser/` |
+| [Claude Agent](./system-design#agent-runtime) | PR analysis, realization checking | `src/canon/agent/` |
+| [Ticket Sync](./system-design#ticket-sync) | Bidirectional ticket synchronization | `src/canon/sync/` |
+| [GitHub Client](./system-design#github-client) | GitHub API, webhook verification | `src/canon/github/` |
+| [Config Parser](./system-design#config-parser) | CANON.yaml validation | `src/canon/config/` |
 
 ## Further Reading
 

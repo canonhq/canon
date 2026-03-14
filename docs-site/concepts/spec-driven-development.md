@@ -1,6 +1,6 @@
-# OpenSpec Framework
+# Spec-Driven Development
 
-Canon adopts an [OpenSpec](https://github.com/Fission-AI/OpenSpec)-inspired structured artifact model. Specs are not freeform wiki pages — they're structured programs that the platform can parse, track, and verify.
+Canon uses a structured artifact model where specs are not freeform wiki pages — they're structured programs that the platform can parse, track, and verify.
 
 ## Artifact Types
 

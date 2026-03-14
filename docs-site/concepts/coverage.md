@@ -50,7 +50,7 @@ This creates an audit trail connecting specs to code. If the code changes in a l
 
 ## Coverage Dashboard
 
-The `/sw:status` command (or the web dashboard) shows coverage at a glance:
+The `/canon-status` command (or the web dashboard) shows coverage at a glance:
 
 ```
 Spec Coverage — payments-overhaul.md
@@ -96,4 +96,4 @@ At the org level (Tier 3), coverage aggregates across all repos:
 - **Guide**: [Writing Specs](/guides/writing-specs) — how to write testable acceptance criteria
 - **Reference**: [CLI](/reference/cli) — `canon status` for the coverage dashboard, `canon verify` for AC verification
 - **Reference**: [MCP Tools](/reference/mcp) — `get_coverage` for programmatic coverage queries
-- **Reference**: [Claude Code Skills](/reference/skills) — `/sw:status` for interactive coverage views
+- **Reference**: [Claude Code Skills](/reference/skills) — `/canon-status` for interactive coverage views

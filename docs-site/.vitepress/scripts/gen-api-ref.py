@@ -33,7 +33,7 @@ def get_openapi_schema() -> dict:
     os.environ.setdefault("AUTH0_AUDIENCE", "dummy")
 
     try:
-        from specwright.main import app
+        from canon.main import app
 
         return app.openapi()
     except Exception as e:

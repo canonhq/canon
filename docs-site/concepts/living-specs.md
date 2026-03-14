@@ -113,4 +113,4 @@ You don't migrate content. You migrate *workflows*. When the workflow lives in C
 - **Concept**: [Delta Tracking](/concepts/delta-tracking) — how status transitions and evidence are recorded
 - **Guide**: [Ticket Sync](/guides/ticket-sync) — configuring bidirectional sync with Jira, Linear, GitHub Issues
 - **Reference**: [CLI](/reference/cli) — `canon verify` and `canon audit` commands
-- **Reference**: [Claude Code Skills](/reference/skills) — `/sw:verify`, `/sw:audit` for agent-assisted verification
+- **Reference**: [Claude Code Skills](/reference/skills) — `/canon-verify`, `/canon-audit` for agent-assisted verification

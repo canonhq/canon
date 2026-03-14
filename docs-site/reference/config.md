@@ -1,7 +1,7 @@
 # CANON.yaml Reference
 
-::: warning Deprecation Notice
-`SPECWRIGHT.yaml` is deprecated but still supported for backward compatibility. Canon checks for `CANON.yaml` first, then falls back to `SPECWRIGHT.yaml`. New projects should use `CANON.yaml`.
+::: info Legacy Config
+If your repo has a `SPECWRIGHT.yaml`, Canon will still read it as a fallback. Rename it to `CANON.yaml` when convenient.
 :::
 
 The `CANON.yaml` file configures Canon behavior for a repository. Place it in the repository root.

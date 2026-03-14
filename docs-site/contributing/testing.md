@@ -49,7 +49,7 @@ tests/
 
 ```python
 import pytest
-from specwright.parser.parse import parse_spec
+from canon.parser.parse import parse_spec
 
 def test_parse_frontmatter():
     content = """---
@@ -100,7 +100,7 @@ Tests should not make real API calls. Mock external services:
 ```python
 from unittest.mock import AsyncMock, patch
 
-@patch("specwright.agent.client.ClaudeClient.analyze")
+@patch("canon.agent.client.ClaudeClient.analyze")
 async def test_pr_analysis(mock_analyze):
     mock_analyze.return_value = {
         "summary": "Test summary",

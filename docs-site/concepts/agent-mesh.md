@@ -121,6 +121,6 @@ Each new repo makes every existing repo's agent smarter. Each indexed doc enrich
 - **Guide**: [Self-Hosting](/guides/self-hosting) — deploy Canon on your own K8s cluster
 - **Guide**: [CI Integration](/guides/ci-integration) — run `canon verify` in your CI pipeline
 - **Reference**: [MCP Tools](/reference/mcp) — the 11 tools exposed to coding agents
-- **Reference**: [Claude Code Skills](/reference/skills) — `/sw:*` commands for interactive agent workflows
+- **Reference**: [Claude Code Skills](/reference/skills) — `/canon-*` commands for interactive agent workflows
 - **Architecture**: [System Design](/architecture/system-design) — component diagram and deployment architecture
 - **Architecture**: [Data Flow](/architecture/data-flow) — PR analysis and ticket sync request flows

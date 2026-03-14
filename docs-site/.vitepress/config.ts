@@ -83,7 +83,7 @@ export default withMermaid(
             text: "Concepts",
             items: [
               { text: "Overview", link: "/concepts/" },
-              { text: "OpenSpec Framework", link: "/concepts/openspec" },
+              { text: "Spec-Driven Development", link: "/concepts/spec-driven-development" },
               { text: "Living Specs", link: "/concepts/living-specs" },
               { text: "Delta Tracking", link: "/concepts/delta-tracking" },
               { text: "Agent Mesh", link: "/concepts/agent-mesh" },

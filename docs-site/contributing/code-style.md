@@ -30,7 +30,7 @@ uv run ruff format --check  # check formatting without changing files
 ```bash
 make typecheck
 # or
-uv run mypy src/specwright
+uv run mypy src/canon
 ```
 
 ### Conventions

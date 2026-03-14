@@ -54,14 +54,14 @@ claude plugin add canonhq/canon
 
 | Command | Description |
 |---------|-------------|
-| `/sw:context` | Load spec context for your current task |
-| `/sw:task` | Pick up a task, implement ACs, mark done |
-| `/sw:verify` | Verify code against spec acceptance criteria |
-| `/sw:new` | Create a new spec from template |
-| `/sw:review` | Review changes against all documentation |
-| `/sw:status` | Show spec coverage dashboard |
-| `/sw:plan` | Spec-driven planning workflow |
-| `/sw:update` | Update spec statuses from code evidence |
+| `/canon-context` | Load spec context for your current task |
+| `/canon-task` | Pick up a task, implement ACs, mark done |
+| `/canon-verify` | Verify code against spec acceptance criteria |
+| `/canon-new` | Create a new spec from template |
+| `/canon-review` | Review changes against all documentation |
+| `/canon-status` | Show spec coverage dashboard |
+| `/canon-plan` | Spec-driven planning workflow |
+| `/canon-update` | Update spec statuses from code evidence |
 
 ## MCP Server {#mcp-server}
 

@@ -67,7 +67,7 @@ How this will be deployed and validated.
 Create a new spec with the Claude Code plugin:
 
 ```
-/sw:new
+/canon-new
 ```
 
 Or copy the template manually:

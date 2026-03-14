@@ -45,7 +45,7 @@ DESCRIPTIONS: dict[str, str] = {
 
 
 def run_help(args: list[str]) -> str:
-    """Run a specwright command with --help and return stdout."""
+    """Run a canon command with --help and return stdout."""
     result = subprocess.run(
         ["uv", "run", "canon", *args, "--help"],
         capture_output=True,

@@ -25,7 +25,7 @@ Canon is a Python application built on FastAPI, with modular components for spec
 
 ## FastAPI App {#fastapi-app}
 
-**File:** `src/specwright/main.py`
+**File:** `src/canon/main.py`
 
 The main application exposes:
 - `POST /webhook` — GitHub App webhook endpoint
@@ -38,7 +38,7 @@ All webhook events are verified using HMAC SHA-256 signature checking before bei
 
 ## Spec Parser {#spec-parser}
 
-**Files:** `src/specwright/parser/`
+**Files:** `src/canon/parser/`
 
 The parser processes markdown spec files into structured Pydantic models:
 
@@ -62,7 +62,7 @@ flowchart LR
 
 ## Agent Runtime {#agent-runtime}
 
-**Files:** `src/specwright/agent/`
+**Files:** `src/canon/agent/`
 
 The Claude agent runtime handles PR analysis:
 
@@ -93,7 +93,7 @@ The user message includes PR metadata, spec summaries, context docs, changed fil
 
 ## GitHub Client {#github-client}
 
-**Files:** `src/specwright/github/`
+**Files:** `src/canon/github/`
 
 - `verify.py` — HMAC SHA-256 webhook signature verification
 - `client.py` — GitHub API client (JWT auth via GitHub App, httpx)
@@ -102,7 +102,7 @@ The user message includes PR metadata, spec summaries, context docs, changed fil
 
 ## Ticket Sync {#ticket-sync}
 
-**Files:** `src/specwright/sync/`
+**Files:** `src/canon/sync/`
 
 Bidirectional synchronization between spec sections and external ticket systems:
 
@@ -113,7 +113,7 @@ Bidirectional synchronization between spec sections and external ticket systems:
 
 ### Server-Proxied Sync
 
-**Files:** `src/specwright/sync/adapters/api_proxy.py`, `src/specwright/web/ticket_routes.py`
+**Files:** `src/canon/sync/adapters/api_proxy.py`, `src/canon/web/ticket_routes.py`
 
 When CLI users are logged in (`canon login`), the sync engine uses the `CanonApiAdapter` instead of calling GitHub directly. This adapter routes ticket CRUD through the Canon server's `/api/tickets/*` endpoints, which use the GitHub App installation token. The server endpoints are in `web/ticket_routes.py`.
 
@@ -130,7 +130,7 @@ class TicketAdapter:
 
 ## Config Parser {#config-parser}
 
-**Files:** `src/specwright/config/`
+**Files:** `src/canon/config/`
 
 - `parse.py` — YAML parsing into Pydantic models with validation
 
@@ -138,7 +138,7 @@ Validates `CANON.yaml` files and provides typed access to all configuration valu
 
 ## Cron Jobs
 
-**Files:** `src/specwright/cron/`
+**Files:** `src/canon/cron/`
 
 - `sync_status.py` — Standalone reverse sync script run as a Kubernetes CronJob
 
