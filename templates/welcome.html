@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Welcome - Canon{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto py-8">
+  <!-- Greeting card -->
+  <div class="text-center mb-10">
+    <h1 class="text-3xl font-display font-bold text-slate-800 dark:text-white mb-3">
+      Welcome{% if user_name %}, {{ user_name }}{% endif %}
+    </h1>
+    <p class="text-slate-600 dark:text-slate-400 text-lg">
+      Canon keeps your specs, tickets, and code in sync.
+      Let's get you set up.
+    </p>
+  </div>
+
+  <!-- Setup checklist -->
+  <div class="bg-white dark:bg-surface-elevated rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm">
+    <h2 class="text-lg font-semibold text-slate-800 dark:text-white mb-6">Setup checklist</h2>
+
+    <ol class="space-y-6">
+      <!-- Step 1: Sign in (always complete) -->
+      <li class="flex items-start gap-4">
+        <div class="flex-shrink-0 mt-0.5">
+          <svg class="w-6 h-6 text-accent-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div>
+          <p class="font-medium text-slate-800 dark:text-white">Sign in</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400">You're signed in and ready to go.</p>
+        </div>
+      </li>
+
+      <!-- Step 2: Install GitHub App -->
+      <li class="flex items-start gap-4">
+        <div class="flex-shrink-0 mt-0.5">
+          {% if app_installed %}
+          <svg class="w-6 h-6 text-accent-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {% else %}
+          <svg class="w-6 h-6 text-slate-300 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <circle cx="12" cy="12" r="9" />
+          </svg>
+          {% endif %}
+        </div>
+        <div>
+          <p class="font-medium text-slate-800 dark:text-white">Install the GitHub App</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mb-2">
+            Canon needs access to your repos to discover and sync specs.
+          </p>
+          {% if not app_installed %}
+          <a href="{{ install_url }}"
+             target="_blank"
+             rel="noopener"
+             class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-accent-500 to-cyan-500 hover:from-accent-600 hover:to-cyan-600 transition-all shadow-sm">
+            Install on GitHub
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+            </svg>
+          </a>
+          {% endif %}
+        </div>
+      </li>
+
+      <!-- Step 3: Create first spec -->
+      <li class="flex items-start gap-4">
+        <div class="flex-shrink-0 mt-0.5">
+          {% if has_specs %}
+          <svg class="w-6 h-6 text-accent-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {% else %}
+          <svg class="w-6 h-6 text-slate-300 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <circle cx="12" cy="12" r="9" />
+          </svg>
+          {% endif %}
+        </div>
+        <div>
+          <p class="font-medium text-slate-800 dark:text-white">Create your first spec</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mb-2">
+            Add a structured markdown file to <code class="text-xs bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">docs/specs/</code> in any repo.
+          </p>
+          {% if not has_specs %}
+          <a href="https://github.com/canonhq/example-specs"
+             target="_blank"
+             rel="noopener"
+             class="text-sm text-accent-500 hover:text-accent-400 transition-colors">
+            View example specs &rarr;
+          </a>
+          {% endif %}
+        </div>
+      </li>
+    </ol>
+  </div>
+
+  <!-- Skip link -->
+  <div class="text-center mt-8">
+    <a href="/app/{{ current_org }}/"
+       class="text-sm text-slate-500 hover:text-accent-400 transition-colors">
+      Skip to Dashboard &rarr;
+    </a>
+  </div>
+</div>
+{% endblock %}

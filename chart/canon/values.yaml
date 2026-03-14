@@ -1,0 +1,238 @@
+## @section Global parameters
+## @param replicaCount Number of replicas
+replicaCount: 1
+
+## @section Image parameters
+## @param image.registry Container image registry
+## @param image.repository Container image repository
+## @param image.tag Container image tag (defaults to appVersion)
+## @param image.pullPolicy Container image pull policy
+image:
+  registry: ""
+  repository: canon
+  tag: ""
+  pullPolicy: IfNotPresent
+
+## @param imagePullSecrets Docker registry pull secret names
+imagePullSecrets: []
+
+## @param nameOverride Override chart name
+nameOverride: ""
+## @param fullnameOverride Override full resource name
+fullnameOverride: ""
+
+## @section Service account
+## @param serviceAccount.create Create a service account
+## @param serviceAccount.name Service account name
+## @param serviceAccount.annotations Annotations for the service account
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+## @section GitHub App secrets
+## @param secrets.githubApp.appId GitHub App ID
+## @param secrets.githubApp.privateKey GitHub App private key (PEM)
+## @param secrets.githubApp.webhookSecret Webhook secret
+## @param secrets.githubApp.installationId GitHub App installation ID
+## @param secrets.githubApp.existingSecret Use existing secret instead
+secrets:
+  githubApp:
+    appId: ""
+    privateKey: ""
+    webhookSecret: ""
+    installationId: ""
+    existingSecret: ""
+
+  ## @section Anthropic secrets
+  ## @param secrets.anthropic.apiKey Anthropic API key
+  ## @param secrets.anthropic.existingSecret Use existing secret
+  anthropic:
+    apiKey: ""
+    existingSecret: ""
+
+  ## @section Neon DB secrets (optional)
+  ## @param secrets.neon.databaseUrl PostgreSQL connection string
+  ## @param secrets.neon.existingSecret Use existing secret
+  neon:
+    databaseUrl: ""
+    existingSecret: ""
+
+  ## @section GCP secrets (optional — Vertex AI embeddings)
+  ## @param secrets.gcp.serviceAccountKey GCP service account key JSON
+  ## @param secrets.gcp.project GCP project ID
+  ## @param secrets.gcp.location GCP region for Vertex AI
+  ## @param secrets.gcp.existingSecret Use existing secret
+  gcp:
+    serviceAccountKey: ""
+    project: ""
+    location: "us-central1"
+    existingSecret: ""
+
+  ## @section Auth0 secrets (optional — gates /app/* behind login)
+  ## @param secrets.auth0.domain Auth0 tenant domain
+  ## @param secrets.auth0.clientId Auth0 application client ID
+  ## @param secrets.auth0.clientSecret Auth0 application client secret
+  ## @param secrets.auth0.audience Auth0 API audience (required for JWT access tokens)
+  ## @param secrets.auth0.deviceClientId Auth0 Native app client ID for CLI device auth
+  ## @param secrets.auth0.existingSecret Use existing secret
+  auth0:
+    domain: ""
+    clientId: ""
+    clientSecret: ""
+    audience: ""
+    deviceClientId: ""
+    existingSecret: ""
+
+  ## @section MCP secrets (optional — API key for MCP HTTP endpoint)
+  ## @param secrets.mcp.apiKey API key for MCP HTTP endpoint (open if empty)
+  ## @param secrets.mcp.existingSecret Use existing secret
+  mcp:
+    apiKey: ""
+    existingSecret: ""
+
+  ## @section Jira secrets (optional)
+  ## @param secrets.jira.host Jira instance hostname
+  ## @param secrets.jira.email Jira service account email
+  ## @param secrets.jira.apiToken Jira API token
+  ## @param secrets.jira.existingSecret Use existing secret
+  jira:
+    host: ""
+    email: ""
+    apiToken: ""
+    existingSecret: ""
+
+  ## @section PostHog secrets (optional — analytics + error tracking)
+  ## @param secrets.posthog.apiKey PostHog project API key
+  ## @param secrets.posthog.existingSecret Use existing secret
+  posthog:
+    apiKey: ""
+    existingSecret: ""
+
+## @section Application configuration
+## @param config.port Server port
+## @param config.logLevel Log level (debug, info, warning, error)
+## @param config.webhookPath Webhook endpoint path
+## @param config.webOrg Default GitHub org for the web UI dashboard
+## @param config.cacheTtlSeconds In-memory cache TTL in seconds
+## @param config.posthogHost PostHog ingest host
+## @param config.posthogLogsEnabled Enable OTel log export to PostHog
+## @param config.posthogLogsMinLevel Minimum log level for OTel export
+config:
+  port: 3000
+  logLevel: "info"
+  webhookPath: "/webhook"
+  webOrg: "Gerner-Ventures"
+  cacheTtlSeconds: 300
+  posthogHost: "https://us.i.posthog.com"
+  posthogLogsEnabled: "false"
+  posthogLogsMinLevel: "WARNING"
+  platformUrl: ""
+
+## @section Service parameters
+## @param service.type Kubernetes service type
+## @param service.port Service port
+service:
+  type: ClusterIP
+  port: 80
+
+## @section Ingress parameters
+## @param ingress.enabled Enable ingress
+## @param ingress.className Ingress class name
+## @param ingress.annotations Ingress annotations
+## @param ingress.hostname Ingress hostname
+## @param ingress.tls Enable TLS
+## @param ingress.tlsSecret TLS secret name
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  hostname: ""
+  tls: false
+  tlsSecret: ""
+
+## @section Pod parameters
+## @param resources Resource limits and requests
+resources:
+  limits:
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+## @param podAnnotations Pod annotations
+podAnnotations: {}
+
+## @param podSecurityContext Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+
+## @param securityContext Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+## @section CronJob parameters
+## @param cronJob.enabled Enable reverse sync CronJob
+## @param cronJob.schedule Cron schedule expression
+## @param cronJob.concurrencyPolicy CronJob concurrency policy
+cronJob:
+  enabled: true
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+
+## @section Stale check CronJob parameters
+## @param staleCheckCronJob.enabled Enable stale documentation check CronJob
+## @param staleCheckCronJob.schedule Cron schedule expression (default: daily at 6am UTC)
+## @param staleCheckCronJob.concurrencyPolicy CronJob concurrency policy
+staleCheckCronJob:
+  enabled: false
+  schedule: "0 6 * * *"
+  concurrencyPolicy: Forbid
+
+## @section Coverage snapshot CronJob parameters
+## @param coverageSnapshotCronJob.enabled Enable daily coverage snapshot CronJob
+## @param coverageSnapshotCronJob.schedule Cron schedule expression (default: daily at 5am UTC)
+## @param coverageSnapshotCronJob.concurrencyPolicy CronJob concurrency policy
+coverageSnapshotCronJob:
+  enabled: false
+  schedule: "0 5 * * *"
+  concurrencyPolicy: Forbid
+
+## @section Re-index CronJob parameters
+## @param reindexCronJob.enabled Enable full re-index CronJob
+## @param reindexCronJob.schedule Cron schedule expression (default: nightly at 2am)
+## @param reindexCronJob.concurrencyPolicy CronJob concurrency policy
+reindexCronJob:
+  enabled: false
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+
+## @section Autoscaling
+## @param autoscaling.enabled Enable HPA
+## @param autoscaling.minReplicas Minimum replicas
+## @param autoscaling.maxReplicas Maximum replicas
+## @param autoscaling.targetCPUUtilizationPercentage Target CPU utilization
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+## @section Network policy
+## @param networkPolicy.enabled Enable network policy
+networkPolicy:
+  enabled: false
+
+## @section Pod disruption budget
+## @param podDisruptionBudget.enabled Enable PDB
+## @param podDisruptionBudget.minAvailable Minimum available pods
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1

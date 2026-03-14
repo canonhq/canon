@@ -1,0 +1,100 @@
+/* Canon brand tokens mapped to VitePress CSS variables */
+
+/* Google Fonts loaded via Layout.vue <head> injection */
+
+:root {
+  /* Brand colors → VitePress variables (Canon amber/gold) */
+  --vp-c-brand-1: #D4880A;
+  --vp-c-brand-2: #E8A030;
+  --vp-c-brand-3: #B8760A;
+  --vp-c-brand-soft: rgba(212, 136, 10, 0.14);
+
+  /* Accent (used for tips, badges) */
+  --vp-c-tip-1: #5C8A4D;
+  --vp-c-tip-2: #6B9E5B;
+  --vp-c-tip-3: #4A7040;
+  --vp-c-tip-soft: rgba(92, 138, 77, 0.14);
+
+  /* Typography — match marketing site */
+  --vp-font-family-base: "DM Sans", system-ui, -apple-system, sans-serif;
+  --vp-font-family-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code",
+    monospace;
+
+  /* Home hero gradient */
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(
+    135deg,
+    #D4880A 30%,
+    #E8A030 100%
+  );
+  --vp-home-hero-image-background-image: linear-gradient(
+    135deg,
+    rgba(212, 136, 10, 0.2) 30%,
+    rgba(232, 160, 48, 0.2) 100%
+  );
+  --vp-home-hero-image-filter: blur(44px);
+}
+
+/* Light mode — warm cream tones matching marketing site */
+:root {
+  --vp-c-bg: #FAF8F5;
+  --vp-c-bg-alt: #F3F0EB;
+  --vp-c-bg-elv: #FFFFFF;
+  --vp-c-text-1: #2C2A27;
+  --vp-c-text-2: #6B6560;
+  --vp-c-text-3: #9B9590;
+  --vp-c-divider: #E2DDD5;
+}
+
+/* Dark mode — warm dark tones matching marketing site */
+.dark {
+  --vp-c-bg: #1A1816;
+  --vp-c-bg-alt: #242120;
+  --vp-c-bg-elv: #2E2B29;
+  --vp-c-text-1: #F0EDE8;
+  --vp-c-text-2: #9B9590;
+  --vp-c-text-3: #6B6560;
+  --vp-c-divider: #3D3835;
+}
+
+/* Nav title uses Canon brand amber */
+.VPNavBarTitle .title {
+  font-family: "Fraunces", Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  color: #D4880A;
+}
+
+/* Headings use Fraunces (display font) */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4,
+.VPHero .name,
+.VPFeature .title {
+  font-family: "Fraunces", Georgia, "Times New Roman", serif;
+}
+
+/* Hero name styling */
+.VPHero .name {
+  font-weight: 700;
+}
+
+/* Slightly tighter line-height for headings */
+.vp-doc h1 {
+  letter-spacing: -0.02em;
+}
+
+.vp-doc h2 {
+  letter-spacing: -0.01em;
+}
+
+/* Button styling to match marketing site */
+.VPButton.brand {
+  background-color: #D4880A !important;
+  border-color: #D4880A !important;
+}
+
+.VPButton.brand:hover {
+  background-color: #B8760A !important;
+  border-color: #B8760A !important;
+}

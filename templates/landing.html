@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Canon — Documentation that keeps up.</title>
+  <meta name="description" content="Canon is an AI-native documentation platform. Write structured specs, get AI-powered PR reviews, bidirectional ticket sync, and code-aware verification that your docs match reality.">
+  <script>
+    (function(){
+      var s = localStorage.getItem('sw-theme');
+      var d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (s === 'dark' || (s !== 'light' && d))
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/brand.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: var(--font-body);
+      color: var(--theme-text);
+      background-color: var(--theme-bg);
+      line-height: 1.6;
+    }
+
+    /* Nav */
+    .landing-nav {
+      position: sticky;
+      top: 0;
+      background: var(--theme-bg-nav);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--theme-border);
+      z-index: 50;
+    }
+    .landing-nav-inner {
+      max-width: 72rem;
+      margin: 0 auto;
+      padding: 0 var(--space-6);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 56px;
+    }
+    .landing-wordmark {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: var(--text-xl);
+      text-decoration: none;
+      background: linear-gradient(135deg, var(--color-gradient-start), var(--color-gradient-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .landing-nav-links {
+      display: flex;
+      align-items: center;
+      gap: var(--space-6);
+    }
+    .landing-nav-links a {
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--theme-text-secondary);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .landing-nav-links a:hover { color: var(--theme-text); }
+    .cta-btn {
+      background: linear-gradient(135deg, var(--color-gradient-start), var(--color-gradient-end));
+      color: #fff !important;
+      padding: var(--space-2) var(--space-6);
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      text-decoration: none;
+      transition: opacity 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .cta-btn:hover { opacity: 0.9; }
+    .cta-outline {
+      color: var(--theme-text-secondary);
+      border: 1px solid var(--theme-border);
+      padding: var(--space-2) var(--space-6);
+      border-radius: var(--radius-md);
+      font-weight: 500;
+      text-decoration: none;
+      transition: border-color 0.15s, color 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .cta-outline:hover { border-color: var(--theme-text-secondary); color: var(--theme-text); }
+
+    /* Nav layout: wordmark left, links center-right, controls far-right */
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    /* Hamburger button */
+    .nav-hamburger {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px;
+      color: var(--theme-text-muted);
+    }
+    .nav-hamburger svg { width: 24px; height: 24px; }
+
+    /* Mobile nav */
+    @media (max-width: 768px) {
+      .nav-hamburger { display: flex; align-items: center; }
+      .landing-nav-links {
+        display: none;
+        position: absolute;
+        top: 56px;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        background: var(--theme-bg);
+        border-bottom: 1px solid var(--theme-border);
+        padding: var(--space-4) var(--space-6);
+        gap: var(--space-1);
+        z-index: 49;
+      }
+      .landing-nav-links.open { display: flex; }
+      .landing-nav-links a {
+        padding: var(--space-2) 0;
+        font-size: var(--text-base);
+      }
+      .landing-nav-links .cta-btn {
+        margin-top: var(--space-2);
+        width: 100%;
+        justify-content: center;
+      }
+      .landing-nav-inner { position: relative; }
+      .nav-right { display: flex; align-items: center; gap: var(--space-2); }
+      .hero {
+        padding: var(--space-16) var(--space-4) var(--space-12);
+      }
+      .hero h1 {
+        font-size: var(--text-3xl);
+      }
+      .hero .subtitle {
+        font-size: var(--text-base);
+      }
+      .hero .detail {
+        font-size: var(--text-xs);
+      }
+      .hero-cta .cta-btn, .hero-cta .cta-outline {
+        padding: var(--space-3) var(--space-6);
+        font-size: var(--text-sm);
+      }
+      .pr-comment {
+        margin: var(--space-8) auto 0;
+      }
+      .pr-comment-body {
+        padding: var(--space-3) var(--space-4);
+        font-size: var(--text-xs);
+        line-height: 1.7;
+      }
+      .pr-comment-body .pr-section-title {
+        font-size: var(--text-sm);
+      }
+      .pr-comment-body .pr-line code {
+        font-size: 0.65rem;
+      }
+      .pr-comment-footer {
+        padding: var(--space-2) var(--space-3);
+      }
+      .pr-action-btn {
+        font-size: 0.65rem;
+        padding: var(--space-1) var(--space-2);
+      }
+      .landing-section {
+        padding: var(--space-12) var(--space-4);
+      }
+      .landing-section h2 {
+        font-size: var(--text-2xl);
+      }
+      .section-subtitle {
+        font-size: var(--text-sm);
+      }
+      .loop-section {
+        padding: var(--space-12) var(--space-4);
+      }
+      .dx-card-body {
+        padding: var(--space-3) var(--space-4);
+        font-size: var(--text-xs);
+        overflow-x: auto;
+      }
+      .feature-card {
+        padding: var(--space-6);
+      }
+      .cta-section {
+        padding: var(--space-12) var(--space-4);
+      }
+      .cta-section h2 {
+        font-size: var(--text-2xl);
+      }
+      .landing-footer {
+        padding: var(--space-6) var(--space-4);
+      }
+      .landing-footer-inner div {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-2);
+      }
+      .landing-footer-inner div a {
+        margin-right: 0 !important;
+      }
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: var(--space-24) var(--space-6) var(--space-16);
+      max-width: 52rem;
+      margin: 0 auto;
+    }
+    .hero-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--color-accent);
+      margin-bottom: var(--space-4);
+    }
+    .hero h1 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: var(--text-5xl);
+      color: var(--theme-text);
+      line-height: 1.1;
+      margin-bottom: var(--space-6);
+    }
+    .hero .subtitle {
+      font-size: var(--text-xl);
+      color: var(--theme-text-secondary);
+      max-width: 42rem;
+      margin: 0 auto var(--space-4);
+    }
+    .hero .detail {
+      font-size: var(--text-sm);
+      color: var(--theme-text-muted);
+      max-width: 38rem;
+      margin: 0 auto var(--space-8);
+    }
+    .hero-cta {
+      display: flex;
+      justify-content: center;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+    }
+    .hero-cta .cta-btn, .hero-cta .cta-outline {
+      padding: var(--space-3) var(--space-8);
+      font-size: var(--text-base);
+    }
+
+    /* PR Comment mockup */
+    .pr-comment {
+      max-width: 44rem;
+      margin: var(--space-12) auto 0;
+      background: var(--theme-bg-elevated);
+      border: 1px solid var(--theme-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      text-align: left;
+    }
+    .pr-comment-header {
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--theme-border);
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      font-size: var(--text-sm);
+    }
+    .pr-comment-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-full);
+      background: linear-gradient(135deg, var(--color-gradient-start), var(--color-gradient-end));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: var(--text-xs);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .pr-comment-meta { color: var(--theme-text-muted); }
+    .pr-comment-meta strong { color: var(--theme-text); font-weight: 600; }
+    .pr-comment-body {
+      padding: var(--space-4) var(--space-6);
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      line-height: 1.8;
+    }
+    .pr-comment-body .pr-section-title {
+      font-weight: 600;
+      color: var(--theme-text);
+      margin-bottom: var(--space-2);
+      font-size: var(--text-base);
+    }
+    .pr-comment-body .pr-blockquote {
+      border-left: 3px solid var(--color-accent);
+      padding-left: var(--space-4);
+      color: var(--theme-text-secondary);
+      margin-bottom: var(--space-4);
+    }
+    .pr-comment-body .pr-line {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-2);
+      padding: 2px 0;
+      color: var(--theme-text-secondary);
+    }
+    .pr-comment-body .pr-line .icon { flex-shrink: 0; width: 1.25em; text-align: center; }
+    .pr-comment-body .pr-line .realized { color: var(--color-success); }
+    .pr-comment-body .pr-line .warning { color: var(--color-warning); }
+    .pr-comment-body .pr-line .pending { color: var(--theme-text-muted); }
+    .pr-comment-body .pr-line code {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      background: var(--theme-bg);
+      padding: 0.125rem 0.375rem;
+      border-radius: var(--radius-sm);
+      color: var(--color-accent);
+    }
+    .pr-spec-ref {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--color-accent);
+      background: var(--theme-bg);
+      padding: 0.125rem 0.5rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--theme-border);
+    }
+    .pr-comment-body .pr-subsection {
+      margin-top: var(--space-4);
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--theme-border);
+    }
+    .pr-comment-body .pr-subsection-title {
+      font-weight: 600;
+      color: var(--theme-text);
+      font-size: var(--text-sm);
+      margin-bottom: var(--space-2);
+    }
+    .pr-comment-footer {
+      padding: var(--space-3) var(--space-4);
+      border-top: 1px solid var(--theme-border);
+      display: flex;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+    }
+    .pr-action-btn {
+      font-size: var(--text-xs);
+      font-weight: 500;
+      color: var(--theme-text-muted);
+      background: var(--theme-bg);
+      border: 1px solid var(--theme-border);
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-md);
+      cursor: default;
+      transition: border-color 0.15s;
+    }
+
+    /* Sections shared */
+    .landing-section {
+      max-width: 72rem;
+      margin: 0 auto;
+      padding: var(--space-20) var(--space-6);
+    }
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--color-accent);
+      text-align: center;
+      margin-bottom: var(--space-3);
+    }
+    .landing-section h2 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: var(--text-3xl);
+      color: var(--theme-text);
+      text-align: center;
+      margin-bottom: var(--space-3);
+    }
+    .section-subtitle {
+      font-size: var(--text-base);
+      color: var(--theme-text-muted);
+      text-align: center;
+      max-width: 40rem;
+      margin: 0 auto var(--space-12);
+    }
+
+    /* Problem/Solution */
+    .problem-solution {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-8);
+    }
+    @media (max-width: 768px) {
+      .problem-solution { grid-template-columns: 1fr; }
+    }
+    .ps-card {
+      padding: var(--space-8);
+      border-radius: var(--radius-xl);
+    }
+    .ps-card h3 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: var(--text-xl);
+      margin-bottom: var(--space-4);
+    }
+    .ps-card ul { list-style: none; padding: 0; }
+    .ps-card ul li {
+      padding: var(--space-2) 0;
+      font-size: var(--text-sm);
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-2);
+    }
+    .ps-card ul li .icon { flex-shrink: 0; width: 1.25em; text-align: center; }
+    .ps-problem {
+      background-color: var(--theme-bg-elevated);
+      border: 1px solid var(--theme-border);
+      color: var(--theme-text-secondary);
+    }
+    .ps-problem h3 { color: var(--theme-text); }
+    .ps-problem .icon { color: #ef4444; }
+    .ps-solution {
+      background: linear-gradient(135deg, var(--color-gradient-start), var(--color-gradient-end));
+      color: #fff;
+    }
+    .ps-solution h3 { color: #fff; }
+    .ps-solution ul li { color: rgba(255,255,255,0.9); }
+    .ps-solution .icon { color: #fff; }
+
+    /* Loop diagram */
+    .loop-section {
+      max-width: 72rem;
+      margin: 0 auto;
+      padding: var(--space-20) var(--space-6);
+    }
+    .loop-container {
+      max-width: 56rem;
+      margin: 0 auto;
+    }
+    .loop-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      position: relative;
+    }
+    .loop-step {
+      display: grid;
+      grid-template-columns: 3rem 1fr;
+      gap: var(--space-4);
+      align-items: start;
+    }
+    .loop-marker {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .loop-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: var(--radius-full);
+      background: linear-gradient(135deg, var(--color-gradient-start), var(--color-gradient-end));
+      flex-shrink: 0;
+      margin-top: 6px;
+    }
+    .loop-line {
+      width: 2px;
+      flex-grow: 1;
+      background: var(--theme-border);
+      min-height: var(--space-8);
+    }
+    .loop-content {
+      padding-bottom: var(--space-6);
+    }
+    .loop-content h4 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: var(--text-base);
+      color: var(--theme-text);
+      margin-bottom: var(--space-1);
+    }
+    .loop-content p {
+      font-size: var(--text-sm);
+      color: var(--theme-text-secondary);
+      line-height: 1.7;
+    }
+    .loop-return {
+      text-align: center;
+      margin-top: var(--space-4);
+      padding: var(--space-4) var(--space-6);
+      background: var(--theme-bg-elevated);
+      border: 1px solid var(--theme-border);
+      border-radius: var(--radius-xl);
+    }
+    .loop-return p {
+      font-size: var(--text-sm);
+      color: var(--color-accent);
+      font-weight: 500;
+    }
+
+    /* Features */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-6);
+    }
+    @media (max-width: 1024px) {
+      .feature-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .feature-grid { grid-template-columns: 1fr; }
+    }
+    .feature-card {
+      background: var(--theme-bg-elevated);
+      border: 1px solid var(--theme-border);
+      border-radius: var(--radius-xl);
+      padding: var(--space-8);
+      transition: border-color 0.2s;
+    }
+    .feature-card:hover { border-color: var(--color-accent); }
+    .feature-icon {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--color-accent);
+      margin-bottom: var(--space-3);
+    }
+    .feature-card h3 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: var(--text-lg);
+      color: var(--theme-text);
+      margin-bottom: var(--space-2);
+    }
+    .feature-card p {
+      font-size: var(--text-sm);
+      color: var(--theme-text-secondary);
+      line-height: 1.7;
+    }
+
+    /* DX Section */
+    .dx-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-8);
+      align-items: start;
+    }
+    @media (max-width: 768px) {
+      .dx-grid { grid-template-columns: 1fr; }
+    }
+    .dx-card {
+      background: var(--theme-bg-elevated);
+      border: 1px solid var(--theme-border);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+    }
+    .dx-card-header {
+      padding: var(--space-3) var(--space-4);
+      border-bottom: 1px solid var(--theme-border);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--theme-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .dx-card-body {
+      padding: var(--space-4) var(--space-6);
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      line-height: 1.8;
+      color: var(--theme-text-secondary);
+    }
+    .dx-card-body .prompt { color: var(--color-accent); }
+    .dx-card-body .cmd { color: var(--theme-text); }
+    .dx-card-body .comment { color: var(--theme-text-muted); }
+    .dx-card-body .output { color: var(--color-accent-light); }
+
+    /* How it works */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-8);
+      position: relative;
+    }
+    @media (max-width: 768px) {
+      .steps { grid-template-columns: 1fr; }
+    }
+    .step { text-align: center; }
+    .step-number {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-full);
+      background: linear-gradient(135deg, var(--color-gradient-start), var(--color-gradient-end));
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: var(--text-xl);
+      margin: 0 auto var(--space-4);
+    }
+    .step h3 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: var(--text-lg);
+      color: var(--theme-text);
+      margin-bottom: var(--space-2);
+    }
+    .step p {
+      font-size: var(--text-sm);
+      color: var(--theme-text-secondary);
+      line-height: 1.7;
+    }
+    .step code {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      background: var(--theme-bg-elevated);
+      border: 1px solid var(--theme-border);
+      padding: 0.125rem 0.375rem;
+      border-radius: var(--radius-sm);
+      color: var(--color-accent);
+    }
+
+    /* Integrations */
+    .integration-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--space-6);
+    }
+    @media (max-width: 1024px) {
+      .integration-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .integration-grid { grid-template-columns: 1fr; }
+    }
+    .integration-card {
+      background: var(--theme-bg-elevated);
+      border: 1px solid var(--theme-border);
+      border-radius: var(--radius-xl);
+      padding: var(--space-6);
+    }
+    .integration-card h4 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: var(--text-base);
+      color: var(--theme-text);
+      margin-bottom: var(--space-3);
+    }
+    .integration-card ul {
+      list-style: none;
+      padding: 0;
+    }
+    .integration-card ul li {
+      font-size: var(--text-sm);
+      color: var(--theme-text-secondary);
+      padding: 2px 0;
+    }
+
+    /* CTA section */
+    .cta-section {
+      text-align: center;
+      padding: var(--space-20) var(--space-6);
+      max-width: 48rem;
+      margin: 0 auto;
+    }
+    .cta-section h2 {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: var(--text-3xl);
+      color: var(--theme-text);
+      margin-bottom: var(--space-4);
+    }
+    .cta-section p {
+      font-size: var(--text-base);
+      color: var(--theme-text-muted);
+      margin-bottom: var(--space-8);
+    }
+    .cta-section .actions {
+      display: flex;
+      justify-content: center;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+    }
+    .cta-section .actions .cta-btn, .cta-section .actions .cta-outline {
+      padding: var(--space-3) var(--space-8);
+      font-size: var(--text-base);
+    }
+
+    /* Footer */
+    .landing-footer {
+      border-top: 1px solid var(--theme-border);
+      padding: var(--space-8) var(--space-6);
+    }
+    .landing-footer-inner {
+      max-width: 72rem;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    @media (max-width: 768px) {
+      .landing-footer-inner {
+        flex-direction: column;
+        gap: var(--space-3);
+        text-align: center;
+      }
+    }
+    .landing-footer p, .landing-footer a {
+      font-size: var(--text-sm);
+      color: var(--theme-text-muted);
+    }
+    .landing-footer a { text-decoration: none; transition: color 0.15s; }
+    .landing-footer a:hover { color: var(--theme-text-secondary); }
+    .landing-footer .wordmark {
+      font-family: var(--font-display);
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--color-gradient-start), var(--color-gradient-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Screenshot showcase */
+    .screenshot-tabs {
+      display: flex;
+      justify-content: center;
+      gap: var(--space-2);
+      margin-bottom: var(--space-6);
+    }
+    .screenshot-tab {
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--theme-text-muted);
+      background: var(--theme-bg-elevated);
+      border: 1px solid var(--theme-border);
+      border-radius: var(--radius-md);
+      padding: var(--space-2) var(--space-6);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+    .screenshot-tab:hover {
+      color: var(--theme-text-secondary);
+      border-color: var(--theme-text-muted);
+    }
+    .screenshot-tab.active {
+      color: #fff;
+      background: linear-gradient(135deg, var(--color-gradient-start), var(--color-gradient-end));
+      border-color: transparent;
+    }
+    .screenshot-frame {
+      max-width: 56rem;
+      margin: 0 auto;
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--theme-border);
+      overflow: hidden;
+      background: var(--theme-bg-elevated);
+    }
+    .screenshot-chrome {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-4);
+      background: var(--theme-bg-elevated);
+      border-bottom: 1px solid var(--theme-border);
+    }
+    .screenshot-chrome .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: var(--radius-full);
+      background: var(--theme-border);
+      display: inline-block;
+    }
+    .screenshot-chrome .url-bar {
+      flex: 1;
+      margin-left: var(--space-3);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--theme-text-muted);
+      background: var(--theme-bg);
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--theme-border);
+    }
+    .screenshot-panel {
+      display: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .screenshot-panel.active {
+      display: block;
+      opacity: 1;
+    }
+    .screenshot-panel img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    @media (max-width: 768px) {
+      .screenshot-tabs {
+        gap: var(--space-1);
+      }
+      .screenshot-tab {
+        padding: var(--space-2) var(--space-4);
+        font-size: var(--text-xs);
+      }
+      .screenshot-panel {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .screenshot-panel img {
+        min-width: 700px;
+        width: 700px;
+      }
+    }
+
+    /* Setup requirements */
+    .step-requirements {
+      text-align: left;
+      margin-top: var(--space-3);
+      font-size: var(--text-xs);
+      color: var(--theme-text-muted);
+      line-height: 1.8;
+    }
+    .step-requirements li {
+      list-style: none;
+      padding: 2px 0;
+    }
+    .step-requirements .req-label {
+      font-weight: 600;
+      color: var(--theme-text-secondary);
+    }
+  </style>
+</head>
+<body>
+  <!-- Nav -->
+  <nav class="landing-nav">
+    <div class="landing-nav-inner">
+      <a href="/" class="landing-wordmark">Canon</a>
+      <div class="nav-right">
+        <button id="theme-toggle" type="button" onclick="cycleTheme()" style="background:none;border:none;cursor:pointer;padding:6px;color:var(--theme-text-muted);display:flex;align-items:center;" title="Toggle theme">
+          <svg id="icon-sun" style="width:20px;height:20px;display:none;" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"/></svg>
+          <svg id="icon-moon" style="width:20px;height:20px;display:none;" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"/></svg>
+          <svg id="icon-monitor" style="width:20px;height:20px;display:none;" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z"/></svg>
+        </button>
+        <script>
+          function getTheme() { return localStorage.getItem('sw-theme') || 'system'; }
+          function applyTheme(mode) {
+            var d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var dark = mode === 'dark' || (mode === 'system' && d);
+            document.documentElement.classList.toggle('dark', dark);
+            document.getElementById('icon-sun').style.display = mode === 'light' ? 'block' : 'none';
+            document.getElementById('icon-moon').style.display = mode === 'dark' ? 'block' : 'none';
+            document.getElementById('icon-monitor').style.display = mode === 'system' ? 'block' : 'none';
+          }
+          function cycleTheme() {
+            var order = ['system', 'light', 'dark'];
+            var current = getTheme();
+            var next = order[(order.indexOf(current) + 1) % 3];
+            localStorage.setItem('sw-theme', next);
+            applyTheme(next);
+          }
+          applyTheme(getTheme());
+          window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+            if (getTheme() === 'system') applyTheme('system');
+          });
+        </script>
+        <button class="nav-hamburger" onclick="document.querySelector('.landing-nav-links').classList.toggle('open')" aria-label="Menu">
+          <svg fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+        </button>
+      </div>
+      <div class="landing-nav-links">
+        <a href="#how-it-works">How It Works</a>
+        <a href="#capabilities">Capabilities</a>
+        <a href="/app">Dashboard</a>
+        <a href="https://github.com/canonhq/canon">GitHub</a>
+        <a href="https://github.com/apps/canon-hq/installations/new" class="cta-btn">Install GitHub App</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <p class="hero-label">AI-native documentation platform</p>
+    <h1>Documentation that <span class="gradient-text">keeps up.</span></h1>
+    <p class="subtitle">Canon indexes every markdown file in your repos, analyzes every PR against your docs, and verifies that your code actually implements what was specified. When reality changes, docs update automatically.</p>
+    <p class="detail">Install a GitHub App. Write specs in structured markdown. The AI agent handles PR reviews, ticket sync, doc-update PRs, and code-aware verification&mdash;across your entire org.</p>
+    <div class="hero-cta">
+      <a href="https://github.com/apps/canon-hq/installations/new" class="cta-btn">Install on GitHub</a>
+      <a href="/app" class="cta-outline">Explore Dashboard</a>
+    </div>
+
+    <!-- PR Comment mockup -->
+    <div class="pr-comment">
+      <div class="pr-comment-header">
+        <div class="pr-comment-avatar">C</div>
+        <div class="pr-comment-meta"><strong>canon</strong> bot commented on <strong>PR #142</strong></div>
+      </div>
+      <div class="pr-comment-body">
+        <p class="pr-blockquote">This PR implements retry logic for the payments service. It addresses 2 of 3 acceptance criteria in <span class="pr-spec-ref">payments-overhaul.md &sect;3.2</span> and introduces a new error type not yet documented.</p>
+
+        <div class="pr-section-title">Spec Realization</div>
+        <div class="pr-line"><span class="icon realized">&#10003;</span> <span><strong>&sect;3.2 AC1</strong> Exponential backoff &mdash; realized in <code>src/payments/retry.ts:42</code></span></div>
+        <div class="pr-line"><span class="icon warning">&#9888;</span> <span><strong>&sect;3.2 AC2</strong> Max 3 retries &mdash; code uses max 5. Update spec or code?</span></div>
+        <div class="pr-line"><span class="icon pending">&#9744;</span> <span><strong>&sect;3.2 AC3</strong> Preserve idempotency key across retries &mdash; not addressed</span></div>
+
+        <div class="pr-subsection">
+          <div class="pr-subsection-title">Other Docs Affected</div>
+          <div class="pr-line"><span class="icon warning">&#9888;</span> <span><code>README.md</code> &sect;Error Handling &mdash; missing PaymentTimeoutError</span></div>
+          <div class="pr-line"><span class="icon warning">&#9888;</span> <span><code>docs/architecture.md</code> &sect;Retry Strategy &mdash; references "3 retries," now stale</span></div>
+        </div>
+      </div>
+      <div class="pr-comment-footer">
+        <span class="pr-action-btn">Update spec</span>
+        <span class="pr-action-btn">Create doc PR</span>
+        <span class="pr-action-btn">@canon reanalyze</span>
+        <span class="pr-action-btn">Dismiss</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Screenshots -->
+  <section class="landing-section" id="see-it">
+    <p class="section-label">See it in action</p>
+    <h2>Your org's docs at a glance</h2>
+    <p class="section-subtitle">The Spec Explorer dashboard gives you real-time visibility into documentation health across every repo.</p>
+
+    <div class="screenshot-tabs">
+      <button class="screenshot-tab active" data-target="ss-dashboard">Dashboard</button>
+      <button class="screenshot-tab" data-target="ss-spec">Spec Detail</button>
+      <button class="screenshot-tab" data-target="ss-search">Search</button>
+    </div>
+
+    <div class="screenshot-frame">
+      <div class="screenshot-chrome">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="url-bar">canonhq.co</span>
+      </div>
+      <div id="ss-dashboard" class="screenshot-panel active">
+        <img src="/static/screenshots/dashboard.png" alt="Spec Explorer dashboard showing repos, specs, coverage, and filters" loading="lazy">
+      </div>
+      <div id="ss-spec" class="screenshot-panel">
+        <img src="/static/screenshots/spec-detail.png" alt="Spec detail page with sections, acceptance criteria, and progress" loading="lazy">
+      </div>
+      <div id="ss-search" class="screenshot-panel">
+        <img src="/static/screenshots/search.png" alt="Search results with highlighted terms and filters" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <!-- Problem / Solution -->
+  <section class="landing-section">
+    <p class="section-label">The problem</p>
+    <h2>Your docs are already wrong</h2>
+    <p class="section-subtitle">The moment a PR merges, some document somewhere becomes inaccurate. Nobody notices until a new hire reads it, a customer hits a bug, or an audit fails.</p>
+    <div class="problem-solution">
+      <div class="ps-card ps-problem">
+        <h3>Without Canon</h3>
+        <ul>
+          <li><span class="icon">&times;</span> Specs go stale within weeks&mdash;nobody trusts them</li>
+          <li><span class="icon">&times;</span> PRs are reviewed without any spec context</li>
+          <li><span class="icon">&times;</span> Tickets close but nobody verifies the code matches the spec</li>
+          <li><span class="icon">&times;</span> READMEs, ADRs, and guides rot silently</li>
+          <li><span class="icon">&times;</span> "What percentage is done?" requires a meeting</li>
+          <li><span class="icon">&times;</span> New engineers have no idea what's been built or why</li>
+        </ul>
+      </div>
+      <div class="ps-card ps-solution">
+        <h3>With Canon</h3>
+        <ul>
+          <li><span class="icon">&check;</span> Agent verifies code against spec requirements</li>
+          <li><span class="icon">&check;</span> Every PR analyzed against all indexed docs</li>
+          <li><span class="icon">&check;</span> Stale docs flagged before anyone reads them</li>
+          <li><span class="icon">&check;</span> Doc-update PRs generated automatically on merge</li>
+          <li><span class="icon">&check;</span> Tickets sync bidirectionally from spec sections</li>
+          <li><span class="icon">&check;</span> One search across every doc in every repo</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- The Feedback Loop -->
+  <section class="loop-section" id="how-it-works">
+    <p class="section-label" style="text-align:center;">The feedback loop</p>
+    <h2 style="font-family:var(--font-display);font-weight:700;font-size:var(--text-3xl);color:var(--theme-text);text-align:center;margin-bottom:var(--space-3);">How docs stay alive</h2>
+    <p class="section-subtitle" style="text-align:center;max-width:40rem;margin:0 auto var(--space-12);">Canon creates a continuous loop between specs, code, and documentation. Every PR makes the system smarter. Every merge keeps docs accurate.</p>
+    <div class="loop-container">
+      <div class="loop-steps">
+        <div class="loop-step">
+          <div class="loop-marker"><div class="loop-dot"></div><div class="loop-line"></div></div>
+          <div class="loop-content">
+            <h4>PM writes a structured spec</h4>
+            <p>Define requirements, acceptance criteria, owners, and teams in markdown. Specs live in your repo&mdash;version controlled, reviewable, and always the source of intent.</p>
+          </div>
+        </div>
+        <div class="loop-step">
+          <div class="loop-marker"><div class="loop-dot"></div><div class="loop-line"></div></div>
+          <div class="loop-content">
+            <h4>Agent indexes all markdown</h4>
+            <p>On every push, Canon indexes specs, READMEs, ADRs, architecture docs, and guides. Every doc becomes searchable and available as context for AI analysis.</p>
+          </div>
+        </div>
+        <div class="loop-step">
+          <div class="loop-marker"><div class="loop-dot"></div><div class="loop-line"></div></div>
+          <div class="loop-content">
+            <h4>Tickets created from spec sections</h4>
+            <p>Each spec section generates a ticket in Jira, Linear, or GitHub Issues. Links are embedded as hidden comments. Engineers work tickets as normal.</p>
+          </div>
+        </div>
+        <div class="loop-step">
+          <div class="loop-marker"><div class="loop-dot"></div><div class="loop-line"></div></div>
+          <div class="loop-content">
+            <h4>Engineer opens a PR</h4>
+            <p>The agent analyzes the diff against all indexed docs&mdash;not just specs. It evaluates whether acceptance criteria are realized in code, flags conflicts with existing docs, and identifies undocumented behavior.</p>
+          </div>
+        </div>
+        <div class="loop-step">
+          <div class="loop-marker"><div class="loop-dot"></div><div class="loop-line"></div></div>
+          <div class="loop-content">
+            <h4>PR merges, docs update</h4>
+            <p>The agent generates doc-update PRs for any affected markdown&mdash;specs, READMEs, guides, architecture docs. Spec sections auto-transition to "done" when the code verifies all acceptance criteria.</p>
+          </div>
+        </div>
+        <div class="loop-step">
+          <div class="loop-marker"><div class="loop-dot"></div><div class="loop-line"></div></div>
+          <div class="loop-content">
+            <h4>Stale docs flagged proactively</h4>
+            <p>A scheduled scan compares doc freshness against code changes. If code changed but related docs didn't, the agent opens an issue with links to the relevant PRs and suggests updates.</p>
+          </div>
+        </div>
+      </div>
+      <div class="loop-return">
+        <p>Updated docs feed back into the knowledge base &mdash; richer context for the next PR analysis.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Capabilities -->
+  <section class="landing-section" id="capabilities">
+    <p class="section-label">Capabilities</p>
+    <h2>Everything your docs need to stay alive</h2>
+    <p class="section-subtitle">Canon installs as a GitHub App and works across your entire organization. Write specs, push code, and let the agent handle the rest.</p>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <p class="feature-icon">01 / index</p>
+        <h3>All-Markdown Knowledge Base</h3>
+        <p>Every markdown file in your repos is indexed and searchable&mdash;specs, READMEs, ADRs, architecture docs, runbooks, changelogs. One search surface for your entire org's documentation, powered by hybrid semantic + keyword search.</p>
+      </div>
+      <div class="feature-card">
+        <p class="feature-icon">02 / verify</p>
+        <h3>Code-Aware Spec Realization</h3>
+        <p>The agent doesn't just check if a ticket is closed&mdash;it reads the code to verify that acceptance criteria are actually implemented. Each spec section shows realization status with links to the PRs and files that fulfill it.</p>
+      </div>
+      <div class="feature-card">
+        <p class="feature-icon">03 / review</p>
+        <h3>Spec-Aware PR Analysis</h3>
+        <p>When a PR opens, the Claude agent analyzes the diff against all relevant docs. It identifies which spec sections are addressed, flags discrepancies, and catches when READMEs or architecture docs are affected by the change.</p>
+      </div>
+      <div class="feature-card">
+        <p class="feature-icon">04 / sync</p>
+        <h3>Bidirectional Ticket Sync</h3>
+        <p>Spec sections generate tickets in Jira, Linear, or GitHub Issues. Tickets sync bidirectionally&mdash;close a ticket and the spec updates; mark a section done in a PR and the ticket closes. No manual status juggling.</p>
+      </div>
+      <div class="feature-card">
+        <p class="feature-icon">05 / update</p>
+        <h3>Automatic Doc-Update PRs</h3>
+        <p>When a PR merges, the agent generates a follow-up PR with suggested updates to any affected markdown&mdash;specs, READMEs, guides. Review and merge the doc PR, or dismiss it. The agent learns from your feedback.</p>
+      </div>
+      <div class="feature-card">
+        <p class="feature-icon">06 / coverage</p>
+        <h3>Spec Coverage Dashboard</h3>
+        <p>Track completion across sections and acceptance criteria for every spec. The Spec Explorer dashboard shows org-wide coverage broken down by repo, team, and status. Know exactly what's shipped and what's still planned.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Developer Experience -->
+  <section class="landing-section">
+    <p class="section-label">Developer experience</p>
+    <h2>Specs where you already work</h2>
+    <p class="section-subtitle">Canon meets developers in their existing tools. No context switching, no new workflow to learn.</p>
+    <div class="dx-grid">
+      <div class="dx-card">
+        <div class="dx-card-header">@canon commands</div>
+        <div class="dx-card-body">
+          <div><span class="comment"># On any PR, comment:</span></div>
+          <div>&nbsp;</div>
+          <div><span class="cmd">@canon reanalyze</span></div>
+          <div><span class="comment">  Re-run spec analysis on this PR</span></div>
+          <div>&nbsp;</div>
+          <div><span class="cmd">@canon apply docs</span></div>
+          <div><span class="comment">  Create a doc-update PR from suggestions</span></div>
+          <div>&nbsp;</div>
+          <div><span class="cmd">@canon dismiss</span></div>
+          <div><span class="comment">  Remove the bot's analysis comment</span></div>
+        </div>
+      </div>
+      <div class="dx-card">
+        <div class="dx-card-header">MCP &mdash; coding agent integration</div>
+        <div class="dx-card-body">
+          <div><span class="comment"># In Claude Code, Cursor, or VS Code:</span></div>
+          <div>&nbsp;</div>
+          <div><span class="prompt">&gt;</span> <span class="cmd">"What does the spec say about retry handling?"</span></div>
+          <div>&nbsp;</div>
+          <div><span class="output">From payments-overhaul.md &sect;3.2:</span></div>
+          <div><span class="output">  Exponential backoff, max 3 retries, with jitter.</span></div>
+          <div><span class="output">  Idempotency key preserved across retries.</span></div>
+          <div>&nbsp;</div>
+          <div><span class="output">Current code (src/payments/retry.ts:42):</span></div>
+          <div><span class="output">  Max retries is 5 &mdash; conflicts with spec.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works / Setup -->
+  <section class="landing-section">
+    <p class="section-label">Setup</p>
+    <h2>Self-hosted, your data stays yours</h2>
+    <p class="section-subtitle">Canon runs on your infrastructure. No SaaS vendor, no data leaving your environment. Deploy with Helm or Docker Compose and connect your GitHub org.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <h3>Install the GitHub App</h3>
+        <p>One click installs Canon across your org. It subscribes to pushes, PRs, and issues. Select all repos or choose specific ones.</p>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <h3>Deploy the platform</h3>
+        <p>Use the Helm chart for Kubernetes or <code>docker compose</code> for local development. See the <a href="https://github.com/canonhq/canon/blob/main/docs/self-hosting.md" style="color:var(--color-accent);text-decoration:underline;">self-hosting guide</a> for full details.</p>
+        <ul class="step-requirements">
+          <li><span class="req-label">Requires:</span> PostgreSQL with pgvector, Anthropic API key</li>
+          <li><span class="req-label">Optional:</span> GCP Vertex AI for semantic search embeddings</li>
+        </ul>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <h3>Write specs and push</h3>
+        <p>Add structured markdown to <code>docs/specs/</code> in any repo. Optionally add <code>CANON.yaml</code> for per-repo config. Every push indexes your docs, every PR gets AI analysis against all relevant documentation.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Integrations -->
+  <section class="landing-section">
+    <p class="section-label">Integrations</p>
+    <h2>Connects to your stack</h2>
+    <p class="section-subtitle">Canon plugs into the tools your team already uses. No migration, no rip-and-replace.</p>
+    <div class="integration-grid">
+      <div class="integration-card">
+        <h4>Source Control</h4>
+        <ul>
+          <li>GitHub (native)</li>
+          <li>GitLab (planned)</li>
+          <li>Bitbucket (planned)</li>
+        </ul>
+      </div>
+      <div class="integration-card">
+        <h4>Tickets</h4>
+        <ul>
+          <li>Jira</li>
+          <li>Linear</li>
+          <li>GitHub Issues</li>
+          <li>Asana (planned)</li>
+        </ul>
+      </div>
+      <div class="integration-card">
+        <h4>Dev Tools</h4>
+        <ul>
+          <li>Claude Code (MCP)</li>
+          <li>Cursor (MCP)</li>
+          <li>VS Code (planned)</li>
+        </ul>
+      </div>
+      <div class="integration-card">
+        <h4>Communication</h4>
+        <ul>
+          <li>Slack (planned)</li>
+          <li>Microsoft Teams (planned)</li>
+          <li>Email digests (planned)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final CTA -->
+  <section class="cta-section">
+    <h2>Stop maintaining docs. Let the agent do it.</h2>
+    <p>Install the Canon GitHub App on your organization. Self-hosted, open source, and free to start. Your documentation will never go stale again.</p>
+    <div class="actions">
+      <a href="https://github.com/apps/canon-hq/installations/new" class="cta-btn">Install on GitHub</a>
+      <a href="/app" class="cta-outline">Explore Dashboard</a>
+      <a href="https://github.com/canonhq/canon" class="cta-outline">View Source</a>
+    </div>
+  </section>
+
+  <script>
+    // Screenshot tab switcher
+    document.querySelectorAll('.screenshot-tab').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        document.querySelectorAll('.screenshot-tab').forEach(function(b) { b.classList.remove('active'); });
+        document.querySelectorAll('.screenshot-panel').forEach(function(p) { p.classList.remove('active'); });
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.target).classList.add('active');
+      });
+    });
+
+    // Close mobile nav on link click
+    document.querySelectorAll('.landing-nav-links a').forEach(function(link) {
+      link.addEventListener('click', function() {
+        document.querySelector('.landing-nav-links').classList.remove('open');
+      });
+    });
+  </script>
+
+  <!-- Footer -->
+  <footer class="landing-footer">
+    <div class="landing-footer-inner">
+      <p><span class="wordmark">Canon</span> by <a href="https://gernerventures.com">Gerner Ventures</a></p>
+      <div>
+        <a href="https://github.com/canonhq/canon/blob/main/docs/self-hosting.md" style="margin-right: var(--space-4);">Self-Hosting Guide</a>
+        <a href="https://github.com/canonhq/canon" style="margin-right: var(--space-4);">GitHub</a>
+        <a href="https://gernerventures.com">gernerventures.com</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

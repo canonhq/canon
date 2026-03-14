@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Indexing Status — Canon Admin{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="text-sm text-slate-500 dark:text-slate-400 mb-6 font-mono">
+  <a href="/app" class="hover:text-accent-400 transition-colors">Dashboard</a>
+  <span class="mx-1 text-slate-400 dark:text-slate-600">/</span>
+  <span class="text-slate-800 dark:text-slate-200">Admin</span>
+  <span class="mx-1 text-slate-400 dark:text-slate-600">/</span>
+  <span class="text-slate-800 dark:text-slate-200">Indexing</span>
+</nav>
+
+<div class="mb-8">
+  <h1 class="text-2xl font-bold font-display text-slate-900 dark:text-slate-100">Indexing Status</h1>
+  <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Monitor and manage search indexing across all installations</p>
+</div>
+
+<!-- Active Tasks -->
+{% if indexing.active_tasks %}
+<div class="mb-8" hx-get="/app/admin/indexing" hx-trigger="every 5s" hx-select="#active-tasks" hx-target="#active-tasks" hx-swap="outerHTML">
+  <div id="active-tasks">
+    <h2 class="text-lg font-semibold font-display text-slate-900 dark:text-slate-100 mb-3">Active Tasks</h2>
+    <div class="space-y-3">
+      {% for task in indexing.active_tasks %}
+      {% if task.status in ('pending', 'running') %}
+      <div class="bg-white dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 px-4 py-3">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium font-mono bg-blue-50 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400">{{ task.status }}</span>
+            <span class="font-medium text-slate-900 dark:text-slate-100">{{ task.org_login }}</span>
+            <span class="text-sm text-slate-500">(task {{ task.task_id }})</span>
+          </div>
+          <span class="text-sm text-slate-500">{{ task.repos_done }}/{{ task.repos_total }} repos</span>
+        </div>
+        {% if task.repos_total > 0 %}
+        <div class="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2">
+          <div class="bg-gradient-to-r from-accent-500 to-cyan-400 h-2 rounded-full transition-all" style="width: {{ (task.repos_done / task.repos_total * 100) | round }}%"></div>
+        </div>
+        <div class="flex justify-between text-xs text-slate-500 mt-1">
+          <span>{{ task.specs_indexed }} specs indexed</span>
+          {% if task.errors > 0 %}
+          <span class="text-red-500">{{ task.errors }} errors</span>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Installations -->
+<h2 class="text-lg font-semibold font-display text-slate-900 dark:text-slate-100 mb-3">Installations</h2>
+{% if indexing.installations %}
+<div class="bg-white dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden mb-8">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100 dark:border-slate-700/50 bg-gray-50 dark:bg-surface">
+        <th class="px-4 py-2 text-left font-medium text-slate-500">Organization</th>
+        <th class="px-4 py-2 text-left font-medium text-slate-500">Installation ID</th>
+        <th class="px-4 py-2 text-left font-medium text-slate-500">Status</th>
+        <th class="px-4 py-2 text-left font-medium text-slate-500">Repos</th>
+        <th class="px-4 py-2 text-left font-medium text-slate-500">Last Indexed</th>
+        <th class="px-4 py-2 text-right font-medium text-slate-500">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100 dark:divide-slate-700/50">
+      {% for inst in indexing.installations %}
+      <tr>
+        <td class="px-4 py-2 font-medium text-slate-900 dark:text-slate-100">{{ inst.org_login }}</td>
+        <td class="px-4 py-2 font-mono text-slate-500">{{ inst.installation_id }}</td>
+        <td class="px-4 py-2">
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+            {% if inst.status == 'active' %}bg-emerald-50 dark:bg-accent-900/50 text-emerald-700 dark:text-accent-400
+            {% elif inst.status == 'suspended' %}bg-yellow-50 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-400
+            {% else %}bg-red-50 dark:bg-red-900/50 text-red-700 dark:text-red-400{% endif %}
+          ">{{ inst.status }}</span>
+        </td>
+        <td class="px-4 py-2 text-slate-500">{{ inst.repos_count }}</td>
+        <td class="px-4 py-2 text-slate-500">
+          {% if inst.last_indexed_at %}
+          {{ inst.last_indexed_at.strftime('%Y-%m-%d %H:%M') }}
+          {% else %}
+          <span class="text-slate-400">Never</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-2 text-right">
+          {% if inst.status == 'active' %}
+          <form method="post" action="/app/admin/reindex/{{ inst.installation_id }}" class="inline">
+            <button type="submit" class="text-sm text-brand-500 hover:text-brand-400 font-medium transition-colors">Re-index</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="bg-white dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 px-4 py-8 text-center text-slate-500 dark:text-slate-400 mb-8">
+  <p>No installations registered yet.</p>
+  <p class="text-sm mt-1">Installations are automatically registered when the GitHub App is installed on an organization.</p>
+</div>
+{% endif %}
+
+<!-- Recent Jobs -->
+{% if indexing.recent_jobs %}
+<h2 class="text-lg font-semibold font-display text-slate-900 dark:text-slate-100 mb-3">Recent Index Jobs</h2>
+<div class="bg-white dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100 dark:border-slate-700/50 bg-gray-50 dark:bg-surface">
+        <th class="px-4 py-2 text-left font-medium text-slate-500">Repository</th>
+        <th class="px-4 py-2 text-left font-medium text-slate-500">Status</th>
+        <th class="px-4 py-2 text-left font-medium text-slate-500">Specs</th>
+        <th class="px-4 py-2 text-left font-medium text-slate-500">Errors</th>
+        <th class="px-4 py-2 text-left font-medium text-slate-500">Completed</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100 dark:divide-slate-700/50">
+      {% for job in indexing.recent_jobs %}
+      <tr>
+        <td class="px-4 py-2 font-mono text-slate-900 dark:text-slate-100">{{ job.repo }}</td>
+        <td class="px-4 py-2">
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+            {% if job.status == 'completed' %}bg-emerald-50 dark:bg-accent-900/50 text-emerald-700 dark:text-accent-400
+            {% elif job.status == 'running' %}bg-blue-50 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400
+            {% elif job.status == 'failed' %}bg-red-50 dark:bg-red-900/50 text-red-700 dark:text-red-400
+            {% else %}bg-gray-50 dark:bg-slate-700 text-slate-500{% endif %}
+          ">{{ job.status }}</span>
+        </td>
+        <td class="px-4 py-2 text-slate-500">{{ job.specs_indexed }}</td>
+        <td class="px-4 py-2 {% if job.errors > 0 %}text-red-500{% else %}text-slate-500{% endif %}">{{ job.errors }}</td>
+        <td class="px-4 py-2 text-slate-500">
+          {% if job.completed_at %}
+          {{ job.completed_at.strftime('%Y-%m-%d %H:%M') }}
+          {% elif job.started_at %}
+          <span class="text-brand-400">Running...</span>
+          {% else %}
+          <span class="text-slate-400">Pending</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

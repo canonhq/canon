@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}{{ repo.full_name }} — Canon{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="text-sm text-slate-500 dark:text-slate-400 mb-6 font-mono">
+  <a href="/app/{{ current_org | default('') }}/" class="hover:text-accent-400 transition-colors">Dashboard</a>
+  <span class="mx-1 text-slate-400 dark:text-slate-600">/</span>
+  <span class="text-slate-800 dark:text-slate-200">{{ repo.full_name }}</span>
+</nav>
+
+<div class="mb-6">
+  <h1 class="text-2xl font-bold font-display text-slate-900 dark:text-slate-100">{{ repo.full_name }}</h1>
+  {% if repo.description %}
+  <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ repo.description }}</p>
+  {% endif %}
+</div>
+
+<!-- Config summary -->
+{% if repo.config %}
+<div class="bg-gray-50 dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 px-4 py-3 mb-6">
+  <h2 class="text-xs font-mono font-semibold text-slate-500 uppercase tracking-wider mb-2">CANON.yaml</h2>
+  <div class="flex flex-wrap gap-2 sm:gap-4 text-sm text-slate-500 dark:text-slate-400">
+    {% if repo.config.team %}
+    <span>Team: <strong class="text-slate-800 dark:text-slate-200">{{ repo.config.team }}</strong></span>
+    {% endif %}
+    {% if repo.config.ticket_system %}
+    <span>Tickets: <strong class="text-slate-800 dark:text-slate-200">{{ repo.config.ticket_system }}</strong></span>
+    {% endif %}
+    {% if repo.config.project_key %}
+    <span>Project: <strong class="text-slate-800 dark:text-slate-200">{{ repo.config.project_key }}</strong></span>
+    {% endif %}
+    <span>Auto-tickets: <strong class="text-slate-800 dark:text-slate-200">{{ "on" if repo.config.specs.auto_tickets else "off" }}</strong></span>
+    <span>PR analysis: <strong class="text-slate-800 dark:text-slate-200">{{ "on" if repo.config.agents.pr_analysis else "off" }}</strong></span>
+  </div>
+</div>
+{% endif %}
+
+<!-- Specs -->
+{% if repo.specs %}
+<h2 class="text-lg font-semibold font-display text-slate-900 dark:text-slate-100 mb-3">Specs ({{ repo.spec_count }})</h2>
+<div class="space-y-3 mb-8">
+  {% for spec in repo.specs %}
+  <div class="bg-white dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden hover:border-accent-600 transition-colors">
+    <a href="/app/{{ current_org | default('') }}/specs/{{ repo.owner }}/{{ repo.repo }}/{{ spec.file_path }}" class="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-1">
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+          <span class="font-medium text-slate-900 dark:text-slate-100">{{ spec.title }}</span>
+          <span class="status-badge status-{{ spec.status }}">{{ spec.status | replace("_", " ") | title }}</span>
+        </div>
+        <span class="text-sm text-slate-500 dark:text-slate-400 shrink-0">{{ spec.owner }}</span>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-slate-500 dark:text-slate-400">
+        {% for tag in spec.tags %}
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium font-mono bg-emerald-50 dark:bg-accent-900/50 text-emerald-700 dark:text-accent-400">{{ tag }}</span>
+        {% endfor %}
+        {% if spec.total_sections > 0 %}
+        <span>Sections: {{ spec.done_sections }}/{{ spec.total_sections }}</span>
+        {% endif %}
+        {% if spec.total_ac > 0 %}
+        <span>AC: {{ spec.done_ac }}/{{ spec.total_ac }}</span>
+        {% endif %}
+      </div>
+      {% if spec.total_sections > 0 %}
+      <div class="mt-2 w-full bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
+        <div class="bg-gradient-to-r from-accent-500 to-cyan-400 h-1.5 rounded-full" style="width: {{ (spec.done_sections / spec.total_sections * 100) | round }}%"></div>
+      </div>
+      {% endif %}
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="bg-white dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 px-4 py-8 text-center text-slate-500 dark:text-slate-400 mb-8">
+  <p>No specs found in this repository.</p>
+  <p class="text-sm mt-1">Add markdown files to <code class="font-mono bg-gray-100 dark:bg-surface px-1.5 py-0.5 rounded text-accent-600 dark:text-accent-400 text-xs">docs/specs/</code> to get started.</p>
+</div>
+{% endif %}
+
+<!-- Docs inventory -->
+{% if not repo.docs and repo.specs %}
+<p class="text-sm text-slate-400 dark:text-slate-500 italic">No additional docs indexed for this repository.</p>
+{% elif repo.docs %}
+<h2 class="text-lg font-semibold font-display text-slate-700 dark:text-slate-300 mb-3">Documentation ({{ repo.docs | length }})</h2>
+<div class="space-y-3">
+  {% for doc in repo.docs %}
+  <div class="bg-white dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden hover:border-accent-600 transition-colors">
+    <a href="/app/{{ current_org | default('') }}/docs/{{ repo.owner }}/{{ repo.repo }}/{{ doc.path }}" class="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+        <div class="flex flex-wrap items-center gap-2 min-w-0">
+          <span class="font-medium text-sm text-slate-900 dark:text-slate-100">{{ doc.title or doc.name }}</span>
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium font-mono bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-400">{{ doc.doc_type }}</span>
+          {% if doc.is_indexed %}
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400" title="Indexed for search">indexed</span>
+          {% endif %}
+        </div>
+        <span class="text-xs font-mono text-slate-500 shrink-0">{{ doc.path }}</span>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

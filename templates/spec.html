@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{{ spec.document.frontmatter.title }} — Canon{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="text-sm text-slate-500 dark:text-slate-400 mb-6 font-mono overflow-hidden">
+  <a href="/app/{{ current_org | default('') }}/" class="hover:text-accent-400 transition-colors">Dashboard</a>
+  <span class="mx-1 text-slate-400 dark:text-slate-600">/</span>
+  <a href="/app/{{ current_org | default('') }}/repos/{{ spec.repo_owner }}/{{ spec.repo_name }}" class="hover:text-accent-400 transition-colors truncate">{{ spec.repo_owner }}/{{ spec.repo_name }}</a>
+  <span class="mx-1 text-slate-400 dark:text-slate-600">/</span>
+  <span class="text-slate-800 dark:text-slate-200">{{ spec.document.frontmatter.title }}</span>
+</nav>
+
+<!-- Header -->
+<div class="bg-white dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 px-4 sm:px-6 py-4 mb-6">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+    <h1 class="text-xl sm:text-2xl font-bold font-display text-slate-900 dark:text-slate-100">{{ spec.document.frontmatter.title }}</h1>
+    <div class="flex items-center gap-3 shrink-0">
+      <a href="/app/{{ current_org | default('') }}/editor/{{ spec.repo_owner }}/{{ spec.repo_name }}/{{ spec.document.file_path }}"
+         class="inline-flex items-center gap-1 text-sm text-accent-400 hover:text-accent-300 hover:underline">
+        Edit
+      </a>
+      <a href="{{ spec.github_url }}" class="inline-flex items-center gap-1 text-sm text-brand-400 hover:text-brand-300 hover:underline" target="_blank">
+        View on GitHub
+      </a>
+    </div>
+  </div>
+  <div class="flex flex-wrap gap-2 sm:gap-4 text-sm text-slate-500 dark:text-slate-400">
+    <span>Status: <span class="status-badge status-{{ spec.document.frontmatter.status }}">{{ spec.document.frontmatter.status | replace("_", " ") | title }}</span></span>
+    {% if spec.document.frontmatter.review_status %}
+    <span>Review: <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium font-mono
+      {% if spec.document.frontmatter.review_status == 'approved' %}bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400
+      {% elif spec.document.frontmatter.review_status == 'in_review' %}bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400
+      {% else %}bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400{% endif %}">{{ spec.document.frontmatter.review_status | replace("_", " ") | title }}</span></span>
+    {% endif %}
+    <span>Owner: <strong class="text-slate-800 dark:text-slate-200">{{ spec.document.frontmatter.owner }}</strong></span>
+    <span>Team: <strong class="text-slate-800 dark:text-slate-200">{{ spec.document.frontmatter.team }}</strong></span>
+    {% if spec.document.frontmatter.created %}
+    <span>Created: {{ spec.document.frontmatter.created }}</span>
+    {% endif %}
+    {% if spec.document.frontmatter.updated %}
+    <span>Updated: {{ spec.document.frontmatter.updated }}</span>
+    {% endif %}
+    {% for tag in spec.document.frontmatter.tags %}
+    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium font-mono bg-emerald-50 dark:bg-accent-900/50 text-emerald-700 dark:text-accent-400">{{ tag }}</span>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Sections -->
+<div class="bg-white dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 px-4 sm:px-6 py-4 prose dark:prose-invert max-w-none">
+  {{ spec.rendered_html | safe }}
+</div>
+
+{% if posthog_key %}
+<script>
+  if (typeof swTrack === 'function') swTrack('spec_viewed', {
+    path: {{ spec.document.file_path | tojson }},
+    repo: {{ (spec.repo_owner ~ '/' ~ spec.repo_name) | tojson }},
+    status: {{ spec.document.frontmatter.status | tojson }},
+    org: {{ current_org | default("") | tojson }}
+  });
+</script>
+{% endif %}
+{% endblock %}

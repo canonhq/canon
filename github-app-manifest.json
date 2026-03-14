@@ -1,0 +1,23 @@
+{
+  "name": "Canon",
+  "url": "https://github.com/canonhq/canon",
+  "hook_attributes": {
+    "url": "https://canonhq.co/webhook",
+    "active": true
+  },
+  "redirect_url": "https://github.com/canonhq/canon",
+  "description": "Spec-driven development platform — AI agents review PRs against specs, sync tickets, and verify code.",
+  "public": true,
+  "default_events": [
+    "push",
+    "pull_request",
+    "issues",
+    "issue_comment"
+  ],
+  "default_permissions": {
+    "contents": "write",
+    "issues": "write",
+    "pull_requests": "write",
+    "metadata": "read"
+  }
+}

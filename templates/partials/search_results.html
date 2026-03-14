@@ -1,0 +1,49 @@
+{% if results %}
+<div class="bg-white dark:bg-surface-elevated rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 mt-2 max-h-[70vh] sm:max-h-96 overflow-y-auto">
+  <div class="px-4 py-2 border-b border-gray-100 dark:border-slate-700/50">
+    <span class="text-sm text-slate-500 dark:text-slate-400">{{ results | length }} result{{ 's' if results | length != 1 }}</span>
+  </div>
+  <div class="divide-y divide-gray-100 dark:divide-slate-700/50">
+    {% for r in results %}
+    <a href="/app/{{ current_org | default('') }}/{% if r.doc_type is defined and r.doc_type != 'spec' %}docs{% else %}specs{% endif %}/{{ r.repo_owner }}/{{ r.repo_name }}/{{ r.file_path }}" class="block px-4 py-2 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5">
+        <div class="flex flex-wrap items-center gap-2 min-w-0">
+          <span class="font-medium text-sm text-slate-900 dark:text-slate-100">{{ r.title }}</span>
+          {% if r.doc_type is defined and r.doc_type != 'spec' %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium font-mono bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-400">{{ r.doc_type }}</span>
+          {% endif %}
+          <span class="status-badge status-{{ r.status }}">{{ r.status | replace("_", " ") | title }}</span>
+        </div>
+        <span class="text-xs font-mono text-slate-500 shrink-0">{{ r.repo_full_name }}</span>
+      </div>
+      {% if r.heading %}
+      <div class="text-xs font-mono text-brand-500 dark:text-brand-400 mt-0.5">{{ r.heading }}</div>
+      {% endif %}
+      {% if r.snippet %}
+      <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{{ r.snippet | safe }}</div>
+      {% endif %}
+      <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+        {% if r.owner %}
+        <span>{{ r.owner }}</span>
+        {% endif %}
+        {% if r.team %}
+        <span>&middot; {{ r.team }}</span>
+        {% endif %}
+        {% for tag in r.tags %}
+        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-emerald-50 dark:bg-accent-900/50 text-emerald-700 dark:text-accent-400">{{ tag }}</span>
+        {% endfor %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% elif query %}
+<div class="bg-white dark:bg-surface-elevated rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 mt-2 px-4 py-6 text-center">
+  <p class="text-slate-500 dark:text-slate-400 text-sm">No specs found matching "{{ query }}"</p>
+  <ul class="mt-3 text-xs text-slate-400 dark:text-slate-500 space-y-1">
+    <li>Try a broader search term</li>
+    <li>Check spelling</li>
+    <li><a href="/app/{{ current_org | default('') }}/" class="text-accent-600 dark:text-accent-400 hover:text-accent-500 dark:hover:text-accent-300 transition-colors">Back to dashboard</a></li>
+  </ul>
+</div>
+{% endif %}

@@ -1,0 +1,54 @@
+{{- if .Values.reindexCronJob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "canon.fullname" . }}-reindex
+  labels:
+    {{- include "canon.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.reindexCronJob.schedule | quote }}
+  concurrencyPolicy: {{ .Values.reindexCronJob.concurrencyPolicy }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "canon.selectorLabels" . | nindent 12 }}
+        spec:
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ include "canon.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          restartPolicy: OnFailure
+          containers:
+            - name: reindex
+              image: {{ include "canon.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["python", "-m", "canon.search.reindex"]
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "canon.fullname" . }}
+                - secretRef:
+                    name: {{ include "canon.githubSecretName" . }}
+              {{- if or .Values.secrets.neon.databaseUrl .Values.secrets.neon.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.neonSecretName" . }}
+              {{- end }}
+              {{- if or .Values.secrets.gcp.serviceAccountKey .Values.secrets.gcp.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.gcpSecretName" . }}
+              {{- end }}
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir: {}
+{{- end }}

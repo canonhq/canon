@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Canon{% endblock %}</title>
+  <script>
+    (function(){
+      var s = localStorage.getItem('sw-theme');
+      var d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (s === 'dark' || (s !== 'light' && d))
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        fontFamily: {
+          sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          display: ['Space Grotesk', 'system-ui', '-apple-system', 'sans-serif'],
+          mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+        },
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff', 100: '#e0f2fe', 200: '#b9e6fe', 300: '#7cd4fd',
+              400: '#36bffa', 500: '#0ba5ec', 600: '#0077cc', 700: '#005fa3',
+              800: '#054985', 900: '#0a3d6e',
+            },
+            accent: {
+              50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7',
+              400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857',
+              800: '#065f46', 900: '#064e3b',
+            },
+            surface: { DEFAULT: '#0a0f1a', alt: '#111827', elevated: '#1e293b' },
+          },
+        },
+      },
+    }
+  </script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <link rel="stylesheet" href="/static/brand.css">
+  <link rel="stylesheet" href="/static/style.css">
+  {% if posthog_key %}
+  <script>
+    !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.async=!0,p.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once unregister opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing reset isFeatureEnabled getFeatureFlag getFeatureFlagPayload reloadFeatureFlags group identify setPersonProperties setPersonPropertiesForFlags".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+    posthog.init({{ posthog_key | tojson }}, {api_host: {{ posthog_host | tojson }}, capture_pageview: true, capture_pageleave: true, capture_exceptions: true});
+    {% if user %}posthog.identify({{ user.sub | tojson }});{% endif %}
+    {% if user and current_org is defined and current_org %}posthog.group('organization', {{ current_org | tojson }});{% endif %}
+    function swTrack(event, props) { try { posthog.capture(event, props); } catch(e) {} }
+  </script>
+  {% endif %}
+</head>
+<body class="h-full bg-white dark:bg-[#0a0f1a] font-sans text-slate-800 dark:text-slate-200 antialiased">
+  <!-- Accent bar -->
+  <div class="h-0.5 bg-gradient-to-r from-accent-500 to-cyan-400"></div>
+
+  <nav class="bg-gray-50/80 dark:bg-[#111827]/80 backdrop-blur border-b border-gray-200 dark:border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-14 items-center">
+        <div class="flex items-center gap-5">
+          <a href="/" class="text-lg font-bold font-display bg-gradient-to-r from-accent-400 to-cyan-400 bg-clip-text text-transparent">Canon</a>
+          <span class="text-xs font-mono text-slate-400 dark:text-slate-500 uppercase tracking-wider hidden sm:inline">Explorer</span>
+        </div>
+
+        <!-- Desktop nav items -->
+        <div class="hidden sm:flex items-center gap-4">
+          {% if orgs is defined and orgs | length > 1 %}
+          <select
+            onchange="window.location.href='/app/' + this.value + '/'"
+            class="bg-white dark:bg-[#0a0f1a] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+          >
+            {% for o in orgs %}
+            <option value="{{ o }}" {% if current_org is defined and o == current_org %}selected{% endif %}>{{ o }}</option>
+            {% endfor %}
+          </select>
+          {% endif %}
+          <div class="relative">
+            <input
+              id="desktop-search"
+              type="search"
+              name="q"
+              placeholder="Search specs..."
+              class="bg-white dark:bg-[#0a0f1a] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent w-64"
+              hx-get="/app/{{ current_org | default('') }}/search"
+              hx-trigger="keyup changed delay:300ms"
+              hx-target="#search-results"
+              hx-swap="innerHTML"
+              hx-params="q"
+              hx-indicator="#search-spinner"
+            >
+            <svg id="search-spinner" class="htmx-indicator absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+          </div>
+          {% if user %}
+          <span class="text-sm text-slate-600 dark:text-slate-400">{{ user.email }}</span>
+          {% if not request.session.get('github_user') %}
+          <a href="/auth/github/login" class="text-sm text-accent-400 hover:text-accent-300 transition-colors">Connect GitHub</a>
+          {% endif %}
+          <a href="/auth/logout" class="text-sm text-slate-500 hover:text-accent-400 transition-colors">Logout</a>
+          {% endif %}
+          <!-- Theme toggle -->
+          <button id="theme-toggle" type="button" onclick="cycleTheme()" class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors" title="Toggle theme">
+            <svg id="icon-sun" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"/></svg>
+            <svg id="icon-moon" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"/></svg>
+            <svg id="icon-monitor" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z"/></svg>
+          </button>
+        </div>
+
+        <!-- Hamburger button (mobile) -->
+        <button id="mobile-menu-btn" type="button" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')" class="sm:hidden p-1.5 rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors" aria-label="Toggle menu">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile menu -->
+    <div id="mobile-menu" class="hidden sm:hidden border-t border-gray-200 dark:border-slate-700">
+      <div class="px-4 py-3 space-y-3">
+        {% if orgs is defined and orgs | length > 1 %}
+        <select
+          onchange="window.location.href='/app/' + this.value + '/'"
+          class="w-full bg-white dark:bg-[#0a0f1a] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+        >
+          {% for o in orgs %}
+          <option value="{{ o }}" {% if current_org is defined and o == current_org %}selected{% endif %}>{{ o }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
+        <div class="relative">
+          <input
+            id="mobile-search"
+            type="search"
+            name="q"
+            placeholder="Search specs..."
+            class="w-full bg-white dark:bg-[#0a0f1a] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+            hx-get="/app/{{ current_org | default('') }}/search"
+            hx-trigger="keyup changed delay:300ms"
+            hx-target="#search-results"
+            hx-swap="innerHTML"
+            hx-params="q"
+          >
+        </div>
+        {% if user %}
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-slate-600 dark:text-slate-400">{{ user.email }}</span>
+          <a href="/auth/logout" class="text-sm text-slate-500 hover:text-accent-400 transition-colors">Logout</a>
+        </div>
+        {% endif %}
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-slate-500">Theme</span>
+          <button type="button" onclick="cycleTheme()" class="p-1.5 rounded-md text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors" title="Toggle theme">
+            <svg id="icon-sun-m" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"/></svg>
+            <svg id="icon-moon-m" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"/></svg>
+            <svg id="icon-monitor-m" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div id="search-results" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative"></div>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="border-t border-gray-200 dark:border-slate-800 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <p class="text-sm text-slate-500 text-center">
+        <span class="font-display font-semibold bg-gradient-to-r from-accent-500 to-cyan-400 bg-clip-text text-transparent">Canon</span>
+        by <a href="https://gernerventures.com" class="hover:text-accent-400 transition-colors">Gerner Ventures</a>
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    function getTheme() { return localStorage.getItem('sw-theme') || 'system'; }
+    function applyTheme(mode) {
+      var d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var dark = mode === 'dark' || (mode === 'system' && d);
+      document.documentElement.classList.toggle('dark', dark);
+      ['', '-m'].forEach(function(suffix) {
+        var sun = document.getElementById('icon-sun' + suffix);
+        var moon = document.getElementById('icon-moon' + suffix);
+        var mon = document.getElementById('icon-monitor' + suffix);
+        if (sun) sun.style.display = mode === 'light' ? 'block' : 'none';
+        if (moon) moon.style.display = mode === 'dark' ? 'block' : 'none';
+        if (mon) mon.style.display = mode === 'system' ? 'block' : 'none';
+      });
+    }
+    function cycleTheme() {
+      var order = ['system', 'light', 'dark'];
+      var current = getTheme();
+      var next = order[(order.indexOf(current) + 1) % 3];
+      localStorage.setItem('sw-theme', next);
+      applyTheme(next);
+      if (typeof swTrack === 'function') swTrack('theme_toggled', {theme: next});
+    }
+    applyTheme(getTheme());
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function() {
+      if (getTheme() === 'system') applyTheme('system');
+    });
+
+    // Search keyboard navigation: Enter → first result, Escape → close
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        document.getElementById('search-results').innerHTML = '';
+        return;
+      }
+      if (e.key === 'Enter' && (e.target.id === 'desktop-search' || e.target.id === 'mobile-search')) {
+        var link = document.querySelector('#search-results a');
+        if (link) { e.preventDefault(); link.click(); }
+      }
+    });
+  </script>
+</body>
+</html>

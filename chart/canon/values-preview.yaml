@@ -1,0 +1,40 @@
+## Preview deployment overrides — ephemeral per-PR namespace
+##
+## NOTE: The preview connects to the production Neon database with full RW
+## access. "Read-only" is by convention (cron jobs disabled, no webhook
+## processing) not by enforcement. Do not enable cron jobs or webhook
+## processing in previews without scoping DB access first.
+## Usage: helm upgrade --install canon-pr-N chart/canon/ \
+##   -f chart/canon/values-production.yaml \
+##   -f chart/canon/values-preview.yaml \
+##   --set ingress.hostname=pr-N.canonhq.co \
+##   --set image.tag=pr-N \
+##   -n canon-preview-N --create-namespace
+
+replicaCount: 1
+
+ingress:
+  enabled: true
+  className: nginx
+  hostname: ""  # set via --set at deploy time
+  tls: true
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    # No CPU limit — avoids kernel CFS throttling (K8s best practice for burstable pods)
+    memory: 256Mi
+
+# Disable all cron jobs — previews are read-only UI
+cronJob:
+  enabled: false
+reindexCronJob:
+  enabled: false
+staleCheckCronJob:
+  enabled: false
+coverageSnapshotCronJob:
+  enabled: false

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "canon.fullname" . }}
+  labels:
+    {{- include "canon.labels" . | nindent 4 }}
+data:
+  PORT: {{ .Values.config.port | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  WEBHOOK_PATH: {{ .Values.config.webhookPath | quote }}
+  WEB_ORG: {{ .Values.config.webOrg | quote }}
+  CACHE_TTL_SECONDS: {{ .Values.config.cacheTtlSeconds | quote }}
+  POSTHOG_HOST: {{ .Values.config.posthogHost | quote }}
+  POSTHOG_LOGS_ENABLED: {{ .Values.config.posthogLogsEnabled | quote }}
+  POSTHOG_LOGS_MIN_LEVEL: {{ .Values.config.posthogLogsMinLevel | quote }}
+  {{- if .Values.config.platformUrl }}
+  PLATFORM_URL: {{ .Values.config.platformUrl | quote }}
+  {{- end }}

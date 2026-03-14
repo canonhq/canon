@@ -1,0 +1,14 @@
+apiVersion: v2
+name: canon
+description: "Canon — spec-driven development platform"
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: Gerner Ventures
+keywords:
+  - specs
+  - ai
+  - github
+  - documentation
+  - canon

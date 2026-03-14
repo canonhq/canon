@@ -1,0 +1,76 @@
+name: "Setup Canon"
+description: "Initialize Canon in your repository with spec templates and configuration"
+branding:
+  icon: "file-text"
+  color: "orange"
+
+inputs:
+  team:
+    description: "Team name for CANON.yaml"
+    required: false
+    default: ""
+  ticket-system:
+    description: "Ticket system (github, jira, linear)"
+    required: false
+    default: "github"
+  create-pr:
+    description: "Create a PR with setup files (vs committing directly)"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install Canon
+      shell: bash
+      run: pip install "canonhq>=1.0.0,<2.0.0"
+
+    - name: Run canon setup
+      shell: bash
+      env:
+        INPUT_TEAM: ${{ inputs.team }}
+        INPUT_TICKET_SYSTEM: ${{ inputs.ticket-system }}
+      run: |
+        ARGS=(--non-interactive --ticket-system "$INPUT_TICKET_SYSTEM")
+        if [ -n "$INPUT_TEAM" ]; then
+          ARGS+=(--team "$INPUT_TEAM")
+        fi
+        canon setup "${ARGS[@]}"
+
+    - name: Create PR with setup files
+      if: inputs.create-pr == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git checkout -b canon/setup
+        git add docs/specs/ CANON.yaml
+        git commit -m "chore: initialize Canon"
+        git push -u origin canon/setup
+        gh pr create \
+          --title "chore: initialize Canon" \
+          --body "$(cat <<'EOF'
+        ## Summary
+
+        Initialize Canon in this repository with:
+        - `docs/specs/_template.md` — copy to create new spec documents
+        - `CANON.yaml` — repo-level configuration
+
+        ## Next steps
+
+        1. Merge this PR
+        2. Copy the template to create your first spec
+        3. Install the Claude Code plugin: `/plugin install canonhq`
+
+        ---
+        _Created by the [Setup Canon](https://github.com/canonhq/canon) action._
+        EOF
+        )"

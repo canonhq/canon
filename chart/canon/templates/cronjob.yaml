@@ -1,0 +1,64 @@
+{{- if .Values.cronJob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "canon.fullname" . }}-sync
+  labels:
+    {{- include "canon.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.cronJob.schedule | quote }}
+  concurrencyPolicy: {{ .Values.cronJob.concurrencyPolicy }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "canon.selectorLabels" . | nindent 12 }}
+        spec:
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ include "canon.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          restartPolicy: OnFailure
+          containers:
+            - name: sync
+              image: {{ include "canon.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["python", "-m", "canon.cron.sync_status"]
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "canon.fullname" . }}
+                - secretRef:
+                    name: {{ include "canon.githubSecretName" . }}
+                - secretRef:
+                    name: {{ include "canon.anthropicSecretName" . }}
+              {{- if or .Values.secrets.neon.databaseUrl .Values.secrets.neon.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.neonSecretName" . }}
+              {{- end }}
+              {{- if or .Values.secrets.gcp.serviceAccountKey .Values.secrets.gcp.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.gcpSecretName" . }}
+              {{- end }}
+              {{- if or .Values.secrets.jira.host .Values.secrets.jira.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.jiraSecretName" . }}
+              {{- end }}
+              {{- if or .Values.secrets.auth0.domain .Values.secrets.auth0.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.auth0SecretName" . }}
+              {{- end }}
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir: {}
+{{- end }}

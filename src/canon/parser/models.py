@@ -1,0 +1,152 @@
+"""Pydantic models for parsed spec documents."""
+
+from __future__ import annotations
+
+from typing import Literal, get_args
+
+from pydantic import BaseModel, ConfigDict, Field
+
+# --- Type aliases (single source of truth for Literal + validation sets) ---
+
+DocType = Literal["spec", "proposal", "design", "adr"]
+ReviewStatus = Literal["draft", "in_review", "approved"]
+
+VALID_DOC_TYPES: frozenset[str] = frozenset(get_args(DocType))
+VALID_REVIEW_STATUSES: frozenset[str] = frozenset(get_args(ReviewStatus))
+
+# --- Section Status ---
+
+
+class SectionStatus(BaseModel):
+    state: Literal["draft", "todo", "in_progress", "done", "blocked", "deprecated"]
+    blocked_by: str | None = None
+
+
+# --- Ticket Link ---
+
+
+class TicketLink(BaseModel):
+    system: Literal["jira", "linear", "github"]
+    ticket_id: str
+
+
+# --- Realization Reference ---
+
+
+class RealizationRef(BaseModel):
+    pr_number: int | None = None
+    file_path: str = ""
+    lines: str = ""  # e.g. "42-60"
+
+
+# --- BDD Scenarios ---
+
+
+class ScenarioStep(BaseModel):
+    keyword: Literal["GIVEN", "WHEN", "THEN", "AND", "BUT"]
+    text: str
+    strength: Literal["MUST", "MUST_NOT", "SHOULD", "SHOULD_NOT", "MAY"] | None = None
+    line: int
+
+
+class Scenario(BaseModel):
+    name: str
+    steps: list[ScenarioStep] = Field(min_length=1)
+    start_line: int
+    end_line: int
+
+
+# --- Acceptance Criteria ---
+
+
+class AcceptanceCriterion(BaseModel):
+    text: str
+    checked: bool
+    line: int
+    realized_in: list[RealizationRef] = []
+    strength: Literal["MUST", "MUST_NOT", "SHOULD", "SHOULD_NOT", "MAY"] | None = None
+
+
+# --- Spec Section ---
+
+
+class SpecSection(BaseModel):
+    id: str
+    section_number: str | None
+    title: str
+    depth: int
+    content: str
+    ticket_link: TicketLink | None = None
+    status: SectionStatus
+    acceptance_criteria: list[AcceptanceCriterion] = []
+    scenarios: list[Scenario] = []
+    delta: Literal["added", "modified", "removed"] | None = None
+    children: list[SpecSection] = []
+    start_line: int
+    end_line: int
+
+
+# --- Frontmatter ---
+
+
+class SpecFrontmatter(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    title: str
+    status: str
+    owner: str
+    team: str
+    ticket_project: str | None = None
+    created: str | None = None
+    updated: str | None = None
+    tags: list[str] = []
+    doc_type: DocType = Field(default="spec", alias="type", serialization_alias="type")
+    depends_on: list[str] = []
+    supersedes: str | None = None
+    review_status: ReviewStatus | None = None
+
+
+# --- Diagnostics ---
+
+
+class Diagnostic(BaseModel):
+    severity: Literal["error", "warning", "info"]
+    message: str
+    line: int | None = None
+    file_path: str | None = None
+
+
+# --- Document ---
+
+
+class SpecDocument(BaseModel):
+    file_path: str
+    frontmatter: SpecFrontmatter
+    sections: list[SpecSection]
+    raw: str
+
+
+# --- Parse Options ---
+
+
+def flatten_sections(sections: list[SpecSection]) -> list[SpecSection]:
+    """Recursively flatten a section tree into a pre-order list."""
+    result: list[SpecSection] = []
+    for section in sections:
+        result.append(section)
+        if section.children:
+            result.extend(flatten_sections(section.children))
+    return result
+
+
+class ParseOptions(BaseModel):
+    file_path: str | None = None
+    include_content: bool = True
+
+
+# --- Parse Result ---
+
+
+class ParseResult(BaseModel):
+    document: SpecDocument
+    diagnostics: list[Diagnostic]

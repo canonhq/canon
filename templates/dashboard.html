@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Canon — {{ overview.org }}{% endblock %}
+
+{% block content %}
+{% from "partials/empty_state.html" import empty_state %}
+<div class="mb-8">
+  <h1 class="text-2xl font-bold font-display text-slate-900 dark:text-slate-100">{{ overview.org }}</h1>
+  <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+    {{ overview.total_repos }} repositories &middot; {{ overview.total_specs }} specs{% if overview.total_docs %} &middot; {{ overview.total_docs }} docs{% endif %}
+  </p>
+</div>
+
+{% if not overview.repos_with_specs and not overview.repos_without_specs %}
+{{ empty_state(
+  icon='<svg class="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" /></svg>',
+  heading="No repositories found",
+  description="Install the Canon GitHub App on your organization to start tracking specs.",
+  cta_text="View setup guide",
+  cta_href="https://github.com/apps/canon-hq"
+) }}
+{% else %}
+
+<!-- Filters -->
+<div class="flex flex-col sm:flex-row gap-3 mb-6" id="filters">
+  <select
+    name="team"
+    class="w-full sm:w-auto rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-surface-elevated text-slate-700 dark:text-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+    hx-get="/app/{{ current_org | default(overview.org) }}/search"
+    hx-trigger="change"
+    hx-target="#spec-list"
+    hx-swap="innerHTML"
+    hx-include="#filters"
+  >
+    <option value="">All teams</option>
+    {% set teams = [] %}
+    {% for repo in overview.repos_with_specs %}
+      {% for spec in repo.specs %}
+        {% if spec.team and spec.team not in teams %}
+          {% if teams.append(spec.team) %}{% endif %}
+          <option value="{{ spec.team }}">{{ spec.team }}</option>
+        {% endif %}
+      {% endfor %}
+    {% endfor %}
+  </select>
+  <select
+    name="status"
+    class="w-full sm:w-auto rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-surface-elevated text-slate-700 dark:text-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+    hx-get="/app/{{ current_org | default(overview.org) }}/search"
+    hx-trigger="change"
+    hx-target="#spec-list"
+    hx-swap="innerHTML"
+    hx-include="#filters"
+  >
+    <option value="">All statuses</option>
+    <option value="draft">Draft{% if facets is defined and facets.status.get('draft') %} ({{ facets.status['draft'] }}){% endif %}</option>
+    <option value="in_progress">In Progress{% if facets is defined and facets.status.get('in_progress') %} ({{ facets.status['in_progress'] }}){% endif %}</option>
+    <option value="done">Done{% if facets is defined and facets.status.get('done') %} ({{ facets.status['done'] }}){% endif %}</option>
+    <option value="blocked">Blocked{% if facets is defined and facets.status.get('blocked') %} ({{ facets.status['blocked'] }}){% endif %}</option>
+  </select>
+  <select
+    name="review_status"
+    class="w-full sm:w-auto rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-surface-elevated text-slate-700 dark:text-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+    hx-get="/app/{{ current_org | default(overview.org) }}/search"
+    hx-trigger="change"
+    hx-target="#spec-list"
+    hx-swap="innerHTML"
+    hx-include="#filters"
+  >
+    <option value="">All review statuses</option>
+    <option value="draft">Draft</option>
+    <option value="in_review">In Review</option>
+    <option value="approved">Approved</option>
+  </select>
+  {% if facets is defined and facets.repo %}
+  <select
+    name="repo"
+    class="w-full sm:w-auto rounded-md border border-gray-300 dark:border-slate-700 bg-white dark:bg-surface-elevated text-slate-700 dark:text-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+    hx-get="/app/{{ current_org | default(overview.org) }}/search"
+    hx-trigger="change"
+    hx-target="#spec-list"
+    hx-swap="innerHTML"
+    hx-include="#filters"
+  >
+    <option value="">All repos</option>
+    {% for repo_name, count in facets.repo.items() %}
+    <option value="{{ repo_name }}">{{ repo_name }} ({{ count }})</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+</div>
+
+<div id="spec-list">
+  {% include "partials/spec_list.html" %}
+</div>
+{% endif %}
+{% endblock %}

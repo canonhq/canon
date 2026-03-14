@@ -1,0 +1,744 @@
+"""MCP server factory — creates a FastMCP instance with spec tools."""
+
+from __future__ import annotations
+
+import logging
+import re as _re
+from contextlib import asynccontextmanager
+from typing import Any
+
+import frontmatter as fm_lib
+from mcp.server.fastmcp import Context, FastMCP
+
+from canon import analytics
+
+from .deps import McpDeps
+
+logger = logging.getLogger(__name__)
+
+MAX_BODY_SNIPPET = 500
+
+
+def _get_deps(ctx: Context) -> McpDeps:
+    """Extract McpDeps from the MCP context's lifespan context."""
+    return ctx.request_context.lifespan_context["deps"]
+
+
+def _section_to_dict(section: Any, include_content: bool = True) -> dict:
+    """Convert a SpecSection to a plain dict for JSON serialization.
+
+    NOTE: This manually mirrors SpecSection/Scenario/ScenarioStep/AcceptanceCriterion
+    fields. If new fields are added to those models, update this function to match.
+    """
+    d: dict[str, Any] = {
+        "id": section.id,
+        "section_number": section.section_number,
+        "title": section.title,
+        "depth": section.depth,
+        "status": section.status.state,
+    }
+    if section.ticket_link:
+        d["ticket_link"] = {
+            "system": section.ticket_link.system,
+            "ticket_id": section.ticket_link.ticket_id,
+        }
+    if section.delta:
+        d["delta"] = section.delta
+    if include_content:
+        d["content"] = section.content
+    if section.acceptance_criteria:
+        d["acceptance_criteria"] = [
+            {
+                "text": ac.text,
+                "checked": ac.checked,
+                **({"strength": ac.strength} if ac.strength else {}),
+            }
+            for ac in section.acceptance_criteria
+        ]
+    if section.scenarios:
+        d["scenarios"] = [
+            {
+                "name": sc.name,
+                "steps": [
+                    {
+                        "keyword": step.keyword,
+                        "text": step.text,
+                        **({"strength": step.strength} if step.strength else {}),
+                    }
+                    for step in sc.steps
+                ],
+            }
+            for sc in section.scenarios
+        ]
+    if section.children:
+        d["children"] = [
+            _section_to_dict(child, include_content=include_content) for child in section.children
+        ]
+    return d
+
+
+VALID_SECTION_STATES = {"draft", "todo", "in_progress", "done", "blocked", "deprecated"}
+
+
+def _find_section(sections: list, target_id: str) -> Any | None:
+    """Search all sections (including children) for matching ID."""
+    for s in sections:
+        if s.id == target_id:
+            return s
+        found = _find_section(s.children, target_id)
+        if found:
+            return found
+    return None
+
+
+def create_mcp_server(deps: McpDeps) -> FastMCP:
+    """Create a FastMCP server with spec tools wired to the given dependencies."""
+
+    @asynccontextmanager
+    async def lifespan(server: FastMCP):
+        yield {"deps": deps}
+
+    mcp = FastMCP(
+        "Canon",
+        instructions=(
+            "Canon gives you access to your organization's spec documents "
+            "and markdown knowledge base. Use 'search' to find relevant specs, "
+            "'get_spec' to read a full spec, and 'get_doc' for raw markdown."
+        ),
+        lifespan=lifespan,
+    )
+
+    # ─── Tool: search ────────────────────────────────────
+
+    @mcp.tool(
+        name="search",
+        description=(
+            "Search the spec knowledge base using hybrid search (vector + BM25). "
+            "Returns matching sections with repo, path, title, heading, body snippet, "
+            "status, and relevance score. Use this to find specs related to what "
+            "you're working on."
+        ),
+    )
+    async def search(
+        query: str,
+        repo: str | None = None,
+        status: str | None = None,
+        limit: int = 10,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> list[dict] | dict:
+        analytics.track("mcp_tool_called", properties={"tool": "search", "repo": repo or ""})
+        d = _get_deps(ctx)
+        if d.search_index is None:
+            return {"error": "Search index not available"}
+
+        # Embed query if possible
+        query_embedding = None
+        if d.embed_client and d.embed_client.is_available:
+            try:
+                query_embedding = d.embed_client.embed_query(query)
+            except Exception:
+                logger.debug("Embedding failed, falling back to text-only search")
+
+        results = await d.search_index.hybrid_search(
+            query_embedding=query_embedding,
+            query_text=query,
+            repo=repo,
+            status=status,
+            limit=limit,
+        )
+
+        return [
+            {
+                "repo": r.repo,
+                "path": r.path,
+                "title": r.doc_title,
+                "heading": r.heading,
+                "body": r.body[:MAX_BODY_SNIPPET] if r.body else "",
+                "status": r.status,
+                "score": round(r.rrf_score, 4),
+            }
+            for r in results
+        ]
+
+    # ─── Tool: get_spec ──────────────────────────────────
+
+    @mcp.tool(
+        name="get_spec",
+        description=(
+            "Get a full parsed spec document with frontmatter, sections, "
+            "acceptance criteria, and status. Returns structured data."
+        ),
+    )
+    async def get_spec(
+        owner: str,
+        repo: str,
+        file_path: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict:
+        analytics.track(
+            "mcp_tool_called", properties={"tool": "get_spec", "repo": f"{owner}/{repo}"}
+        )
+        d = _get_deps(ctx)
+        if d.github_client is None:
+            return {"error": "GitHub client not available"}
+
+        from ..parser.models import ParseOptions
+        from ..parser.parse import parse_spec
+
+        try:
+            content, _sha = await d.github_client.get_file_content(owner, repo, file_path)
+        except Exception:
+            return {"error": f"File not found: {owner}/{repo}/{file_path}"}
+
+        result = parse_spec(content, ParseOptions(file_path=file_path))
+        doc = result.document
+
+        fm = doc.frontmatter
+        fm_dict: dict[str, Any] = {
+            "title": fm.title,
+            "status": fm.status,
+            "owner": fm.owner,
+            "team": fm.team,
+            "tags": fm.tags,
+            "doc_type": fm.doc_type,
+            "depends_on": fm.depends_on,
+        }
+        if fm.review_status:
+            fm_dict["review_status"] = fm.review_status
+        if fm.supersedes:
+            fm_dict["supersedes"] = fm.supersedes
+
+        return {
+            "file_path": doc.file_path,
+            "frontmatter": fm_dict,
+            "sections": [_section_to_dict(s) for s in doc.sections],
+        }
+
+    # ─── Tool: get_section ───────────────────────────────
+
+    @mcp.tool(
+        name="get_section",
+        description=(
+            "Get a single section from a spec by its ID. "
+            "Returns the section with content, acceptance criteria, and ticket link."
+        ),
+    )
+    async def get_section(
+        owner: str,
+        repo: str,
+        file_path: str,
+        section_id: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict:
+        analytics.track(
+            "mcp_tool_called", properties={"tool": "get_section", "repo": f"{owner}/{repo}"}
+        )
+        d = _get_deps(ctx)
+        if d.github_client is None:
+            return {"error": "GitHub client not available"}
+
+        from ..parser.models import ParseOptions
+        from ..parser.parse import parse_spec
+
+        try:
+            content, _sha = await d.github_client.get_file_content(owner, repo, file_path)
+        except Exception:
+            return {"error": f"File not found: {owner}/{repo}/{file_path}"}
+
+        result = parse_spec(content, ParseOptions(file_path=file_path))
+
+        section = _find_section(result.document.sections, section_id)
+        if section is None:
+            return {"error": f"Section not found: {section_id}"}
+
+        return _section_to_dict(section)
+
+    # ─── Tool: get_doc ───────────────────────────────────
+
+    @mcp.tool(
+        name="get_doc",
+        description=(
+            "Get raw markdown content of any document from a repository. "
+            "Use this when you need the unprocessed markdown."
+        ),
+    )
+    async def get_doc(
+        owner: str,
+        repo: str,
+        file_path: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict:
+        analytics.track(
+            "mcp_tool_called", properties={"tool": "get_doc", "repo": f"{owner}/{repo}"}
+        )
+        d = _get_deps(ctx)
+        if d.github_client is None:
+            return {"error": "GitHub client not available"}
+
+        try:
+            content, _sha = await d.github_client.get_file_content(owner, repo, file_path)
+        except Exception:
+            return {"error": f"File not found: {owner}/{repo}/{file_path}"}
+
+        return {"owner": owner, "repo": repo, "path": file_path, "content": content}
+
+    # ─── Tool: list_specs ────────────────────────────────
+
+    @mcp.tool(
+        name="list_specs",
+        description=(
+            "List all spec documents in a repository (using configured doc_paths). "
+            "Returns metadata (title, status, owner) without full content."
+        ),
+    )
+    async def list_specs(
+        owner: str,
+        repo: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> list[dict] | dict:
+        analytics.track(
+            "mcp_tool_called", properties={"tool": "list_specs", "repo": f"{owner}/{repo}"}
+        )
+        d = _get_deps(ctx)
+        if d.github_client is None:
+            return {"error": "GitHub client not available"}
+
+        from ..github.spec_utils import load_repo_config, load_repo_specs
+
+        config = await load_repo_config(d.github_client, owner, repo)
+        specs = await load_repo_specs(d.github_client, owner, repo, patterns=config.specs.doc_paths)
+
+        return [
+            {
+                "file_path": s["file_path"],
+                "title": s["document"].frontmatter.title,
+                "status": s["document"].frontmatter.status,
+                "owner": s["document"].frontmatter.owner,
+                "team": s["document"].frontmatter.team,
+                "tags": s["document"].frontmatter.tags,
+                "section_count": len(s["document"].sections),
+            }
+            for s in specs
+        ]
+
+    # ─── Tool: list_docs ─────────────────────────────────
+
+    @mcp.tool(
+        name="list_docs",
+        description=(
+            "List all indexed document paths in the knowledge base. "
+            "Optionally filter by repository (e.g. 'owner/repo')."
+        ),
+    )
+    async def list_docs(
+        repo: str | None = None,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> list[dict] | dict:
+        analytics.track("mcp_tool_called", properties={"tool": "list_docs", "repo": repo or ""})
+        d = _get_deps(ctx)
+        if d.search_index is None:
+            return {"error": "Search index not available"}
+
+        paths = await d.search_index.get_indexed_paths(repo=repo)
+
+        return [
+            {
+                "key": key,
+                "indexed_at": str(info["indexed_at"]),
+                "has_embedding": info["has_embedding"],
+            }
+            for key, info in paths.items()
+        ]
+
+    # ─── Tool: get_coverage ────────────────────────────
+
+    @mcp.tool(
+        name="get_coverage",
+        description=(
+            "Get spec coverage metrics for the organization. Returns aggregate "
+            "coverage summary (total specs, sections, ACs, realization rate, "
+            "health score) and a time-series trend. Optionally filter by "
+            "repository or team."
+        ),
+    )
+    async def get_coverage_tool(
+        repo: str | None = None,
+        team: str | None = None,
+        days: int = 30,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict:
+        analytics.track("mcp_tool_called", properties={"tool": "get_coverage", "repo": repo or ""})
+        d = _get_deps(ctx)
+
+        if d.github_client is None and d.agent_store is None:
+            return {"error": "Coverage data not available (no GitHub client or database)"}
+
+        try:
+            from ..web.cache import TTLCache
+            from ..web.services import get_coverage
+        except ImportError:
+            return {"error": "Coverage tools not available (cloud dependencies not installed)"}
+
+        cache = d.cache or TTLCache(ttl_seconds=300)
+        result = await get_coverage(
+            d.github_client,
+            d.settings.web_org if d.settings else "",
+            cache,
+            repo=repo or "",
+            team=team or "",
+            days=days,
+            agent_store=d.agent_store,
+        )
+        return result.model_dump()
+
+    # ─── Tool: create_spec ────────────────────────────────
+
+    @mcp.tool(
+        name="create_spec",
+        description=(
+            "Create a new spec document in a repository from a template. "
+            "Commits the file directly to the default branch."
+        ),
+    )
+    async def create_spec(
+        owner: str,
+        repo: str,
+        title: str,
+        doc_type: str = "spec",
+        team: str = "",
+        owner_name: str = "",
+        tags: list[str] | None = None,
+        file_name: str | None = None,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict:
+        analytics.track(
+            "mcp_tool_called", properties={"tool": "create_spec", "repo": f"{owner}/{repo}"}
+        )
+        d = _get_deps(ctx)
+        if d.github_client is None:
+            return {"error": "GitHub client not available"}
+
+        from ..parser.templates import get_template
+
+        try:
+            template = get_template(doc_type)
+        except ValueError as e:
+            return {"error": str(e)}
+
+        post = fm_lib.loads(template)
+        post.metadata["title"] = title
+        if team:
+            post.metadata["team"] = team
+        if owner_name:
+            post.metadata["owner"] = owner_name
+        if tags:
+            post.metadata["tags"] = tags
+
+        # Replace the placeholder heading with the actual title
+        content = fm_lib.dumps(post)
+        # Templates use "# Untitled <Type>" headings — replace generically
+        content = _re.sub(r"^# Untitled \w+", f"# {title}", content, count=1, flags=_re.MULTILINE)
+
+        # Build file path — sanitize both caller-provided and derived slugs
+        def _sanitize_slug(raw: str) -> str:
+            s = raw.lower().replace(" ", "-")
+            s = "".join(c for c in s if c.isalnum() or c == "-")
+            return _re.sub(r"-+", "-", s).strip("-")
+
+        slug = _sanitize_slug(file_name) if file_name else _sanitize_slug(title)
+        if not slug:
+            return {"error": f"Cannot derive a valid filename from title: {title!r}"}
+
+        # Use configurable spec directory from CANON.yaml
+        from ..github.spec_utils import extract_directories
+        from ..github.spec_utils import load_repo_config as _load_cfg
+
+        cfg = await _load_cfg(d.github_client, owner, repo)
+        dirs = extract_directories(cfg.specs.doc_paths)
+        spec_dir = dirs[0][0] if dirs else "docs/specs"
+        path = f"{spec_dir}/{slug}.md"
+
+        try:
+            result = await d.github_client.create_or_update_file(
+                owner,
+                repo,
+                path,
+                content,
+                f"docs: create spec — {title}",
+            )
+            return {
+                "path": path,
+                "sha": result.get("content", {}).get("sha", ""),
+                "message": f"Created spec: {path}",
+            }
+        except Exception as e:
+            return {"error": f"Failed to create spec: {e}"}
+
+    # ─── Tool: update_section_status ──────────────────────
+
+    @mcp.tool(
+        name="update_section_status",
+        description=(
+            "Update the status of a spec section. Modifies the status comment "
+            "in-place or inserts one if missing, then commits the change."
+        ),
+    )
+    async def update_section_status(
+        owner: str,
+        repo: str,
+        file_path: str,
+        section_id: str,
+        new_state: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict:
+        analytics.track(
+            "mcp_tool_called",
+            properties={"tool": "update_section_status", "repo": f"{owner}/{repo}"},
+        )
+        d = _get_deps(ctx)
+        if d.github_client is None:
+            return {"error": "GitHub client not available"}
+
+        if new_state not in VALID_SECTION_STATES:
+            return {
+                "error": f"Invalid state: {new_state}. Must be one of {sorted(VALID_SECTION_STATES)}"
+            }
+
+        from ..parser.models import ParseOptions
+        from ..parser.parse import parse_spec
+        from ..parser.writer import (
+            StatusUpdate,
+            insert_status_comment,
+            update_status_comments,
+        )
+
+        try:
+            content, sha = await d.github_client.get_file_content(owner, repo, file_path)
+        except Exception:
+            return {"error": f"File not found: {owner}/{repo}/{file_path}"}
+
+        result = parse_spec(content, ParseOptions(file_path=file_path))
+        section = _find_section(result.document.sections, section_id)
+        if section is None:
+            return {"error": f"Section not found: {section_id}"}
+
+        # Try in-place update first
+        updated = update_status_comments(
+            result.document,
+            [StatusUpdate(section_number=section.section_number, new_state=new_state)],
+        )
+
+        # If nothing changed, insert a new status comment
+        if updated == content:
+            updated = insert_status_comment(
+                content, section.start_line, section.section_number, new_state
+            )
+
+        try:
+            await d.github_client.create_or_update_file(
+                owner,
+                repo,
+                file_path,
+                updated,
+                f"docs: update {section.title} status to {new_state}",
+                sha=sha,
+            )
+            return {
+                "section_id": section_id,
+                "new_state": new_state,
+                "message": f"Updated section '{section.title}' to {new_state}",
+            }
+        except Exception as e:
+            return {"error": f"Failed to commit: {e}"}
+
+    # ─── Tool: add_realization ───────────────────────────
+
+    @mcp.tool(
+        name="add_realization",
+        description=(
+            "Add realization evidence to a spec section's acceptance criterion. "
+            "Links a PR and code location to an AC checkbox."
+        ),
+    )
+    async def add_realization(
+        owner: str,
+        repo: str,
+        file_path: str,
+        section_id: str,
+        ac_text: str,
+        pr_number: int,
+        code_file: str,
+        lines: str = "",
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict:
+        analytics.track(
+            "mcp_tool_called", properties={"tool": "add_realization", "repo": f"{owner}/{repo}"}
+        )
+        d = _get_deps(ctx)
+        if d.github_client is None:
+            return {"error": "GitHub client not available"}
+
+        from ..parser.models import ParseOptions
+        from ..parser.parse import parse_spec
+        from ..parser.writer import RealizationInsertion, insert_realization_comments
+
+        try:
+            content, sha = await d.github_client.get_file_content(owner, repo, file_path)
+        except Exception:
+            return {"error": f"File not found: {owner}/{repo}/{file_path}"}
+
+        result = parse_spec(content, ParseOptions(file_path=file_path))
+        section = _find_section(result.document.sections, section_id)
+        if section is None:
+            return {"error": f"Section not found: {section_id}"}
+
+        insertion = RealizationInsertion(
+            ac_text=ac_text,
+            pr_number=pr_number,
+            file_path=code_file,
+            lines=lines,
+        )
+
+        updated = insert_realization_comments(result.document, [insertion])
+
+        if updated == content:
+            return {"error": f"AC not found in section: {ac_text}"}
+
+        try:
+            await d.github_client.create_or_update_file(
+                owner,
+                repo,
+                file_path,
+                updated,
+                f"docs: add realization for PR#{pr_number} in {section.title}",
+                sha=sha,
+            )
+            return {
+                "section_id": section_id,
+                "ac_text": ac_text,
+                "pr_number": pr_number,
+                "message": f"Added realization evidence for PR#{pr_number}",
+            }
+        except Exception as e:
+            return {"error": f"Failed to commit: {e}"}
+
+    # ─── Tool: sync_spec_status ──────────────────────────
+
+    @mcp.tool(
+        name="sync_spec_status",
+        description=(
+            "Bulk update a spec: apply multiple status updates and realizations "
+            "in a single commit. More efficient than individual calls."
+        ),
+    )
+    async def sync_spec_status(
+        owner: str,
+        repo: str,
+        file_path: str,
+        status_updates: list[dict] | None = None,
+        realizations: list[dict] | None = None,
+        commit_message: str = "",
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict:
+        analytics.track(
+            "mcp_tool_called", properties={"tool": "sync_spec_status", "repo": f"{owner}/{repo}"}
+        )
+        d = _get_deps(ctx)
+        if d.github_client is None:
+            return {"error": "GitHub client not available"}
+
+        from ..parser.models import ParseOptions
+        from ..parser.parse import parse_spec
+        from ..parser.writer import (
+            RealizationInsertion,
+            StatusUpdate,
+            insert_realization_comments,
+            insert_status_comment,
+            update_status_comments,
+        )
+
+        if not status_updates and not realizations:
+            return {"error": "No updates provided"}
+
+        # Validate states upfront
+        if status_updates:
+            for su in status_updates:
+                if su["new_state"] not in VALID_SECTION_STATES:
+                    return {
+                        "error": f"Invalid state: {su['new_state']}. "
+                        f"Must be one of {sorted(VALID_SECTION_STATES)}"
+                    }
+
+        try:
+            content, sha = await d.github_client.get_file_content(owner, repo, file_path)
+        except Exception:
+            return {"error": f"File not found: {owner}/{repo}/{file_path}"}
+
+        result = parse_spec(content, ParseOptions(file_path=file_path))
+        updated = content
+        applied_statuses = 0
+        applied_realizations = 0
+
+        # Apply status updates: first try in-place replacement for existing comments
+        if status_updates:
+            su_list = [
+                StatusUpdate(section_number=su["section_number"], new_state=su["new_state"])
+                for su in status_updates
+            ]
+            updated = update_status_comments(result.document, su_list)
+
+            # For sections that didn't have existing status comments,
+            # insert new ones. Requires section_id to locate the heading.
+            # Re-parse after each insertion so start_line values stay correct.
+            for su in status_updates:
+                # Already present (either pre-existing or just updated)?
+                if f"canon:system:{su['section_number']} status:{su['new_state']}" in updated:
+                    continue
+                section_id = su.get("section_id", "")
+                if not section_id:
+                    return {
+                        "error": f"section_id required for section {su['section_number']} "
+                        f"(no existing status comment to update in-place)"
+                    }
+                # Re-parse to get accurate line numbers
+                fresh = parse_spec(updated, ParseOptions(file_path=file_path))
+                section = _find_section(fresh.document.sections, section_id)
+                if section:
+                    updated = insert_status_comment(
+                        updated, section.start_line, su["section_number"], su["new_state"]
+                    )
+
+            applied_statuses = len(status_updates)
+
+        # Re-parse after status updates for realization insertion
+        if realizations:
+            re_result = parse_spec(updated, ParseOptions(file_path=file_path))
+            r_list = [
+                RealizationInsertion(
+                    ac_text=r["ac_text"],
+                    pr_number=r["pr_number"],
+                    file_path=r["code_file"],
+                    lines=r.get("lines", ""),
+                )
+                for r in realizations
+            ]
+            updated = insert_realization_comments(re_result.document, r_list)
+            applied_realizations = len(r_list)
+
+        if updated == content:
+            return {"message": "No changes applied — spec already up to date"}
+
+        msg = commit_message or f"docs: sync spec status for {file_path}"
+        try:
+            await d.github_client.create_or_update_file(
+                owner, repo, file_path, updated, msg, sha=sha
+            )
+            return {
+                "applied_statuses": applied_statuses,
+                "applied_realizations": applied_realizations,
+                "message": f"Synced {file_path}",
+            }
+        except Exception as e:
+            return {"error": f"Failed to commit: {e}"}
+
+    return mcp

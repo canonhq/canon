@@ -1,0 +1,70 @@
+{% if overview is defined %}
+<!-- Repos with specs -->
+{% if overview.repos_with_specs %}
+<div class="mb-8">
+  {% for repo in overview.repos_with_specs %}
+  <div class="bg-white dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 mb-4 overflow-hidden">
+    <div class="px-4 py-3 border-b border-gray-100 dark:border-slate-700/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+      <div class="min-w-0">
+        <a href="/app/{{ current_org | default('') }}/repos/{{ repo.owner }}/{{ repo.repo }}" class="text-base font-semibold text-slate-900 dark:text-slate-100 hover:text-accent-400 transition-colors truncate">
+          {{ repo.full_name }}
+        </a>
+        {% if repo.config and repo.config.team %}
+        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium font-mono bg-blue-50 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400">{{ repo.config.team }}</span>
+        {% endif %}
+        {% if repo.description %}
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{{ repo.description }}</p>
+        {% endif %}
+      </div>
+      <span class="text-sm text-slate-500 shrink-0">{{ repo.spec_count }} spec{{ 's' if repo.spec_count != 1 }}{% if repo.docs %} &middot; {{ repo.docs | length }} doc{{ 's' if repo.docs | length != 1 }}{% endif %}</span>
+    </div>
+    <div class="divide-y divide-gray-100 dark:divide-slate-700/50">
+      {% for spec in repo.specs %}
+      <a href="/app/{{ current_org | default('') }}/specs/{{ repo.owner }}/{{ repo.repo }}/{{ spec.file_path }}" class="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+          <div class="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+            <span class="font-medium text-slate-900 dark:text-slate-100">{{ spec.title }}</span>
+            <span class="status-badge status-{{ spec.status }}">{{ spec.status | replace("_", " ") | title }}</span>
+            {% if spec.is_indexed %}
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-blue-50 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400" title="Indexed for search">indexed</span>
+            {% endif %}
+            {% for tag in spec.tags %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium font-mono bg-emerald-50 dark:bg-accent-900/50 text-emerald-700 dark:text-accent-400">{{ tag }}</span>
+            {% endfor %}
+          </div>
+          <div class="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400 shrink-0">
+            <span>{{ spec.owner }}</span>
+            {% if spec.total_sections > 0 %}
+            <span class="hidden sm:inline" title="Sections">{{ spec.done_sections }}/{{ spec.total_sections }} sections</span>
+            {% endif %}
+            {% if spec.total_ac > 0 %}
+            <span class="hidden sm:inline" title="Acceptance Criteria">{{ spec.done_ac }}/{{ spec.total_ac }} AC</span>
+            {% endif %}
+          </div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Repos without specs -->
+{% if overview.repos_without_specs %}
+<div>
+  <h2 class="text-lg font-semibold font-display text-slate-500 mb-3">Repos without specs</h2>
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    {% for repo in overview.repos_without_specs %}
+    <div class="bg-gray-50 dark:bg-surface-elevated rounded-lg border border-gray-200 dark:border-slate-700 px-4 py-3 opacity-60">
+      <a href="/app/{{ current_org | default('') }}/repos/{{ repo.owner }}/{{ repo.repo }}" class="text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-accent-400 transition-colors">{{ repo.full_name }}</a>
+      {% if repo.description %}
+      <p class="text-xs text-slate-500 mt-1 truncate">{{ repo.description }}</p>
+      {% endif %}
+      <p class="text-xs text-slate-500 mt-1">{{ repo.docs | length }} doc{{ 's' if repo.docs | length != 1 }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endif %}
