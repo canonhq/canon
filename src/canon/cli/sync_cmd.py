@@ -7,7 +7,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-from canon.config.parse import SpecwrightConfig
+from canon.config.parse import CanonConfig
 from canon.sync.mapping import TicketMappingConfig
 from canon.sync.mapping import TicketSystemConfig as TSC
 from canon.sync.router import resolve_target
@@ -34,14 +34,14 @@ def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[ty
 
 
 def _try_remote_adapter(
-    config: SpecwrightConfig, root: Path
+    config: CanonConfig, root: Path
 ) -> tuple[object, TicketMappingConfig] | None:
     """Try to create a server-proxied adapter for logged-in users.
 
     Returns (adapter, mapping) if credentials exist and the ticket system is
     GitHub (the only system the proxy supports), otherwise None.
     """
-    from canon.sync.adapters.api_proxy import SpecwrightApiAdapter
+    from canon.sync.adapters.api_proxy import CanonApiAdapter
 
     from ._credentials import load_credentials
     from ._local import resolve_github_remote
@@ -68,7 +68,7 @@ def _try_remote_adapter(
         return None
 
     client = PlatformClient()
-    adapter = SpecwrightApiAdapter(client, org, owner, repo)
+    adapter = CanonApiAdapter(client, org, owner, repo)
     mapping = TicketMappingConfig(
         ticket_systems={"primary": TSC(system="github", project=f"{owner}/{repo}")}
     )

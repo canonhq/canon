@@ -18,7 +18,7 @@ from canon.parser.models import SpecDocument, SpecSection
 from canon.sync.mapping import TemplateConfig
 
 # Matches canon/specwright HTML comments (ticket, status, delta, realized-in)
-_SPECWRIGHT_COMMENT_RE = re.compile(r"<!--\s*(?:specwright|canon):\S.*?-->\n?")
+_CANON_COMMENT_RE = re.compile(r"<!--\s*(?:specwright|canon):\S.*?-->\n?")
 
 
 def _clean_content(content: str) -> str:
@@ -27,7 +27,7 @@ def _clean_content(content: str) -> str:
     Removes ticket links, status comments, delta annotations, and
     realization refs so they don't appear in ticket descriptions.
     """
-    return _SPECWRIGHT_COMMENT_RE.sub("", content).strip()
+    return _CANON_COMMENT_RE.sub("", content).strip()
 
 
 def _build_context(

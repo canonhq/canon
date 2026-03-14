@@ -22,7 +22,7 @@ class SetupFile:
     content: str
 
 
-def create_specwright_yaml(
+def create_canon_yaml(
     team: str = "",
     ticket_system: str = "github",
     project_key: str = "",
@@ -121,7 +121,7 @@ def list_setup_files(
         files.append(
             SetupFile(
                 path="CANON.yaml",
-                content=create_specwright_yaml(
+                content=create_canon_yaml(
                     team=team,
                     ticket_system=ticket_system,
                     project_key=project_key,

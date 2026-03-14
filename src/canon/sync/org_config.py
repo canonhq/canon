@@ -91,9 +91,9 @@ async def load_org_mapping_config(
         return None
 
     try:
-        from canon.config.parse import parse_specwright_yaml
+        from canon.config.parse import parse_canon_yaml
 
-        result = parse_specwright_yaml(content)
+        result = parse_canon_yaml(content)
         if result.config.ticket_mapping:
             logger.info(
                 "Loaded org-level ticket mapping from %s/.github/%s",

@@ -12,7 +12,7 @@ from canon.sync.models import (
 )
 
 
-class SpecwrightApiAdapter:
+class CanonApiAdapter:
     """TicketAdapter that proxies operations through the Canon API.
 
     Uses ``PlatformClient`` (synchronous httpx) for authenticated HTTP.

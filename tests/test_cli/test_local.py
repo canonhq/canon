@@ -143,9 +143,9 @@ class TestFindSectionById:
 
 class TestResolveGithubRemote:
     def test_from_config(self):
-        from canon.config.parse import SpecwrightConfig
+        from canon.config.parse import CanonConfig
 
-        config = SpecwrightConfig(project_key="owner/repo")
+        config = CanonConfig(project_key="owner/repo")
         result = resolve_github_remote(config)
         assert result == ("owner", "repo")
 

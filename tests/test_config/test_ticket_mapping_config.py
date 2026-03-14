@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from canon.config import parse_specwright_yaml
+from canon.config import parse_canon_yaml
 
 
 class TestTicketSystemsParsing:
@@ -13,7 +13,7 @@ ticket_systems:
     system: jira
     project: PAY
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 0
         assert result.config.ticket_mapping is not None
@@ -32,7 +32,7 @@ ticket_systems:
     system: github
     project: org/repo
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 0
         mapping = result.config.ticket_mapping
@@ -54,7 +54,7 @@ ticket_systems:
         blocked: "On Hold"
         deprecated: "Won't Fix"
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 0
         sys = result.config.ticket_mapping.ticket_systems["primary"]
@@ -71,7 +71,7 @@ ticket_systems:
         todo: "Open"
         done: "Closed"
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         warnings = [d for d in result.diagnostics if d.severity == "warning"]
         assert any("missing forward mappings" in w.message for w in warnings)
 
@@ -88,7 +88,7 @@ ticket_systems:
         4: Sub-task
       auto_parent: true
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 0
         h = result.config.ticket_mapping.ticket_systems["primary"].hierarchy
@@ -108,7 +108,7 @@ ticket_systems:
       custom:
         customfield_10001: "literal:managed-by-canon"
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 0
         fm = result.config.ticket_mapping.ticket_systems["primary"].field_map
@@ -122,7 +122,7 @@ ticket_systems:
     system: servicenow
     project: OPS
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) >= 1
         assert any("servicenow" in e.message or "Invalid" in e.message for e in errors)
@@ -131,7 +131,7 @@ ticket_systems:
         raw = """
 ticket_systems: true
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert any("mapping" in e.message for e in errors)
 
@@ -141,7 +141,7 @@ team: backend
 ticket_system: jira
 project_key: PAY
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert result.config.ticket_mapping is None
         assert result.config.ticket_system == "jira"
         assert result.config.project_key == "PAY"
@@ -161,7 +161,7 @@ ticket_systems:
     project: PAY
     auth_profile: jira-cloud
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 0
         mapping = result.config.ticket_mapping
@@ -176,7 +176,7 @@ ticket_systems:
     project: PAY
     auth_profile: nonexistent
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert any(
             "nonexistent" in e.message or "unknown auth profile" in e.message for e in errors
@@ -194,7 +194,7 @@ ticket_systems:
     system: jira
     project: PAY
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert any("auth method" in e.message.lower() or "oauth2" in e.message for e in errors)
 
@@ -217,7 +217,7 @@ routing:
       default: true
     target: engineering
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 0
         mapping = result.config.ticket_mapping
@@ -236,7 +236,7 @@ routing:
       default: true
     target: nonexistent
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert any(
             "nonexistent" in e.message or "unknown ticket system" in e.message for e in errors
@@ -250,7 +250,7 @@ ticket_systems:
     project: PAY
 routing: true
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert any("list" in e.message for e in errors)
 
@@ -313,7 +313,7 @@ specs:
   auto_tickets: true
   require_review: true
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 0
 

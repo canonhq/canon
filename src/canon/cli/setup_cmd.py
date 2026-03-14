@@ -7,7 +7,7 @@ import glob as globmod
 import subprocess
 from pathlib import Path
 
-from ..setup import create_mcp_json, create_specwright_yaml, install_skills, list_setup_files
+from ..setup import create_canon_yaml, create_mcp_json, install_skills, list_setup_files
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
@@ -218,7 +218,7 @@ def run_setup(
 
     # ── Write files ──────────────────────────────────────
     # Always regenerate CANON.yaml on setup
-    yaml_content = create_specwright_yaml(
+    yaml_content = create_canon_yaml(
         team=final_team,
         ticket_system=final_system,
         project_key=final_project,

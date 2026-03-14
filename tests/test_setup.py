@@ -6,9 +6,9 @@ import json
 from pathlib import Path
 
 from canon.setup import (
+    create_canon_yaml,
     create_mcp_json,
     create_spec_template,
-    create_specwright_yaml,
     install_skills,
     list_setup_files,
 )
@@ -16,7 +16,7 @@ from canon.setup import (
 
 class TestCreateSpecwrightYaml:
     def test_default_yaml(self):
-        result = create_specwright_yaml()
+        result = create_canon_yaml()
         assert "specs:" in result
         assert "agents:" in result
         assert "doc_paths:" in result
@@ -25,35 +25,35 @@ class TestCreateSpecwrightYaml:
         assert "system: github" in result
 
     def test_with_team(self):
-        result = create_specwright_yaml(team="platform")
+        result = create_canon_yaml(team="platform")
         assert "team: platform" in result
         assert "# team:" not in result
 
     def test_with_ticket_system(self):
-        result = create_specwright_yaml(ticket_system="jira")
+        result = create_canon_yaml(ticket_system="jira")
         assert "system: jira" in result
 
     def test_with_all_options(self):
-        result = create_specwright_yaml(team="payments", ticket_system="linear")
+        result = create_canon_yaml(team="payments", ticket_system="linear")
         assert "team: payments" in result
         assert "system: linear" in result
 
     def test_with_project_key(self):
-        result = create_specwright_yaml(project_key="Acme/widgets")
+        result = create_canon_yaml(project_key="Acme/widgets")
         assert 'project: "Acme/widgets"' in result
         assert "# project:" not in result
 
     def test_without_project_key(self):
-        result = create_specwright_yaml()
+        result = create_canon_yaml()
         assert '# project: "Owner/repo"' in result
 
     def test_with_custom_doc_paths(self):
-        result = create_specwright_yaml(doc_paths=["specs/*.md", "docs/*.md"])
+        result = create_canon_yaml(doc_paths=["specs/*.md", "docs/*.md"])
         assert '"specs/*.md"' in result
         assert '"docs/*.md"' in result
 
     def test_default_doc_paths(self):
-        result = create_specwright_yaml()
+        result = create_canon_yaml()
         assert '"docs/specs/*.md"' in result
 
 

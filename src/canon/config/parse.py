@@ -52,7 +52,7 @@ class AgentsConfig(BaseModel):
     stale_detection: str | Literal[False] = "30d"
 
 
-class SpecwrightConfig(BaseModel):
+class CanonConfig(BaseModel):
     team: str | None = None
     ticket_system: TicketSystem | None = None
     project_key: str | None = None
@@ -62,27 +62,28 @@ class SpecwrightConfig(BaseModel):
     ticket_mapping: TicketMappingConfig | None = None
 
 
+# Deprecated alias
+SpecwrightConfig = CanonConfig
+
+
 class ConfigResult(BaseModel):
-    config: SpecwrightConfig
+    config: CanonConfig
     diagnostics: list[Diagnostic]
 
 
-DEFAULT_CONFIG = SpecwrightConfig()
-
-# Canonical aliases — SpecwrightConfig/parse_specwright_yaml are deprecated
-CanonConfig = SpecwrightConfig
+DEFAULT_CONFIG = CanonConfig()
 
 
 # ─── Public API ───────────────────────────────────────────
 
 
-def parse_specwright_yaml(raw: str) -> ConfigResult:
+def parse_canon_yaml(raw: str) -> ConfigResult:
     """Parse and validate CANON.yaml content."""
     diagnostics: list[Diagnostic] = []
 
     if not raw.strip():
         return ConfigResult(
-            config=SpecwrightConfig(),
+            config=CanonConfig(),
             diagnostics=[
                 Diagnostic(
                     severity="warning",
@@ -95,13 +96,13 @@ def parse_specwright_yaml(raw: str) -> ConfigResult:
         parsed = yaml.safe_load(raw)
     except yaml.YAMLError as err:
         return ConfigResult(
-            config=SpecwrightConfig(),
+            config=CanonConfig(),
             diagnostics=[Diagnostic(severity="error", message=f"Invalid YAML: {err}")],
         )
 
     if not isinstance(parsed, dict):
         return ConfigResult(
-            config=SpecwrightConfig(),
+            config=CanonConfig(),
             diagnostics=[
                 Diagnostic(
                     severity="error",
@@ -234,8 +235,8 @@ def parse_specwright_yaml(raw: str) -> ConfigResult:
     return ConfigResult(config=config, diagnostics=diagnostics)
 
 
-# Canonical alias
-parse_canon_yaml = parse_specwright_yaml
+# Deprecated alias
+parse_specwright_yaml = parse_canon_yaml
 
 
 # ─── Internal ─────────────────────────────────────────────
@@ -363,7 +364,7 @@ def _parse_ticket_mapping(
 def _merge_with_defaults(
     partial: dict[str, object],
     ticket_mapping: TicketMappingConfig | None = None,
-) -> SpecwrightConfig:
+) -> CanonConfig:
     """Merge partial config dict with defaults."""
     specs_data = partial.get("specs")
     agents_data = partial.get("agents")
@@ -403,7 +404,7 @@ def _merge_with_defaults(
             else "30d",
         )
 
-    return SpecwrightConfig(
+    return CanonConfig(
         team=partial["team"] if isinstance(partial.get("team"), str) else None,
         ticket_system=partial["ticket_system"]
         if isinstance(partial.get("ticket_system"), str)

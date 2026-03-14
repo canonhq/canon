@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from canon.config import DEFAULT_CONFIG, parse_specwright_yaml
+from canon.config import DEFAULT_CONFIG, parse_canon_yaml
 
 
-class TestParseSpecwrightYaml:
+class TestParseCanonYaml:
     def test_parses_valid_full_config(self):
         raw = """
 team: platform
@@ -20,7 +20,7 @@ agents:
   pr_analysis: false
   stale_detection: "7d"
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 0
         assert result.config.team == "platform"
         assert result.config.ticket_system == "jira"
@@ -36,7 +36,7 @@ agents:
         raw = """
 team: backend
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 0
         assert result.config.team == "backend"
         assert result.config.ticket_system is None
@@ -46,26 +46,26 @@ team: backend
         assert result.config.agents == DEFAULT_CONFIG.agents
 
     def test_returns_defaults_with_warning_for_empty_file(self):
-        result = parse_specwright_yaml("")
+        result = parse_canon_yaml("")
         assert result.config == DEFAULT_CONFIG
         assert len(result.diagnostics) == 1
         assert result.diagnostics[0].severity == "warning"
         assert "empty" in result.diagnostics[0].message
 
     def test_returns_defaults_with_warning_for_whitespace_only(self):
-        result = parse_specwright_yaml("   \n  \n  ")
+        result = parse_canon_yaml("   \n  \n  ")
         assert result.config == DEFAULT_CONFIG
         assert result.diagnostics[0].severity == "warning"
 
     def test_returns_error_for_malformed_yaml(self):
-        result = parse_specwright_yaml("team: [unclosed")
+        result = parse_canon_yaml("team: [unclosed")
         assert len(result.diagnostics) == 1
         assert result.diagnostics[0].severity == "error"
         assert "Invalid YAML" in result.diagnostics[0].message
         assert result.config == DEFAULT_CONFIG
 
     def test_returns_error_for_non_mapping_yaml(self):
-        result = parse_specwright_yaml("- item1\n- item2")
+        result = parse_canon_yaml("- item1\n- item2")
         assert len(result.diagnostics) == 1
         assert result.diagnostics[0].severity == "error"
         assert "mapping" in result.diagnostics[0].message
@@ -76,7 +76,7 @@ team: frontend
 unknown_key: value
 another_bad: true
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert result.config.team == "frontend"
         warnings = [d for d in result.diagnostics if d.severity == "warning"]
         assert len(warnings) == 2
@@ -87,7 +87,7 @@ another_bad: true
         raw = """
 ticket_system: asana
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 1
         assert result.diagnostics[0].severity == "error"
         assert "asana" in result.diagnostics[0].message
@@ -95,7 +95,7 @@ ticket_system: asana
 
     def test_accepts_all_valid_ticket_system_values(self):
         for system in ("jira", "linear", "github"):
-            result = parse_specwright_yaml(f"ticket_system: {system}")
+            result = parse_canon_yaml(f"ticket_system: {system}")
             assert len(result.diagnostics) == 0
             assert result.config.ticket_system == system
 
@@ -104,7 +104,7 @@ ticket_system: asana
 agents:
   stale_detection: "two weeks"
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 1
         assert result.diagnostics[0].severity == "error"
         assert "stale_detection" in result.diagnostics[0].message
@@ -115,7 +115,7 @@ agents:
 agents:
   stale_detection: false
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 0
         assert result.config.agents.stale_detection is False
 
@@ -125,7 +125,7 @@ specs:
   auto_tickets: "yes"
   require_review: 1
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 2
         assert result.config.specs == DEFAULT_CONFIG.specs
@@ -136,7 +136,7 @@ specs:
   auto_tickets: true
   unknown_spec_key: true
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         warnings = [d for d in result.diagnostics if d.severity == "warning"]
         assert len(warnings) == 1
         assert "unknown_spec_key" in warnings[0].message
@@ -147,7 +147,7 @@ agents:
   pr_analysis: true
   magic_feature: true
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         warnings = [d for d in result.diagnostics if d.severity == "warning"]
         assert len(warnings) == 1
         assert "magic_feature" in warnings[0].message
@@ -156,7 +156,7 @@ agents:
         raw = """
 specs: true
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 1
         assert result.diagnostics[0].severity == "error"
         assert "specs" in result.diagnostics[0].message
@@ -166,7 +166,7 @@ specs: true
         raw = """
 agents: "all"
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 1
         assert result.diagnostics[0].severity == "error"
         assert "agents" in result.diagnostics[0].message
@@ -176,7 +176,7 @@ agents: "all"
         raw = """
 team: 42
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 1
         assert result.diagnostics[0].severity == "error"
         assert "team" in result.diagnostics[0].message
@@ -191,7 +191,7 @@ specs:
     - "docs/rfcs/**/*.md"
     - "design/*.md"
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 0
         assert result.config.specs.doc_paths == [
             "docs/specs/*.md",
@@ -204,7 +204,7 @@ specs:
 specs:
   auto_tickets: true
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert result.config.specs.doc_paths == ["docs/specs/*.md"]
 
     def test_errors_on_non_list_doc_paths(self):
@@ -212,7 +212,7 @@ specs:
 specs:
   doc_paths: "docs/specs/*.md"
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 1
         assert "doc_paths" in errors[0].message
@@ -224,7 +224,7 @@ specs:
 specs:
   doc_paths: []
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 1
         assert "empty" in errors[0].message
@@ -237,7 +237,7 @@ specs:
     - 42
     - true
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 1
         assert "doc_paths" in errors[0].message
@@ -249,7 +249,7 @@ class TestRealizationCheckConfig:
         raw = """
 team: test
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert result.config.agents.realization_check is True
 
     def test_can_be_set_false(self):
@@ -257,7 +257,7 @@ team: test
 agents:
   realization_check: false
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 0
         assert result.config.agents.realization_check is False
 
@@ -266,7 +266,7 @@ agents:
 agents:
   realization_check: true
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 0
         assert result.config.agents.realization_check is True
 
@@ -275,7 +275,7 @@ agents:
 agents:
   realization_check: "yes"
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         errors = [d for d in result.diagnostics if d.severity == "error"]
         assert len(errors) == 1
         assert "realization_check" in errors[0].message
@@ -291,7 +291,7 @@ agents:
   realization_check: false
   stale_detection: "14d"
 """
-        result = parse_specwright_yaml(raw)
+        result = parse_canon_yaml(raw)
         assert len(result.diagnostics) == 0
         assert result.config.agents.doc_updates is True
         assert result.config.agents.pr_analysis is False

@@ -12,7 +12,7 @@ import subprocess
 import warnings
 from pathlib import Path
 
-from canon.config.parse import DEFAULT_CONFIG, SpecwrightConfig, parse_specwright_yaml
+from canon.config.parse import DEFAULT_CONFIG, CanonConfig, parse_canon_yaml
 from canon.parser.models import ParseOptions, SpecDocument, SpecSection
 from canon.parser.parse import parse_spec
 from canon.sync.adapters.base import TicketAdapter
@@ -28,7 +28,7 @@ from canon.sync.mapping import (
 from canon.sync.models import GitHubConfig
 
 
-def load_local_config(root: Path | None = None) -> SpecwrightConfig:
+def load_local_config(root: Path | None = None) -> CanonConfig:
     """Read CANON.yaml (or legacy SPECWRIGHT.yaml) from repo root, falling back to DEFAULT_CONFIG."""
     root = root or Path.cwd()
     config_path = root / "CANON.yaml"
@@ -45,12 +45,12 @@ def load_local_config(root: Path | None = None) -> SpecwrightConfig:
     if not config_path.exists():
         return DEFAULT_CONFIG
     raw = config_path.read_text()
-    result = parse_specwright_yaml(raw)
+    result = parse_canon_yaml(raw)
     return result.config
 
 
 def discover_spec_files(
-    root: Path | None = None, config: SpecwrightConfig | None = None
+    root: Path | None = None, config: CanonConfig | None = None
 ) -> list[Path]:
     """Glob local filesystem using config.specs.doc_paths patterns.
 
@@ -71,7 +71,7 @@ def discover_spec_files(
 
 
 def parse_all_local_specs(
-    root: Path | None = None, config: SpecwrightConfig | None = None
+    root: Path | None = None, config: CanonConfig | None = None
 ) -> list[SpecDocument]:
     """Discover and parse all spec files."""
     root = root or Path.cwd()
@@ -129,7 +129,7 @@ def find_section_by_id(
 
 
 def resolve_github_remote(
-    config: SpecwrightConfig | None = None, root: Path | None = None
+    config: CanonConfig | None = None, root: Path | None = None
 ) -> tuple[str, str] | None:
     """Extract owner/repo from CANON.yaml project_key or git remote.
 
@@ -194,7 +194,7 @@ def resolve_github_token() -> str | None:
 
 
 def create_github_adapter_local(
-    config: SpecwrightConfig | None = None, root: Path | None = None
+    config: CanonConfig | None = None, root: Path | None = None
 ) -> GitHubAdapter | None:
     """Wire token + owner/repo into a GitHubAdapter for local use.
 
@@ -213,7 +213,7 @@ def create_github_adapter_local(
 
 
 def create_adapter_local(
-    config: SpecwrightConfig | None = None,
+    config: CanonConfig | None = None,
     root: Path | None = None,
     system_name: str | None = None,
 ) -> tuple[TicketAdapter | None, TicketMappingConfig]:
