@@ -1,4 +1,4 @@
-"""Tests for SpecwrightApiAdapter — CLI-side proxy adapter."""
+"""Tests for CanonApiAdapter — CLI-side proxy adapter."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from canon.parser.models import SectionStatus
-from canon.sync.adapters.api_proxy import SpecwrightApiAdapter
+from canon.sync.adapters.api_proxy import CanonApiAdapter
 from canon.sync.models import CreateTicketInput, UpdateTicketInput
 
 
@@ -16,14 +16,14 @@ def _mock_platform_client() -> MagicMock:
 
 
 @pytest.fixture
-def adapter() -> SpecwrightApiAdapter:
+def adapter() -> CanonApiAdapter:
     client = _mock_platform_client()
-    return SpecwrightApiAdapter(client, org="acme", owner="acme", repo="widgets")
+    return CanonApiAdapter(client, org="acme", owner="acme", repo="widgets")
 
 
 class TestCreateTicket:
     @pytest.mark.asyncio
-    async def test_posts_to_correct_endpoint(self, adapter: SpecwrightApiAdapter):
+    async def test_posts_to_correct_endpoint(self, adapter: CanonApiAdapter):
         resp = MagicMock()
         resp.json.return_value = {
             "ticket_id": "42",
@@ -53,7 +53,7 @@ class TestCreateTicket:
 
 class TestGetTicketStatus:
     @pytest.mark.asyncio
-    async def test_posts_to_status_endpoint(self, adapter: SpecwrightApiAdapter):
+    async def test_posts_to_status_endpoint(self, adapter: CanonApiAdapter):
         resp = MagicMock()
         resp.json.return_value = {
             "ticket_id": "7",
@@ -73,7 +73,7 @@ class TestGetTicketStatus:
 
 class TestUpdateTicket:
     @pytest.mark.asyncio
-    async def test_posts_to_update_endpoint(self, adapter: SpecwrightApiAdapter):
+    async def test_posts_to_update_endpoint(self, adapter: CanonApiAdapter):
         resp = MagicMock()
         resp.json.return_value = {"ok": True}
         resp.raise_for_status = MagicMock()
@@ -94,7 +94,7 @@ class TestUpdateTicket:
 
 class TestLinkPR:
     @pytest.mark.asyncio
-    async def test_posts_to_link_pr_endpoint(self, adapter: SpecwrightApiAdapter):
+    async def test_posts_to_link_pr_endpoint(self, adapter: CanonApiAdapter):
         resp = MagicMock()
         resp.json.return_value = {"ok": True}
         resp.raise_for_status = MagicMock()
@@ -111,7 +111,7 @@ class TestLinkPR:
 
 
 class TestCapabilities:
-    def test_supports_labels(self, adapter: SpecwrightApiAdapter):
+    def test_supports_labels(self, adapter: CanonApiAdapter):
         caps = adapter.capabilities
         assert caps.supports_labels is True
         assert caps.supports_custom_fields is False

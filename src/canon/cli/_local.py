@@ -49,9 +49,7 @@ def load_local_config(root: Path | None = None) -> CanonConfig:
     return result.config
 
 
-def discover_spec_files(
-    root: Path | None = None, config: CanonConfig | None = None
-) -> list[Path]:
+def discover_spec_files(root: Path | None = None, config: CanonConfig | None = None) -> list[Path]:
     """Glob local filesystem using config.specs.doc_paths patterns.
 
     Skips files prefixed with ``_`` (e.g. ``_template.md``).
