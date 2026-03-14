@@ -27,7 +27,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copy project files
 COPY pyproject.toml .python-version README.md ./
 COPY src/ src/
-COPY plugin/skills/ plugin/skills/
+COPY plugin/plugins/canon/skills/ plugin/plugins/canon/skills/
 COPY templates/ templates/
 COPY static/ static/
 
