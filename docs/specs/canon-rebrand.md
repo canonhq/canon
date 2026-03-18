@@ -31,7 +31,7 @@ See also: `docs/plans/2026-03-04-canon-rebrand-design.md` for the full design ex
 
 ## 2. Register Namespace & Foundation
 
-<!-- specwright:system:2 status:todo -->
+<!-- canon:system:2 status:done -->
 
 Secure all external namespaces before any code changes.
 
@@ -217,6 +217,7 @@ Transfer the repository from `Gerner-Ventures/gv-exp-specwright` to `canonhq/can
 ### Acceptance Criteria
 
 - [ ] Repo transferred from `Gerner-Ventures/gv-exp-specwright` → `canonhq/canon`
+<!-- canon:realized-in:PR#323 file:.github/scripts/export-oss.sh -->
 - [ ] GitHub auto-redirect from old URL is active
 - [ ] All spec `ticket_project` frontmatter fields updated to `canonhq/canon`
 - [ ] CI/CD workflows updated with new repo references
