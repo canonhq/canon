@@ -10,6 +10,8 @@ export default withMermaid(
       "AI-native enterprise documentation platform. Living specs, agent-maintained docs, repo-native knowledge.",
     base: "/docs/",
     head: [
+      ["link", { rel: "icon", type: "image/svg+xml", href: "/docs/logo.svg" }],
+      ["link", { rel: "icon", type: "image/png", href: "/static/favicon.png" }],
       ["meta", { property: "og:type", content: "website" }],
       ["meta", { property: "og:title", content: "Canon Docs" }],
       [
