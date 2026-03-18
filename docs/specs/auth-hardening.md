@@ -314,6 +314,7 @@ Auth0 tenant and deployment configuration changes required to support the above 
 - [ ] DB migrations for `sessions` and `org_members` tables applied
 - [ ] Helm chart updated with session cleanup CronJob
 - [x] All new environment variables documented and added to Doppler
+<!-- canon:realized-in:PR#328 file:src/canon/settings.py -->
 
 <!-- specwright:ticket:github:261 -->
 <!-- specwright:ticket:github:285 -->

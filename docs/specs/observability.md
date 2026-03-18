@@ -32,8 +32,10 @@ Enable PostHog exception capture in the Python SDK (`src/specwright/`) for serve
 
 - [x] PostHog Python SDK configured with `enable_exception_autocapture=True`
 <!-- specwright:realized-in:PR#112 file:src/specwright/analytics.py -->
+<!-- canon:realized-in:PR#328 file:src/canon/otel_logging.py -->
 - [x] Unhandled FastAPI exceptions are captured and sent to PostHog
 <!-- specwright:realized-in:PR#112 file:src/specwright/main.py -->
+<!-- canon:realized-in:PR#328 file:src/canon/main.py -->
 - [x] Exception events include stack trace, request context, and user identity
 - [ ] Sensitive data (API keys, tokens) is scrubbed from exception payloads
 - [x] Exception capture does not affect application performance or error handling behavior
