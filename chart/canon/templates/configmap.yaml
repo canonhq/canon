@@ -16,3 +16,6 @@ data:
   {{- if .Values.config.platformUrl }}
   PLATFORM_URL: {{ .Values.config.platformUrl | quote }}
   {{- end }}
+  {{- if .Values.config.environment }}
+  ENVIRONMENT: {{ .Values.config.environment | quote }}
+  {{- end }}

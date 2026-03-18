@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 
 import anthropic
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 class AgentUnavailableError(Exception):
@@ -49,6 +52,10 @@ class ClaudeClient:
         """Return the API key, or None if unavailable."""
         return self._client.api_key if self._client else None
 
+    def for_api_key(self, api_key: str) -> ClaudeClient:
+        """Return a new ClaudeClient using a different API key (e.g. BYOK)."""
+        return ClaudeClient(api_key=api_key)
+
     def complete(
         self, system_prompt: str, user_message: str, config: AgentConfig
     ) -> CompletionResult:
@@ -73,3 +80,53 @@ class ClaudeClient:
             )
         except anthropic.APIError as e:
             raise AgentAPIError(str(e), getattr(e, "status_code", None)) from e
+
+
+async def get_claude_client_for_org(
+    org_login: str,
+    default_client: ClaudeClient,
+    billing_service: object | None = None,
+) -> ClaudeClient:
+    """Resolve the right ClaudeClient for an org based on their subscription plan.
+
+    - Starter (BYOK): uses the org's stored Anthropic API key
+    - Pro/Enterprise: uses Canon's default API key
+    - No subscription: uses default (self-hosted behavior)
+    """
+    if billing_service is None:
+        return default_client
+
+    try:
+        from ..billing.models import Plan
+        from ..billing.service import BillingService
+
+        if not isinstance(billing_service, BillingService):
+            return default_client
+
+        sub = await billing_service.get_subscription(org_login)
+        if sub is None:
+            return default_client
+
+        if sub.plan == Plan.STARTER:
+            byok_key = await billing_service.get_anthropic_key(org_login)
+            if byok_key:
+                return default_client.for_api_key(byok_key)
+            logger.warning("Starter plan org %s has no BYOK key — agent unavailable", org_login)
+            raise AgentUnavailableError()
+
+        # Pro and Enterprise use Canon's key
+        return default_client
+
+    except AgentUnavailableError:
+        raise
+    except ImportError:
+        # Billing module not deployed yet — acceptable fallback
+        logger.info("Billing module not available for org %s — using default client", org_login)
+        return default_client
+    except Exception:
+        logger.error(
+            "Unexpected error resolving client for org %s — refusing to silently fall back",
+            org_login,
+            exc_info=True,
+        )
+        raise AgentUnavailableError() from None

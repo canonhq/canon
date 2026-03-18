@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     # Platform URL (used by CLI to know where to connect, and for PR comment links)
     platform_url: str = ""
 
+    # Environment: "development", "staging", "preview", "production"
+    environment: str = "development"
+
     @property
     def auth0_enabled(self) -> bool:
         return bool(self.auth0_domain and self.auth0_client_id and self.auth0_client_secret)
@@ -98,6 +101,31 @@ class Settings(BaseSettings):
     # Web UI
     web_org: str = ""
     web_admin_logins: str = ""  # Comma-separated GitHub logins granted specs:admin in the SPA
+
+    # Stripe billing
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_starter_monthly_price_id: str = ""
+    stripe_starter_annual_price_id: str = ""
+    stripe_pro_monthly_price_id: str = ""
+    stripe_pro_annual_price_id: str = ""
+
+    # BYOK encryption
+    byok_encryption_key: str = ""
+
+    # Enterprise contact
+    enterprise_contact_email: str = "sales@canonhq.co"
+
+    @property
+    def stripe_enabled(self) -> bool:
+        return bool(
+            self.stripe_secret_key
+            and self.stripe_publishable_key
+            and self.stripe_webhook_secret
+            and self.byok_encryption_key
+        )
+
     cache_ttl_seconds: int = 300
 
     model_config = {"env_prefix": "", "case_sensitive": False}

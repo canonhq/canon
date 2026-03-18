@@ -24,6 +24,7 @@ dependencies = [
     "jinja2>=3.1",
     "pyyaml>=6.0",
     "cryptography>=44.0",
+    "stripe>=11.0",
     "PyJWT[crypto]>=2.9",
     "mcp[cli]>=1.7",
     "posthog>=3.7",
@@ -43,6 +44,8 @@ cloud = [
     "itsdangerous>=2.1",
     "asyncpg>=0.30",
     "google-genai>=1.0",
+    "alembic>=1.14",
+    "sqlalchemy[asyncio]>=2.0",
 ]
 dev = [
     "pytest>=8.3",

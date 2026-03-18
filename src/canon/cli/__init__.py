@@ -17,6 +17,7 @@ def main(argv: list[str] | None = None) -> None:
     # Register subcommands
     from .audit import register as audit_register
     from .auth_cmd import register as auth_register
+    from .db import register as db_register
     from .dedup import register as dedup_register
     from .done import register as done_register
     from .login import register as login_register
@@ -29,6 +30,7 @@ def main(argv: list[str] | None = None) -> None:
     from .tasks import register as tasks_register
     from .verify import register as verify_register
 
+    db_register(subparsers)
     setup_register_cmd(subparsers)
     login_register(subparsers)
     logout_register(subparsers)
@@ -45,7 +47,11 @@ def main(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(argv)
 
-    if args.command == "setup":
+    if args.command == "db":
+        from .db import run_db
+
+        run_db(args)
+    elif args.command == "setup":
         from .setup_cmd import run_setup
 
         run_setup(

@@ -38,3 +38,6 @@ staleCheckCronJob:
   enabled: false
 coverageSnapshotCronJob:
   enabled: false
+
+config:
+  environment: "preview"
