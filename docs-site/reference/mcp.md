@@ -1,12 +1,12 @@
 ---
 # This file is auto-generated. Do not edit manually.
-# Generated: 2026-03-04 16:10 UTC
+# Generated: 2026-03-18 18:07 UTC
 ---
 
 # MCP Tools Reference
 
 ::: tip Auto-Generated
-This page was auto-generated from MCP server tool metadata on 2026-03-04 16:10 UTC.
+This page was auto-generated from MCP server tool metadata on 2026-03-18 18:07 UTC.
 See [source script](https://github.com/canonhq/canon/blob/main/docs-site/.vitepress/scripts/gen-mcp-ref.py).
 :::
 

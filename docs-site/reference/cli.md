@@ -1,12 +1,12 @@
 ---
 # This file is auto-generated. Do not edit manually.
-# Generated: 2026-03-08 00:28 UTC
+# Generated: 2026-03-18 18:07 UTC
 ---
 
 # CLI Reference
 
 ::: tip Auto-Generated
-This page was auto-generated from `canon --help` on 2026-03-08 00:28 UTC.
+This page was auto-generated from `canon --help` on 2026-03-18 18:07 UTC.
 See [source script](https://github.com/canonhq/canon/blob/main/docs-site/.vitepress/scripts/gen-cli-ref.py).
 :::
 
@@ -254,6 +254,21 @@ usage: canon verify [-h] [--section SECTION]
 ### `canon audit`
 
 Audit spec statuses against the codebase using Claude. Checks off realized ACs, inserts evidence comments, and optionally runs ticket sync.
+
+```bash
+usage: canon audit [-h] [--dry-run] [--sync] [--spec SPEC] [--no-ac-updates]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--dry-run` | Preview changes without writing |
+| `--sync` | Run ticket sync after audit |
+| `--spec SPEC` | Filter to a single spec file |
+| `--no-ac-updates` | Skip checking off ACs and inserting evidence |
+
 
 ---
 

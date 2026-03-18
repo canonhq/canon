@@ -1,12 +1,12 @@
 ---
 # This file is auto-generated. Do not edit manually.
-# Generated: 2026-03-04 16:10 UTC
+# Generated: 2026-03-18 18:07 UTC
 ---
 
 # REST API Reference
 
 ::: tip Auto-Generated
-This page was auto-generated from the FastAPI OpenAPI schema on 2026-03-04 16:10 UTC.
+This page was auto-generated from the FastAPI OpenAPI schema on 2026-03-18 18:07 UTC.
 See [source script](https://github.com/canonhq/canon/blob/main/docs-site/.vitepress/scripts/gen-api-ref.py).
 :::
 
@@ -28,7 +28,7 @@ Tokens can be:
 - **API keys** prefixed with `sw_` (create via Settings > API Keys)
 - **Session cookies** for browser-based access
 
-## Endpoints (58)
+## Endpoints (74)
 
 ### Public
 
@@ -56,13 +56,61 @@ Public changelog.
 
 ---
 
+#### `GET /pricing`
+
+Pricing
+
+Dedicated pricing page.
+
+**Responses:**
+
+- **200**: Successful Response
+
+---
+
 ### JSON API
+
+#### `POST /api/contact/enterprise`
+
+Enterprise Contact
+
+Handle enterprise contact form submission.
+
+**Request Body** (`EnterpriseContactRequest`):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | `string` | Yes |  |
+| `email` | `string` | Yes |  |
+| `company` | `string` | Yes |  |
+| `team_size` | `string` | Yes |  |
+| `message` | `string` | No |  |
+| `honeypot` | `string` | No |  |
+
+**Responses:**
+
+- **200**: Successful Response
+- **422**: Validation Error
+
+---
 
 #### `POST /api/waitlist`
 
 Waitlist Signup
 
 Capture waitlist email signup (fires PostHog event, no DB needed).
+
+**Responses:**
+
+- **200**: Successful Response
+
+---
+
+#### `POST /api/webhooks/stripe`
+
+Stripe Webhook
+
+Handle Stripe webhook events.
 
 **Responses:**
 
@@ -91,6 +139,118 @@ Trigger re-index via JSON API for the Vue SPA.
 | Name | In | Type | Required | Description |
 |------|-----|------|----------|-------------|
 | `installation_id` | path | `integer` | Yes |  |
+
+**Responses:**
+
+- **200**: Successful Response
+- **422**: Validation Error
+
+---
+
+#### `GET /app/{org}/api/billing/ai-ops`
+
+Get Ai Ops Usage
+
+Get AI operation usage for the current billing period.
+
+| Name | In | Type | Required | Description |
+|------|-----|------|----------|-------------|
+| `org` | path | `string` | Yes |  |
+
+**Responses:**
+
+- **200**: Successful Response
+- **422**: Validation Error
+
+---
+
+#### `POST /app/{org}/api/billing/portal`
+
+Create Portal Session
+
+Create a Stripe Billing Portal session for self-service management.
+
+| Name | In | Type | Required | Description |
+|------|-----|------|----------|-------------|
+| `org` | path | `string` | Yes |  |
+
+**Responses:**
+
+- **200**: Successful Response
+- **422**: Validation Error
+
+---
+
+#### `GET /app/{org}/api/billing/seats`
+
+Get Seat Info
+
+Get seat count and active user count for the current billing period.
+
+| Name | In | Type | Required | Description |
+|------|-----|------|----------|-------------|
+| `org` | path | `string` | Yes |  |
+
+**Responses:**
+
+- **200**: Successful Response
+- **422**: Validation Error
+
+---
+
+#### `POST /app/{org}/api/billing/start-trial`
+
+Start Trial
+
+Start a 14-day Pro trial. No credit card required.
+
+| Name | In | Type | Required | Description |
+|------|-----|------|----------|-------------|
+| `org` | path | `string` | Yes |  |
+
+**Responses:**
+
+- **200**: Successful Response
+- **422**: Validation Error
+
+---
+
+#### `GET /app/{org}/api/billing/subscription`
+
+Get Subscription
+
+Get current subscription details.
+
+| Name | In | Type | Required | Description |
+|------|-----|------|----------|-------------|
+| `org` | path | `string` | Yes |  |
+
+**Responses:**
+
+- **200**: Successful Response
+- **422**: Validation Error
+
+---
+
+#### `POST /app/{org}/api/checkout`
+
+Create Checkout
+
+Create a Stripe Checkout Session for a per-seat subscription.
+
+| Name | In | Type | Required | Description |
+|------|-----|------|----------|-------------|
+| `org` | path | `string` | Yes |  |
+
+**Request Body** (`CheckoutRequest`):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `plan` | `Plan` | Yes |  |
+| `billing_cycle` | `BillingCycle` | No |  |
+| `seat_count` | `integer` | No |  |
+| `success_url` | `string` | Yes |  |
+| `cancel_url` | `string` | Yes |  |
 
 **Responses:**
 
@@ -220,6 +380,63 @@ no read access to analytics data).
 
 ---
 
+#### `GET /app/{org}/api/settings/anthropic-key`
+
+Get Anthropic Key Status
+
+Get the status of the stored Anthropic API key (never returns the key).
+
+| Name | In | Type | Required | Description |
+|------|-----|------|----------|-------------|
+| `org` | path | `string` | Yes |  |
+
+**Responses:**
+
+- **200**: Successful Response
+- **422**: Validation Error
+
+---
+
+#### `POST /app/{org}/api/settings/anthropic-key`
+
+Submit Anthropic Key
+
+Submit and validate an Anthropic API key for BYOK.
+
+| Name | In | Type | Required | Description |
+|------|-----|------|----------|-------------|
+| `org` | path | `string` | Yes |  |
+
+**Request Body** (`AnthropicKeyRequest`):
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `api_key` | `string` | Yes |  |
+
+**Responses:**
+
+- **200**: Successful Response
+- **422**: Validation Error
+
+---
+
+#### `DELETE /app/{org}/api/settings/anthropic-key`
+
+Delete Anthropic Key
+
+Remove the stored Anthropic API key.
+
+| Name | In | Type | Required | Description |
+|------|-----|------|----------|-------------|
+| `org` | path | `string` | Yes |  |
+
+**Responses:**
+
+- **200**: Successful Response
+- **422**: Validation Error
+
+---
+
 #### `GET /app/{org}/api/specs/{owner}/{repo}/{file_path}`
 
 Api Spec Detail
@@ -287,6 +504,27 @@ Redirect /app/ to /app/{default_org}/.
 **Responses:**
 
 - **200**: Successful Response
+
+---
+
+#### `GET /app/setup/complete`
+
+Setup Complete
+
+Handle redirect from GitHub after app installation.
+
+GitHub sends the user here with ?installation_id=X after they install
+the app. We look up which org that installation belongs to and redirect
+to their welcome page.
+
+| Name | In | Type | Required | Description |
+|------|-----|------|----------|-------------|
+| `installation_id` | query | `integer` | No |  |
+
+**Responses:**
+
+- **200**: Successful Response
+- **422**: Validation Error
 
 ---
 
@@ -1079,6 +1317,52 @@ Readiness probe — checks DB health when pool is configured.
 Webhook
 
 Receive and process GitHub webhook events.
+
+**Responses:**
+
+- **200**: Successful Response
+
+---
+
+### webhooks
+
+#### `POST /webhooks/asana`
+
+Asana Webhook
+
+Handle Asana webhook events for reverse sync.
+
+Currently only supports the webhook handshake (X-Hook-Secret).
+Task status processing requires an Asana API adapter to fetch
+actual completion status — not yet implemented.
+
+**Responses:**
+
+- **200**: Successful Response
+
+---
+
+#### `POST /webhooks/jira`
+
+Jira Webhook
+
+Handle Jira webhook events for reverse sync.
+
+Triggered by: jira:issue_updated
+
+**Responses:**
+
+- **200**: Successful Response
+
+---
+
+#### `POST /webhooks/linear`
+
+Linear Webhook
+
+Handle Linear webhook events for reverse sync.
+
+Triggered by: Issue updates
 
 **Responses:**
 
