@@ -97,10 +97,13 @@ export default withMermaid(
             items: [
               { text: "Overview", link: "/guides/" },
               { text: "Writing Specs", link: "/guides/writing-specs" },
+              { text: "Example Specs", link: "/guides/examples" },
               { text: "Self-Hosting", link: "/guides/self-hosting" },
               { text: "GitHub App Setup", link: "/guides/github-app" },
               { text: "Ticket Sync", link: "/guides/ticket-sync" },
               { text: "CI Integration", link: "/guides/ci-integration" },
+              { text: "FAQ", link: "/guides/faq" },
+              { text: "Troubleshooting", link: "/guides/troubleshooting" },
             ],
           },
         ],

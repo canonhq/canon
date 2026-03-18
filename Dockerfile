@@ -9,7 +9,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /usr/local/bin/uv
 # Copy project files
 COPY pyproject.toml .python-version README.md ./
 COPY src/ src/
-COPY plugin/plugins/canon/skills/ plugin/plugins/canon/skills/
+COPY plugin/skills/ plugin/skills/
 
 # Build wheel
 RUN uv build --wheel --out-dir /dist
