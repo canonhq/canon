@@ -25,7 +25,11 @@ def run_db(args: argparse.Namespace) -> None:
             print("ERROR: DATABASE_URL environment variable is not set", file=sys.stderr)
             sys.exit(1)
 
-        from ..db.migrate import run_upgrade
+        try:
+            from ..db.migrate import run_upgrade
+        except ImportError:
+            print("ERROR: Database module not available (cloud-only feature)", file=sys.stderr)
+            sys.exit(1)
 
         run_upgrade(database_url, revision=args.revision)
         print("Migrations applied successfully.")

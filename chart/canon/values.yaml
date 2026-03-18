@@ -122,7 +122,7 @@ config:
   port: 3000
   logLevel: "info"
   webhookPath: "/webhook"
-  webOrg: "Gerner-Ventures"
+  webOrg: ""
   cacheTtlSeconds: 300
   posthogHost: "https://us.i.posthog.com"
   posthogLogsEnabled: "false"

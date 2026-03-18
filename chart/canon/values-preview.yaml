@@ -1,9 +1,9 @@
 ## Preview deployment overrides — ephemeral per-PR namespace
 ##
-## NOTE: The preview connects to the production Neon database with full RW
-## access. "Read-only" is by convention (cron jobs disabled, no webhook
-## processing) not by enforcement. Do not enable cron jobs or webhook
-## processing in previews without scoping DB access first.
+## NOTE: Preview uses the shared database with full RW access.
+## "Read-only" is by convention (cron jobs disabled, no webhook processing)
+## not by enforcement. Do not enable cron jobs or webhook processing in
+## previews without scoping DB access first.
 ## Usage: helm upgrade --install canon-pr-N chart/canon/ \
 ##   -f chart/canon/values-production.yaml \
 ##   -f chart/canon/values-preview.yaml \

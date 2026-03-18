@@ -24,7 +24,6 @@ dependencies = [
     "jinja2>=3.1",
     "pyyaml>=6.0",
     "cryptography>=44.0",
-    "stripe>=11.0",
     "PyJWT[crypto]>=2.9",
     "mcp[cli]>=1.7",
     "posthog>=3.7",
@@ -46,6 +45,7 @@ cloud = [
     "google-genai>=1.0",
     "alembic>=1.14",
     "sqlalchemy[asyncio]>=2.0",
+    "stripe>=11.0",
 ]
 dev = [
     "pytest>=8.3",
@@ -69,7 +69,7 @@ build-backend = "hatchling.build"
 packages = ["src/canon"]
 
 [tool.hatch.build.targets.sdist.force-include]
-"plugin/plugins/canon/skills" = "plugin/plugins/canon/skills"
+"plugin/skills" = "plugin/skills"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

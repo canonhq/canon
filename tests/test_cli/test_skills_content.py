@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-PLUGIN_DIR = Path(__file__).parent.parent.parent / "plugin" / "plugins" / "canon"
+PLUGIN_DIR = Path(__file__).parent.parent.parent / "plugin"
 SKILLS_DIR = PLUGIN_DIR / "skills"
 
 EXPECTED_SKILLS = [
