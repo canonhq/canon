@@ -111,12 +111,15 @@ Users on the Starter tier provide their own Anthropic API key. Canon stores the 
 ### Acceptance Criteria
 
 - [x] Pricing page displays all four tiers with accurate feature comparison
+<!-- canon:realized-in:PR#321 file:frontend/src/views/PricingView.vue -->
 - [x] BYOK and all-inclusive pricing is clearly differentiated
 - [x] Per-seat pricing with minimum 3 seats enforced
+<!-- canon:realized-in:PR#321 file:src/canon/billing/models.py -->
 - [x] Annual billing option applies 20% discount
 - [x] Monthly/annual toggle on pricing page
 - [x] AI operations defined and metered for Pro tier
 - [x] 14-day Pro trial available without credit card
+<!-- canon:realized-in:PR#321 file:src/canon/billing/service.py -->
 
 ## 3. Stripe Integration
 
@@ -171,6 +174,7 @@ Stripe's Customer Portal for self-service:
 
 - [x] Stripe Prices support per-seat quantity
 - [x] Checkout flow passes seat_count in metadata
+<!-- canon:realized-in:PR#321 file:src/canon/billing/routes.py -->
 - [x] Trial period (14 days) enabled for new customers
 - [x] Billing Portal allows subscription management
 - [x] Webhook handler processes all subscription lifecycle events
@@ -185,6 +189,7 @@ Stripe's Customer Portal for self-service:
 ### Acceptance Criteria
 
 - [x] Anthropic API key can be submitted and is encrypted at rest (AES-256-GCM)
+<!-- canon:realized-in:PR#321 file:src/canon/billing/encryption.py -->
 - [x] Key validation endpoint verifies key works before storing
 - [x] Key is never returned in full via API (last 4 chars only)
 - [ ] Agent uses BYOK key for Starter plans, Canon key for Pro/Enterprise
@@ -256,6 +261,9 @@ POST   /api/webhooks/stripe                     # Stripe webhook handler (separa
 - [x] All API routes are implemented
 - [x] Settings loaded from environment variables
 - [x] Comprehensive test suite (140 tests passing)
+<!-- canon:realized-in:PR#321 file:tests/test_billing/test_models.py -->
+<!-- canon:realized-in:PR#321 file:tests/test_billing/test_service.py -->
+<!-- canon:realized-in:PR#321 file:tests/test_billing/test_routes.py -->
 
 ## 7. Known Deferrals
 
