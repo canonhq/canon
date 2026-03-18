@@ -1,0 +1,16 @@
+{
+  "name": "canon",
+  "description": "AI-native spec documentation — verify code against specs, track coverage, maintain living docs. Powered by Canon.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Gerner Ventures"
+  },
+  "repository": "https://github.com/canonhq/canon-claude-plugin",
+  "license": "MIT",
+  "mcpServers": {
+    "canon": {
+      "command": "uvx",
+      "args": ["--from", "canonhq", "canon-mcp"]
+    }
+  }
+}

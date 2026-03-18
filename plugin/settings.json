@@ -1,0 +1,8 @@
+{
+  "canon": {
+    "spec_paths": ["docs/specs/*.md"],
+    "doc_paths": ["docs/**/*.md", "*.md"],
+    "auto_context": true,
+    "write_back": true
+  }
+}

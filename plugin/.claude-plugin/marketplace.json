@@ -1,0 +1,12 @@
+{
+  "listing": {
+    "title": "Canon — Spec-Driven Development",
+    "tagline": "Verify code against specs, track coverage, maintain living documentation",
+    "icon": "file-text",
+    "screenshots": [],
+    "featured": false
+  },
+  "compatibility": {
+    "minClaudeCodeVersion": "1.0.0"
+  }
+}
