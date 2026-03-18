@@ -53,6 +53,7 @@ def init(
         from opentelemetry.sdk._logs import LoggerProvider as _LP
         from opentelemetry.sdk._logs import LoggingHandler
         from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+        from opentelemetry.sdk.resources import Resource
 
         endpoint = _endpoint_for_host(posthog_host)
 
@@ -61,7 +62,8 @@ def init(
             headers={"Authorization": f"Bearer {api_key}"},
         )
 
-        _provider = _LP()
+        resource = Resource.create({"service.name": "canon"})
+        _provider = _LP(resource=resource)
         _provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
 
         level = getattr(logging, min_level.upper(), logging.WARNING)

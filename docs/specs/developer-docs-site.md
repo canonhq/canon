@@ -327,7 +327,7 @@ Formal specification of the spec markdown format:
 - Frontmatter fields (required vs. optional, valid values)
 - Section numbering rules
 - Status comment syntax (`<!-- canon:system:ID status:STATE -->`)
-- Ticket link syntax (`<!-- canon:ticket:SYSTEM:ID -->`)
+- Ticket link syntax (`<!-- canon:ticket:{SYSTEM}:{ID} -->`)
 - Realization evidence syntax (`<!-- canon:realized-in:PR#N file:PATH lines:L1-L2 -->`)
 - AC checkbox format with strength keywords
 - Delta markers

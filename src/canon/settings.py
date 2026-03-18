@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     # and linked via set_auth0_org_id() in the installation registry.
     auth0_orgs_enabled: bool = False
 
+    # Auth0 M2M credentials for Management API (org membership queries).
+    # Falls back to auth0_client_id/secret when not set.
+    auth0_m2m_client_id: str = ""
+    auth0_m2m_client_secret: str = ""
+
     # GitHub OAuth (for web editor — user-level repo access)
     github_oauth_client_id: str = ""
     github_oauth_client_secret: str = ""
