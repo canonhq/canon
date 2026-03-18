@@ -7,7 +7,7 @@ import glob as globmod
 import subprocess
 from pathlib import Path
 
-from ..setup import create_canon_yaml, create_mcp_json, install_skills, list_setup_files
+from ..setup import cleanup_stale_skills, create_canon_yaml, create_mcp_json, list_setup_files
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
@@ -250,11 +250,8 @@ def run_setup(
     elif mcp_result == "updated":
         print("  Updated: .mcp.json")
 
-    skills, skipped = install_skills(root)
-    if skills:
-        print(f"  Installed {len(skills)} Claude Code skills")
-    if skipped:
-        print(f"  Skipped {skipped} skills (already installed — delete to reinstall)")
+    if cleanup_stale_skills(root):
+        print("  Cleaned up stale .claude/skills/ (skills now come from the canon plugin)")
 
     # ── Post-setup hints ─────────────────────────────────
     if detected_project:

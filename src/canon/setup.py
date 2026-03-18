@@ -6,8 +6,8 @@ from any context (CLI, action runner, or async webhook handler).
 
 from __future__ import annotations
 
-import importlib.resources
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -178,33 +178,31 @@ def create_mcp_json(root: Path) -> str | None:
         return "created"
 
 
-def install_skills(root: Path) -> tuple[list[str], int]:
-    """Copy bundled SKILL.md files to .claude/skills/ in the target directory.
+def cleanup_stale_skills(root: Path) -> bool:
+    """Remove stale .claude/skills/ left by older canon versions.
 
-    Existing skill files are skipped to preserve user customizations.
-    Delete a skill directory and re-run ``canon setup`` to reinstall.
+    Skills are now delivered via the canon Claude Code plugin
+    (canonhq/canon-claude-plugin) and should not be installed into the
+    repo. This function cleans up:
+    - Dangling symlinks at .claude/skills (from old plugin layout)
+    - Directories at .claude/skills with only canon-* skill subdirs
 
-    Returns ``(installed, skipped)`` — list of newly installed skill names
-    and count of skills that were skipped because they already existed.
+    Returns True if cleanup was performed.
     """
-    installed: list[str] = []
-    skipped = 0
-    skills_pkg = importlib.resources.files("canon.plugin_data") / "skills"
+    skills_dest = root / ".claude" / "skills"
 
-    for skill_dir in sorted(skills_pkg.iterdir()):
-        if not skill_dir.is_dir() or skill_dir.name.startswith("."):
-            continue
+    # Remove dangling symlink
+    if skills_dest.is_symlink() and not skills_dest.exists():
+        skills_dest.unlink()
+        return True
 
-        skill_file = skill_dir / "SKILL.md"
-        if not skill_file.is_file():
-            continue
+    # Remove directory if it only contains canon-installed skills
+    # Skip symlinks — only clean up real directories we created
+    if skills_dest.is_dir() and not skills_dest.is_symlink():
+        children = list(skills_dest.iterdir())
+        canon_skills = [c for c in children if c.name.startswith("canon-") and c.is_dir()]
+        if children and len(canon_skills) == len(children):
+            shutil.rmtree(skills_dest)
+            return True
 
-        dest = root / ".claude" / "skills" / skill_dir.name / "SKILL.md"
-        if dest.exists():
-            skipped += 1
-            continue
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(skill_file.read_text(encoding="utf-8"), encoding="utf-8")
-        installed.append(skill_dir.name)
-
-    return installed, skipped
+    return False

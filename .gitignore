@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage*.json
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (docs site)
+node_modules/
+docs-site/.vitepress/dist/
+docs-site/.vitepress/cache/

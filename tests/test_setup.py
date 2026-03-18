@@ -6,10 +6,10 @@ import json
 from pathlib import Path
 
 from canon.setup import (
+    cleanup_stale_skills,
     create_canon_yaml,
     create_mcp_json,
     create_spec_template,
-    install_skills,
     list_setup_files,
 )
 
@@ -137,29 +137,57 @@ class TestCreateMcpJson:
         assert "not a JSON object" in capsys.readouterr().out
 
 
-class TestInstallSkills:
-    def test_installs_skills(self, tmp_path: Path):
-        installed, skipped = install_skills(tmp_path)
-        assert len(installed) > 0
-        assert skipped == 0
-        assert "canon-context" in installed
-        skill_path = tmp_path / ".claude" / "skills" / "canon-context" / "SKILL.md"
-        assert skill_path.exists()
-        assert "canon-context" in skill_path.read_text()
+class TestCleanupStaleSkills:
+    def test_removes_dangling_symlink(self, tmp_path: Path):
+        skills = tmp_path / ".claude" / "skills"
+        skills.parent.mkdir(parents=True)
+        skills.symlink_to("/nonexistent/path")
+        assert skills.is_symlink()
 
-    def test_skips_existing_skills(self, tmp_path: Path):
-        dest = tmp_path / ".claude" / "skills" / "canon-context" / "SKILL.md"
-        dest.parent.mkdir(parents=True)
-        dest.write_text("customized by user")
+        assert cleanup_stale_skills(tmp_path) is True
+        assert not skills.exists()
+        assert not skills.is_symlink()
 
-        installed, skipped = install_skills(tmp_path)
-        assert "canon-context" not in installed
-        assert skipped >= 1
-        assert dest.read_text() == "customized by user"
+    def test_removes_canon_only_skills_dir(self, tmp_path: Path):
+        skills = tmp_path / ".claude" / "skills"
+        (skills / "canon-verify").mkdir(parents=True)
+        (skills / "canon-verify" / "SKILL.md").write_text("skill content")
+        (skills / "canon-context").mkdir()
+        (skills / "canon-context" / "SKILL.md").write_text("skill content")
 
-    def test_idempotent(self, tmp_path: Path):
-        installed, _ = install_skills(tmp_path)
-        second_installed, second_skipped = install_skills(tmp_path)
-        assert len(installed) > 0
-        assert len(second_installed) == 0
-        assert second_skipped == len(installed)
+        assert cleanup_stale_skills(tmp_path) is True
+        assert not skills.exists()
+
+    def test_preserves_mixed_skills_dir(self, tmp_path: Path):
+        skills = tmp_path / ".claude" / "skills"
+        (skills / "canon-verify").mkdir(parents=True)
+        (skills / "custom-skill").mkdir()
+
+        assert cleanup_stale_skills(tmp_path) is False
+        assert skills.exists()
+
+    def test_noop_when_no_skills_dir(self, tmp_path: Path):
+        assert cleanup_stale_skills(tmp_path) is False
+
+    def test_noop_when_valid_symlink(self, tmp_path: Path):
+        target = tmp_path / "real_skills"
+        target.mkdir()
+        skills = tmp_path / ".claude" / "skills"
+        skills.parent.mkdir(parents=True)
+        skills.symlink_to(target)
+
+        assert cleanup_stale_skills(tmp_path) is False
+        assert skills.is_symlink()
+
+    def test_noop_when_valid_symlink_with_canon_contents(self, tmp_path: Path):
+        """Valid symlink to dir with canon-* contents should not be removed."""
+        target = tmp_path / "real_skills"
+        (target / "canon-verify").mkdir(parents=True)
+        (target / "canon-verify" / "SKILL.md").write_text("content")
+        skills = tmp_path / ".claude" / "skills"
+        skills.parent.mkdir(parents=True)
+        skills.symlink_to(target)
+
+        assert cleanup_stale_skills(tmp_path) is False
+        assert skills.is_symlink()
+        assert target.exists()

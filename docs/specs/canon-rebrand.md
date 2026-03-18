@@ -38,10 +38,12 @@ Secure all external namespaces before any code changes.
 ### Acceptance Criteria
 
 - [x] `canonhq` GitHub organization created (under njgerner account)
+<!-- canon:realized-in:PR#327 file:.github/scripts/export-oss.sh -->
 - [x] `canonhq.co` domain registered
 - [x] New `canonhq` GitHub App created (App ID: 3012101) with correct permissions and event subscriptions
 - [x] GitHub App has logo uploaded
 - [x] `canonhq` PyPI package name reserved (published 0.0.1.dev0 placeholder)
+<!-- canon:realized-in:PR#327 file:uv.lock -->
 
 ## 3. Visual Identity
 
