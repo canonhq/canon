@@ -7,6 +7,8 @@
        docker-run docker-dev helm-template \
        docs-dev docs-build docs-preview
 
+SHELL := /bin/bash
+
 # ── Defaults ──────────────────────────────────────────────
 DOCKER_REGISTRY ?= registry.digitalocean.com/gv-shared
 DOCKER_IMAGE    ?= $(DOCKER_REGISTRY)/canon
@@ -22,7 +24,7 @@ help: ## Show this help
 install: install-backend install-frontend ## Install all dependencies
 
 install-backend: ## Install Python dependencies
-	uv sync --extra dev
+	uv sync --extra dev --extra cloud
 
 install-frontend: ## Install frontend dependencies
 	cd frontend && npm ci
