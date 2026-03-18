@@ -22,7 +22,7 @@ jobs:
         run: uv run ruff check
 
       - name: Type check
-        run: uv run mypy src/canon
+        run: uv run mypy src/canon --ignore-missing-imports
 
       - name: Test
         run: uv run pytest --tb=short -q

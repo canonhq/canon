@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://canonhq.co/logo.svg" alt="Canon" width="80" />
+  <img src="https://raw.githubusercontent.com/canonhq/canon/main/docs-site/public/logo.svg" alt="Canon" width="80" />
 </p>
 
 <h1 align="center">Canon</h1>
@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://pypi.org/project/canonhq/"><img src="https://img.shields.io/pypi/v/canonhq?color=blue" alt="PyPI"></a>
   <a href="https://github.com/canonhq/canon/actions/workflows/ci.yml"><img src="https://github.com/canonhq/canon/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/canonhq/canon/blob/main/LICENSE"><img src="https://img.shields.io/github/license/canonhq/canon" alt="License"></a>
+  <a href="https://github.com/canonhq/canon/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-BSL_1.1-blue" alt="License"></a>
   <a href="https://canonhq.co/docs"><img src="https://img.shields.io/badge/docs-canonhq.co-green" alt="Docs"></a>
 </p>
 
@@ -81,52 +81,25 @@ Specs define **intent** (what should be built). Code reveals **reality** (what s
 
 ## Quick Start
 
-### Install the CLI
+### Install
 
 ```bash
-pip install canonhq
+pip install canonhq        # CLI + MCP server
+canon setup                # Creates CANON.yaml in your repo
 ```
 
-### Set up a repo
+### Create a spec with AI
 
-```bash
-canon setup          # Creates CANON.yaml
+Using the [Claude Code plugin](https://canonhq.co/docs/getting-started/installation#claude-code-plugin):
+
+```
+> /canon-new
+
+Creating spec: User Authentication
+✓ Generated docs/specs/user-auth.md with 4 sections, 12 acceptance criteria
 ```
 
-### Write a spec
-
-Create `docs/specs/my-feature.md`:
-
-```markdown
----
-title: User Authentication
-status: draft
-priority: high
----
-
-## 1. Login Flow
-
-Users can log in with email and password.
-
-- [ ] POST /auth/login accepts email + password
-- [ ] Returns JWT token on success
-- [ ] Rate-limits to 5 attempts per minute
-
-## 2. Session Management
-
-- [ ] Tokens expire after 24 hours
-- [ ] Refresh tokens extend sessions by 7 days
-```
-
-### Check coverage
-
-```bash
-canon status         # See spec completion
-canon verify         # Verify specs against code
-canon sync           # Sync sections to tickets
-```
-
-### Connect your AI agent
+Or connect any MCP-compatible agent (Claude Code, Cursor, Windsurf) to the Canon knowledge base:
 
 ```json
 {
@@ -138,6 +111,23 @@ canon sync           # Sync sections to tickets
   }
 }
 ```
+
+### Work with specs
+
+```bash
+canon status             # See spec completion across your repo
+canon verify             # Verify acceptance criteria against code
+canon sync               # Sync spec sections to Jira/Linear/GitHub Issues
+canon plan               # Generate an implementation plan from a spec
+```
+
+### What happens next
+
+Once specs exist, Canon keeps them alive:
+
+1. **Open a PR** → Canon analyzes the diff against relevant specs and comments with coverage
+2. **Close a ticket** → the spec section updates automatically
+3. **Code ships** → the agent verifies acceptance criteria are actually implemented
 
 ## Documentation
 
@@ -161,4 +151,4 @@ make test
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[Business Source License 1.1](LICENSE) — free to use, modify, and self-host. The only restriction is offering Canon as a competing commercial hosted service. Converts to Apache 2.0 four years after each release.
