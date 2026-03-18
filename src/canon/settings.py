@@ -24,8 +24,7 @@ class Settings(BaseSettings):
 
     # Linear (optional)
     linear_api_key: str = ""
-    # When unconfigured, the /webhooks/linear endpoint accepts unauthenticated
-    # requests that can trigger spec file writes. Configure in production.
+    # When unconfigured, the /webhooks/linear endpoint returns 503.
     linear_webhook_secret: str = ""
 
     # GitHub token for ticket sync (optional)
@@ -34,13 +33,11 @@ class Settings(BaseSettings):
     github_repo: str = ""
 
     # Jira webhook secret (optional — for real-time reverse sync).
-    # When unconfigured, the /webhooks/jira endpoint accepts unauthenticated
-    # requests that can trigger spec file writes. Configure in production.
+    # When unconfigured, the /webhooks/jira endpoint returns 503.
     jira_webhook_secret: str = ""
 
     # Asana webhook secret (optional — for real-time reverse sync).
-    # When unconfigured, the /webhooks/asana endpoint accepts unauthenticated
-    # requests. Configure in production.
+    # When unconfigured, the /webhooks/asana endpoint returns 503.
     asana_webhook_secret: str = ""
 
     # Database (optional — app works without it)
