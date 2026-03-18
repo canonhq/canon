@@ -421,6 +421,8 @@ Documentation for open-source contributors.
 ### Acceptance Criteria
 
 - [x] Development setup guide gets a new contributor running locally from scratch
+<!-- canon:realized-in:PR#322 file:Makefile -->
+<!-- canon:realized-in:PR#322 file:CLAUDE.md -->
 - [x] Testing guide explains how to write and run tests with examples
 - [x] Code style guide documents linting, formatting, and type checking requirements
 - [ ] All commands in contributing docs are tested and work
