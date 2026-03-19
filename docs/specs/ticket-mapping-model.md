@@ -230,7 +230,7 @@ When `hierarchy` is absent, all sections create "Task" issues (current behavior)
 
 ## 3. Multi-System Routing
 
-<!-- specwright:system:3 status:done -->
+<!-- canon:system:3 status:in_progress -->
 
 Support multiple ticket systems per repo, with routing rules that determine which system a given section targets.
 
