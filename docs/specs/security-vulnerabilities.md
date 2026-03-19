@@ -41,7 +41,7 @@ The MCP endpoint at `/mcp` provides read/write access to all connected GitHub re
 
 ## 3. Fix Authentication Bypass When Auth0 Is Disabled
 
-<!-- canon:system:3 status:in_progress -->
+<!-- canon:system:3 status:todo -->
 <!-- specwright:ticket:github:98 -->
 
 **Severity: HIGH**
