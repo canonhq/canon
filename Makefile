@@ -1,4 +1,4 @@
-.PHONY: help install install-docs \
+.PHONY: help setup install install-cli setup-claude install-docs \
        test test-v test-cov \
        lint format typecheck \
        build-wheel \
@@ -8,6 +8,25 @@
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+# ── Setup ────────────────────────────────────────────────
+setup: install ## First-time setup: install deps, create CANON.yaml + .mcp.json
+	uv run canon setup --non-interactive
+
+install-cli: ## Install canon CLI globally (installs or upgrades)
+	uv tool install --force canonhq
+	@echo ""
+	@echo "Installed. Verify with: canon --help"
+
+setup-claude: ## Configure Claude Code MCP (.mcp.json only, won't touch CANON.yaml)
+	@if [ ! -f .mcp.json ]; then \
+		printf '{\n  "mcpServers": {\n    "canon": {\n      "type": "stdio",\n      "command": "uvx",\n      "args": ["--from", "canonhq", "canon-mcp"]\n    }\n  }\n}\n' > .mcp.json; \
+		echo "Created .mcp.json with Canon MCP config."; \
+		echo "Tip: consider adding .mcp.json to your .gitignore."; \
+	else \
+		echo ".mcp.json already exists — verify it includes the canon MCP server."; \
+	fi
+	@echo "Restart Claude Code to pick up MCP changes."
 
 # ── Install ───────────────────────────────────────────────
 install: ## Install all dependencies
