@@ -277,7 +277,7 @@ Routing matches against section-level or frontmatter-level metadata. When no rou
 <!-- specwright:ticket:github:266 -->
 ## 4. Enterprise Configuration Layers
 
-<!-- specwright:system:4 status:done -->
+<!-- canon:system:4 status:in_progress -->
 
 Support org-wide defaults that individual repos inherit and can override.
 
