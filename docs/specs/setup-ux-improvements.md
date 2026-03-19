@@ -29,6 +29,7 @@ These friction points compound: a new user's first experience is often
 confusion about what worked and what didn't, with no single command to diagnose
 the state of their installation.
 
+<!-- canon:ticket:github:353 -->
 ## 2. Fix `canon setup` Flow
 
 <!-- specwright:system:2 status:todo -->
@@ -36,6 +37,7 @@ the state of their installation.
 Improve the interactive setup command to produce a fully working configuration
 and give users clear next steps.
 
+<!-- canon:ticket:github:354 -->
 ### 2.1 Fix Unreachable "Next Steps" Hint
 
 <!-- specwright:system:2.1 status:todo -->
@@ -51,6 +53,7 @@ install.
 - [ ] "Next steps" block does not print when reconfiguring an existing setup
 - [ ] Test covers fresh-install and reconfigure paths
 
+<!-- canon:ticket:github:355 -->
 ### 2.2 Add Login Awareness to Setup
 
 <!-- specwright:system:2.2 status:todo -->
@@ -65,6 +68,7 @@ about `canon login` when credentials are missing.
 - [ ] If credentials exist: print "Authenticated as <org>" confirmation
 - [ ] Non-interactive mode skips the hint (no blocking prompt)
 
+<!-- canon:ticket:github:356 -->
 ### 2.3 Add `--force` Flag for Skill Reinstall
 
 <!-- specwright:system:2.3 status:todo -->
@@ -79,6 +83,7 @@ Allow users to update skills without manually deleting them.
 - [ ] Print count of skills updated vs. skipped vs. newly installed
 - [ ] `--force` works with both interactive and non-interactive modes
 
+<!-- canon:ticket:github:357 -->
 ### 2.4 Post-Setup MCP Server Validation
 
 <!-- specwright:system:2.4 status:todo -->
@@ -93,6 +98,7 @@ After writing `.mcp.json`, verify that the MCP server can actually start.
 - [ ] Validation is skipped in non-interactive mode with `--skip-validation` flag
 - [ ] Total validation adds no more than 5 seconds to setup
 
+<!-- canon:ticket:github:358 -->
 ## 3. Add `canon doctor` Command
 
 <!-- specwright:system:3 status:todo -->
@@ -100,6 +106,7 @@ After writing `.mcp.json`, verify that the MCP server can actually start.
 A single diagnostic command that checks the health of a Canon installation
 and reports actionable fixes.
 
+<!-- canon:ticket:github:359 -->
 ### 3.1 Configuration Checks
 
 <!-- specwright:system:3.1 status:todo -->
@@ -112,6 +119,7 @@ and reports actionable fixes.
 - [ ] Report skill versions vs. bundled versions (detect stale skills)
 - [ ] Check `docs/specs/` contains at least one `.md` file (not just the template)
 
+<!-- canon:ticket:github:360 -->
 ### 3.2 Authentication Checks
 
 <!-- specwright:system:3.2 status:todo -->
@@ -124,6 +132,7 @@ and reports actionable fixes.
 - [ ] Check `gh auth status` for GitHub CLI authentication
 - [ ] Report each check as PASS / WARN / FAIL with one-line fix suggestion
 
+<!-- canon:ticket:github:361 -->
 ### 3.3 MCP Server Health
 
 <!-- specwright:system:3.3 status:todo -->
@@ -136,6 +145,7 @@ and reports actionable fixes.
 - [ ] If server fails to start: report the error and suggest fixes
 - [ ] Timeout after 10 seconds if server doesn't respond
 
+<!-- canon:ticket:github:362 -->
 ### 3.4 Output Format
 
 <!-- specwright:system:3.4 status:todo -->
@@ -147,12 +157,14 @@ and reports actionable fixes.
 - [ ] Exit code 0 if all checks pass, 1 if any FAIL, 2 if only WARNings
 - [ ] Summary line at the end: "X passed, Y warnings, Z failures"
 
+<!-- canon:ticket:github:363 -->
 ## 4. Unify Documentation and Naming
 
 <!-- specwright:system:4 status:todo -->
 
 Fix naming inconsistencies and clarify the two installation paths.
 
+<!-- canon:ticket:github:364 -->
 ### 4.1 Fix Command Name Drift
 
 <!-- canon:system:4.1 status:in_progress -->
@@ -163,6 +175,7 @@ Fix naming inconsistencies and clarify the two installation paths.
 - [ ] Replace all references to `canon init` in plugin/README.md and plugin skills
 - [ ] Add `init` as a CLI alias for `setup` (so both work, setup is canonical)
 
+<!-- canon:ticket:github:365 -->
 ### 4.2 Clarify Installation Paths in Plugin README
 
 <!-- canon:system:4.2 status:in_progress -->
@@ -173,6 +186,7 @@ Fix naming inconsistencies and clarify the two installation paths.
 - [ ] Both paths list what they produce (which files, which capabilities)
 - [ ] Note that `canon setup` installs skills AND writes `.mcp.json`, so marketplace install is not needed after CLI setup
 
+<!-- canon:ticket:github:366 -->
 ### 4.3 Add Environment Variable Reference
 
 <!-- canon:system:4.3 status:in_progress -->

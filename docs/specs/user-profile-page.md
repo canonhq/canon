@@ -42,6 +42,7 @@ The profile header presents the user's visual identity, including avatar, displa
 - [x] Display Auth0 subject ID in a muted, copyable format for debugging purposes
 - [x] Display "Last login" timestamp from `users.last_login_at` database field
 
+<!-- canon:ticket:github:370 -->
 ## 3. Roles & Permissions
 
 <!-- canon:system:3 status:in_progress -->
@@ -58,6 +59,7 @@ The interface presents both the user's effective role and the granular permissio
 - [x] Display authentication method (session, jwt, or api_key) indicating how the user authenticated
 - [x] Include explanatory text noting that permissions are derived from Auth0 RBAC and organization membership
 
+<!-- canon:ticket:github:371 -->
 ## 4. Organization & Access
 
 <!-- canon:system:4 status:in_progress -->
@@ -71,6 +73,7 @@ This section displays the user's current organization context and enables switch
 - [ ] Display Auth0 organization ID in debug/details section (when organization mode is enabled)
 - [x] Provide link to organization dashboard filtered to the user's current organization
 
+<!-- canon:ticket:github:372 -->
 ## 5. Backend API
 
 <!-- canon:system:5 status:in_progress -->
@@ -84,6 +87,7 @@ The `GET /api/profile` endpoint returns a complete profile payload by combining 
 - [x] Response includes `last_login_at` from the `users` database table
 - [x] Response conforms to the `ProfileResponse` Pydantic model
 
+<!-- canon:ticket:github:373 -->
 ## 6. Frontend View
 
 <!-- canon:system:6 status:in_progress -->

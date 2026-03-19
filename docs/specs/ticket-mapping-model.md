@@ -198,6 +198,7 @@ Field mapping is optional. When absent, behavior matches today (summary = sectio
 - [x] MUST validate field map sources against known spec model fields at config parse time
 - [x] SHOULD support array/list field sources (tags → labels)
 
+<!-- canon:ticket:github:368 -->
 ### 2.3 Hierarchy Templates
 
 <!-- canon:system:2.3 status:in_progress -->
@@ -274,15 +275,15 @@ Routing matches against section-level or frontmatter-level metadata. When no rou
 - [x] SHOULD support routing by frontmatter fields (team, owner)
 - [x] SHOULD support routing by spec file path glob
 
-<!-- specwright:ticket:github:266 -->
+<!-- section done: old ticket #266 closed -->
 ## 4. Enterprise Configuration Layers
 
 <!-- canon:system:4 status:in_progress -->
 
 Support org-wide defaults that individual repos inherit and can override.
 
-<!-- specwright:ticket:github:267 -->
-<!-- specwright:ticket:github:289 -->
+<!-- section done: old ticket #267 closed -->
+<!-- section done: old ticket #289 closed -->
 ### 4.1 Org-Level Defaults
 
 <!-- specwright:system:4.1 status:done -->
@@ -370,6 +371,7 @@ When `auth_profile` is set, the adapter factory reads credentials from the named
 - [x] MUST validate that referenced auth profiles exist in config
 - [x] MUST NOT store credentials in config files (env vars only)
 
+<!-- canon:ticket:github:369 -->
 ### 4.3 Ticket Description Templates
 
 <!-- canon:system:4.3 status:in_progress -->
@@ -517,8 +519,7 @@ Changes:
 - [x] MUST NOT break existing adapter implementations
 - [x] SHOULD add UpdateTicketInput.custom_fields for reverse field sync
 
-<!-- specwright:ticket:github:268 -->
-<!-- specwright:ticket:github:290 -->
+<!-- section done: old tickets #268, #290 closed -->
 ## 8. Rollout Plan
 
 <!-- specwright:system:8 status:done -->

@@ -59,7 +59,7 @@ Implement the `TicketAdapter` protocol for Asana, extending ticket sync to teams
 ## 3. Real-Time Reverse Sync via Webhooks
 
 <!-- specwright:system:3 status:done -->
-<!-- specwright:ticket:github:56 -->
+<!-- section done: old ticket #56 closed -->
 
 Replace the cron-based reverse sync with webhook-driven updates for near-real-time spec status tracking.
 

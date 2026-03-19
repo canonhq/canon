@@ -26,8 +26,7 @@ Current documentation lives in scattered locations:
 
 Developers evaluating or adopting Canon have no single place to learn how it works, how to configure it, or how to extend it. A VitePress docs site solves this by providing a structured, searchable, version-controlled documentation portal built with the same toolchain (Vite) the frontend already uses.
 
-<!-- specwright:ticket:github:275 -->
-<!-- specwright:ticket:github:286 -->
+<!-- section done: old tickets #275, #286, #303 closed -->
 ## 2. Configurable Spec Paths (Prerequisite)
 
 <!-- canon:system:2 status:done -->
@@ -429,8 +428,8 @@ Documentation for open-source contributors.
 - [x] Code style guide documents linting, formatting, and type checking requirements
 - [ ] All commands in contributing docs are tested and work
 
-<!-- specwright:ticket:github:264 -->
-<!-- specwright:ticket:github:287 -->
+<!-- canon:ticket:github:304 -->
+<!-- canon:ticket:github:349 -->
 ## 10. Versioned Documentation
 
 <!-- canon:system:10 status:in_progress -->
@@ -462,8 +461,8 @@ Use VitePress multi-version support (via directory-based versioning or a plugin 
 - [x] Canonical URLs point to latest version
 - [ ] Auto-generated reference pages are version-specific
 
-<!-- specwright:ticket:github:265 -->
-<!-- specwright:ticket:github:288 -->
+<!-- canon:ticket:github:305 -->
+<!-- canon:ticket:github:305 -->
 ## 11. Deployment & Hosting
 
 <!-- specwright:system:11 status:in_progress -->

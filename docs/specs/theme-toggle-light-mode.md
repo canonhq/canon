@@ -42,6 +42,7 @@ Define light-mode equivalents for the surface color tokens so components can use
 - [x] Light surfaces use subtle brand-tinted whites/grays (not pure gray-50/white) to give light mode a cohesive identity
 - [x] Update `style.css` `--theme-bg`, `--theme-bg-alt`, `--theme-bg-elevated` CSS vars to use the new tokens
 
+<!-- canon:ticket:github:367 -->
 ## 3. Marketing Page Light Mode Polish
 
 <!-- canon:system:3 status:in_progress -->

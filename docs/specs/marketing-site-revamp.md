@@ -26,6 +26,7 @@ The current marketing site is a single 1,247-line HTML file (`templates/landing.
 
 Moving into the Vue SPA with prerendering gives us: Tailwind CSS, component reuse with the dashboard, PostHog analytics, and the ability to iterate faster on marketing content.
 
+<!-- canon:ticket:github:350 -->
 ## 2. Migrate to Vue SPA with Prerendering
 
 <!-- canon:system:2 status:in_progress -->
@@ -150,6 +151,7 @@ Show the MCP + skills workflow side-by-side:
 - [x] Claude Code / MCP integration shown alongside CLI
 - [x] Section positioned after the "How It Works" loop to show the developer experience
 
+<!-- canon:ticket:github:351 -->
 ## 5. Interactive Demo
 
 <!-- canon:system:5 status:in_progress -->
@@ -253,6 +255,7 @@ Update to reflect actual integration status:
 <!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/IntegrationsGrid.vue -->
 - [x] Each capability card links to relevant docs or demo section
 
+<!-- canon:ticket:github:352 -->
 ## 8. Analytics & Performance
 
 <!-- canon:system:8 status:in_progress -->
