@@ -10,9 +10,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 DocType = Literal["spec", "proposal", "design", "adr"]
 ReviewStatus = Literal["draft", "in_review", "approved"]
+AiExposure = Literal["full", "metadata", "none"]
 
 VALID_DOC_TYPES: frozenset[str] = frozenset(get_args(DocType))
 VALID_REVIEW_STATUSES: frozenset[str] = frozenset(get_args(ReviewStatus))
+VALID_AI_EXPOSURES: frozenset[str] = frozenset(get_args(AiExposure))
 
 # --- Section Status ---
 
@@ -104,6 +106,7 @@ class SpecFrontmatter(BaseModel):
     depends_on: list[str] = []
     supersedes: str | None = None
     review_status: ReviewStatus | None = None
+    ai_exposure: AiExposure | None = None
 
 
 # --- Diagnostics ---
@@ -137,6 +140,31 @@ def flatten_sections(sections: list[SpecSection]) -> list[SpecSection]:
         if section.children:
             result.extend(flatten_sections(section.children))
     return result
+
+
+def resolve_ai_exposure(
+    frontmatter: SpecFrontmatter,
+    restricted_tags: list[str] | None = None,
+    config_default: AiExposure | None = None,
+) -> AiExposure:
+    """Resolve effective ai_exposure for a spec.
+
+    Resolution order: frontmatter (if explicitly set) > restricted_tags match >
+    CANON.yaml default > "full".
+    """
+    # If frontmatter explicitly sets ai_exposure, it always wins
+    if frontmatter.ai_exposure is not None:
+        return frontmatter.ai_exposure
+
+    # Check restricted_tags match
+    if restricted_tags and any(tag in restricted_tags for tag in frontmatter.tags):
+        return "metadata"
+
+    # CANON.yaml default
+    if config_default and config_default in VALID_AI_EXPOSURES:
+        return config_default
+
+    return "full"
 
 
 class ParseOptions(BaseModel):

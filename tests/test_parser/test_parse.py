@@ -66,6 +66,170 @@ status: banana
         _fm, _content, diagnostics = parse_frontmatter(raw)
         assert any("banana" in d.message for d in diagnostics)
 
+    def test_parses_ai_exposure_full(self):
+        raw = """---
+title: "Test"
+status: draft
+owner: alice
+team: platform
+ai_exposure: full
+---
+"""
+        fm, _content, diagnostics = parse_frontmatter(raw)
+        assert fm.ai_exposure == "full"
+        assert len(diagnostics) == 0
+
+    def test_parses_ai_exposure_metadata(self):
+        raw = """---
+title: "Test"
+status: draft
+owner: alice
+team: platform
+ai_exposure: metadata
+---
+"""
+        fm, _content, diagnostics = parse_frontmatter(raw)
+        assert fm.ai_exposure == "metadata"
+        assert len(diagnostics) == 0
+
+    def test_parses_ai_exposure_none(self):
+        raw = """---
+title: "Test"
+status: draft
+owner: alice
+team: platform
+ai_exposure: none
+---
+"""
+        fm, _content, diagnostics = parse_frontmatter(raw)
+        assert fm.ai_exposure == "none"
+        assert len(diagnostics) == 0
+
+    def test_ai_exposure_defaults_to_none_when_absent(self):
+        raw = """---
+title: "Test"
+status: draft
+owner: alice
+team: platform
+---
+"""
+        fm, _content, _diagnostics = parse_frontmatter(raw)
+        assert fm.ai_exposure is None
+
+    def test_warns_on_invalid_ai_exposure(self):
+        raw = """---
+title: "Test"
+status: draft
+owner: alice
+team: platform
+ai_exposure: partial
+---
+"""
+        fm, _content, diagnostics = parse_frontmatter(raw)
+        assert fm.ai_exposure is None
+        assert any("ai_exposure" in d.message for d in diagnostics)
+
+
+class TestResolveAiExposure:
+    def test_frontmatter_none_takes_precedence(self):
+        from canon.parser.models import resolve_ai_exposure
+
+        fm = SpecFrontmatter(title="Test", status="draft", owner="a", team="t", ai_exposure="none")
+        assert (
+            resolve_ai_exposure(fm, restricted_tags=["security"], config_default="full") == "none"
+        )
+
+    def test_frontmatter_metadata_takes_precedence(self):
+        from canon.parser.models import resolve_ai_exposure
+
+        fm = SpecFrontmatter(
+            title="Test", status="draft", owner="a", team="t", ai_exposure="metadata"
+        )
+        assert resolve_ai_exposure(fm, restricted_tags=[], config_default="full") == "metadata"
+
+    def test_explicit_full_overrides_restricted_tags(self):
+        """Frontmatter ai_exposure: full explicitly set should win over restricted_tags."""
+        from canon.parser.models import resolve_ai_exposure
+
+        fm = SpecFrontmatter(
+            title="Test",
+            status="draft",
+            owner="a",
+            team="t",
+            tags=["security"],
+            ai_exposure="full",
+        )
+        assert (
+            resolve_ai_exposure(fm, restricted_tags=["security"], config_default="full") == "full"
+        )
+
+    def test_restricted_tags_apply_when_not_set(self):
+        """When ai_exposure is not set in frontmatter, restricted_tags apply."""
+        from canon.parser.models import resolve_ai_exposure
+
+        fm = SpecFrontmatter(
+            title="Test",
+            status="draft",
+            owner="a",
+            team="t",
+            tags=["security"],
+        )
+        assert (
+            resolve_ai_exposure(fm, restricted_tags=["security"], config_default="full")
+            == "metadata"
+        )
+
+    def test_config_default_applies_when_not_set(self):
+        """When ai_exposure is not set in frontmatter, config default applies."""
+        from canon.parser.models import resolve_ai_exposure
+
+        fm = SpecFrontmatter(title="Test", status="draft", owner="a", team="t")
+        assert resolve_ai_exposure(fm, restricted_tags=[], config_default="metadata") == "metadata"
+
+    def test_explicit_full_overrides_config_default(self):
+        """Frontmatter ai_exposure: full explicitly set should win over config default."""
+        from canon.parser.models import resolve_ai_exposure
+
+        fm = SpecFrontmatter(title="Test", status="draft", owner="a", team="t", ai_exposure="full")
+        assert resolve_ai_exposure(fm, restricted_tags=[], config_default="metadata") == "full"
+
+    def test_fallback_to_full(self):
+        from canon.parser.models import resolve_ai_exposure
+
+        fm = SpecFrontmatter(title="Test", status="draft", owner="a", team="t")
+        assert resolve_ai_exposure(fm) == "full"
+
+    def test_resolution_order_frontmatter_over_tags(self):
+        from canon.parser.models import resolve_ai_exposure
+
+        fm = SpecFrontmatter(
+            title="Test",
+            status="draft",
+            owner="a",
+            team="t",
+            tags=["security"],
+            ai_exposure="none",
+        )
+        # Frontmatter "none" beats restricted_tags "metadata"
+        assert (
+            resolve_ai_exposure(fm, restricted_tags=["security"], config_default="full") == "none"
+        )
+
+    def test_no_restricted_tag_match_falls_to_config(self):
+        """Tags don't match restricted_tags, so config default applies."""
+        from canon.parser.models import resolve_ai_exposure
+
+        fm = SpecFrontmatter(
+            title="Test",
+            status="draft",
+            owner="a",
+            team="t",
+            tags=["backend"],
+        )
+        assert (
+            resolve_ai_exposure(fm, restricted_tags=["security"], config_default="none") == "none"
+        )
+
 
 # ─── Comments ───────────────────────────────────────────
 

@@ -41,7 +41,7 @@ The GitHub App handles PR-time concerns (analysis, realization tracking, doc-upd
 
 ## 2. CANON.yaml `ide:` Section
 
-<!-- canon:system:2 status:todo -->
+<!-- canon:system:2 status:done -->
 
 Add a new `ide:` top-level section to CANON.yaml that controls client-side AI agent behavior. This complements the existing `agents:` section which controls server-side behavior (PR analysis, doc updates).
 
@@ -94,7 +94,7 @@ The section is named `ide:` (not `claude:` or `cursor:`) because any coding agen
 
 ## 3. AI Exposure Controls
 
-<!-- canon:system:3 status:todo -->
+<!-- canon:system:3 status:done -->
 
 Add per-spec `ai_exposure` frontmatter field that controls what content is sent to AI providers via MCP tools. Enforced at the MCP server layer so all consumers (Claude Code, Cursor, Copilot, any MCP client) respect the same restrictions.
 
@@ -152,7 +152,7 @@ The agent prompt builder (`src/canon/agent/prompts.py`) must also respect `ai_ex
 
 ## 4. MCP Server Enhancements
 
-<!-- canon:system:4 status:todo -->
+<!-- canon:system:4 status:done -->
 
 Add `summary_only` mode and pagination to the MCP server to support token-budget-aware context loading.
 
@@ -185,7 +185,7 @@ Add optional `status_filter: list[str] | None = None` parameter to `get_spec`. W
 
 ## 5. Claude Code Plugin Hooks
 
-<!-- canon:system:5 status:todo -->
+<!-- canon:system:5 status:done -->
 
 Add hooks to the Canon Claude Code plugin that make spec awareness automatic. Hooks read `ide:` config from CANON.yaml to determine behavior.
 
@@ -283,7 +283,7 @@ Hooks are defined in `plugin/hooks/hooks.json`:
 
 ## 6. Multi-Agent Setup
 
-<!-- canon:system:6 status:todo -->
+<!-- canon:system:6 status:done -->
 
 Add a `canon setup --agent <platform>` CLI command that generates thin agent-config wrapper files for each supported AI coding agent platform.
 

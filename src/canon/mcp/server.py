@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re as _re
+import time
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -11,6 +12,7 @@ import frontmatter as fm_lib
 from mcp.server.fastmcp import Context, FastMCP
 
 from canon import analytics
+from canon.parser.models import AiExposure, resolve_ai_exposure
 
 from .deps import McpDeps
 
@@ -18,17 +20,26 @@ logger = logging.getLogger(__name__)
 
 MAX_BODY_SNIPPET = 500
 
+# TTL cache for ai_exposure config to avoid repeated GitHub API calls per tool invocation.
+# Keyed by (owner, repo), values are (timestamp, (default, restricted_tags)).
+_AI_EXPOSURE_CACHE: dict[tuple[str, str], tuple[float, tuple[str, list[str]]]] = {}
+_AI_EXPOSURE_CACHE_TTL = 60  # seconds
+
 
 def _get_deps(ctx: Context) -> McpDeps:
     """Extract McpDeps from the MCP context's lifespan context."""
     return ctx.request_context.lifespan_context["deps"]
 
 
-def _section_to_dict(section: Any, include_content: bool = True) -> dict:
+def _section_to_dict(
+    section: Any, include_content: bool = True, metadata_only: bool = False
+) -> dict:
     """Convert a SpecSection to a plain dict for JSON serialization.
 
     NOTE: This manually mirrors SpecSection/Scenario/ScenarioStep/AcceptanceCriterion
     fields. If new fields are added to those models, update this function to match.
+
+    When metadata_only=True, section content and AC text are redacted (ai_exposure: metadata).
     """
     d: dict[str, Any] = {
         "id": section.id,
@@ -44,35 +55,44 @@ def _section_to_dict(section: Any, include_content: bool = True) -> dict:
         }
     if section.delta:
         d["delta"] = section.delta
-    if include_content:
-        d["content"] = section.content
-    if section.acceptance_criteria:
-        d["acceptance_criteria"] = [
-            {
-                "text": ac.text,
-                "checked": ac.checked,
-                **({"strength": ac.strength} if ac.strength else {}),
-            }
-            for ac in section.acceptance_criteria
-        ]
-    if section.scenarios:
-        d["scenarios"] = [
-            {
-                "name": sc.name,
-                "steps": [
-                    {
-                        "keyword": step.keyword,
-                        "text": step.text,
-                        **({"strength": step.strength} if step.strength else {}),
-                    }
-                    for step in sc.steps
-                ],
-            }
-            for sc in section.scenarios
-        ]
+    if metadata_only:
+        # Redact content for metadata-only exposure
+        if section.acceptance_criteria:
+            d["acceptance_criteria_count"] = len(section.acceptance_criteria)
+            d["acceptance_criteria_checked"] = sum(
+                1 for ac in section.acceptance_criteria if ac.checked
+            )
+    else:
+        if include_content:
+            d["content"] = section.content
+        if section.acceptance_criteria:
+            d["acceptance_criteria"] = [
+                {
+                    "text": ac.text,
+                    "checked": ac.checked,
+                    **({"strength": ac.strength} if ac.strength else {}),
+                }
+                for ac in section.acceptance_criteria
+            ]
+        if section.scenarios:
+            d["scenarios"] = [
+                {
+                    "name": sc.name,
+                    "steps": [
+                        {
+                            "keyword": step.keyword,
+                            "text": step.text,
+                            **({"strength": step.strength} if step.strength else {}),
+                        }
+                        for step in sc.steps
+                    ],
+                }
+                for sc in section.scenarios
+            ]
     if section.children:
         d["children"] = [
-            _section_to_dict(child, include_content=include_content) for child in section.children
+            _section_to_dict(child, include_content=include_content, metadata_only=metadata_only)
+            for child in section.children
         ]
     return d
 
@@ -89,6 +109,50 @@ def _find_section(sections: list, target_id: str) -> Any | None:
         if found:
             return found
     return None
+
+
+async def _get_ai_exposure_config(d: McpDeps, owner: str, repo: str) -> tuple[str, list[str]]:
+    """Get the ai_exposure default and restricted_tags from CANON.yaml.
+
+    Returns (default, restricted_tags).  Fails closed to "metadata" on error
+    so that a transient config-load failure never silently bypasses restrictions.
+    Results are cached for 60s to avoid repeated GitHub API calls per tool invocation.
+    """
+    key = (owner, repo)
+    cached = _AI_EXPOSURE_CACHE.get(key)
+    if cached is not None:
+        ts, value = cached
+        if time.monotonic() - ts < _AI_EXPOSURE_CACHE_TTL:
+            return value
+
+    try:
+        from ..github.spec_utils import load_repo_config
+
+        config = await load_repo_config(d.github_client, owner, repo)
+        result = config.ide.ai_exposure.default, config.ide.ai_exposure.restricted_tags
+    except Exception:
+        logger.warning(
+            "Failed to load ai_exposure config for %s/%s, failing closed to 'metadata'",
+            owner,
+            repo,
+            exc_info=True,
+        )
+        result = "metadata", []
+
+    _AI_EXPOSURE_CACHE[key] = (time.monotonic(), result)
+    return result
+
+
+def _resolve_exposure(
+    frontmatter: Any,
+    config_default: str = "full",
+    restricted_tags: list[str] | None = None,
+) -> AiExposure:
+    """Resolve effective ai_exposure for a spec frontmatter."""
+    cd: AiExposure | None = (
+        config_default if config_default in ("full", "metadata", "none") else None
+    )
+    return resolve_ai_exposure(frontmatter, restricted_tags, cd)
 
 
 def create_mcp_server(deps: McpDeps) -> FastMCP:
@@ -147,18 +211,34 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
             limit=limit,
         )
 
-        return [
-            {
+        # Apply ai_exposure config-level filtering.
+        # Per-spec frontmatter restrictions are enforced at get_spec/get_section
+        # access time; here we apply repo-level defaults (e.g. default: "none").
+        config_cache: dict[str, tuple[str, list[str]]] = {}
+        filtered: list[dict] = []
+        for r in results:
+            owner_repo = r.repo
+            if owner_repo not in config_cache:
+                if d.github_client and "/" in owner_repo:
+                    o, rp = owner_repo.split("/", 1)
+                    config_cache[owner_repo] = await _get_ai_exposure_config(d, o, rp)
+                else:
+                    config_cache[owner_repo] = ("full", [])
+            config_default, _restricted = config_cache[owner_repo]
+            if config_default == "none":
+                continue  # Repo-level default hides all specs from search
+            entry: dict[str, Any] = {
                 "repo": r.repo,
                 "path": r.path,
                 "title": r.doc_title,
                 "heading": r.heading,
-                "body": r.body[:MAX_BODY_SNIPPET] if r.body else "",
                 "status": r.status,
                 "score": round(r.rrf_score, 4),
             }
-            for r in results
-        ]
+            if config_default != "metadata":
+                entry["body"] = r.body[:MAX_BODY_SNIPPET] if r.body else ""
+            filtered.append(entry)
+        return filtered
 
     # ─── Tool: get_spec ──────────────────────────────────
 
@@ -166,13 +246,18 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         name="get_spec",
         description=(
             "Get a full parsed spec document with frontmatter, sections, "
-            "acceptance criteria, and status. Returns structured data."
+            "acceptance criteria, and status. Returns structured data. "
+            "Use summary_only=true for lightweight metadata (frontmatter + section titles/status/AC counts). "
+            "Use status_filter to include only top-level sections with specific statuses "
+            "(children of matching sections are always included)."
         ),
     )
     async def get_spec(
         owner: str,
         repo: str,
         file_path: str,
+        summary_only: bool = False,
+        status_filter: list[str] | None = None,
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict:
         analytics.track(
@@ -193,6 +278,14 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         result = parse_spec(content, ParseOptions(file_path=file_path))
         doc = result.document
 
+        # Check ai_exposure
+        config_default, restricted_tags = await _get_ai_exposure_config(d, owner, repo)
+        exposure = _resolve_exposure(doc.frontmatter, config_default, restricted_tags)
+        if exposure == "none":
+            return {"error": f"Spec {file_path} is not available (ai_exposure: none)"}
+
+        metadata_only = exposure == "metadata"
+
         fm = doc.frontmatter
         fm_dict: dict[str, Any] = {
             "title": fm.title,
@@ -202,16 +295,32 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
             "tags": fm.tags,
             "doc_type": fm.doc_type,
             "depends_on": fm.depends_on,
+            "ai_exposure": exposure,
         }
         if fm.review_status:
             fm_dict["review_status"] = fm.review_status
         if fm.supersedes:
             fm_dict["supersedes"] = fm.supersedes
 
+        # Build sections list with filtering
+        use_metadata_only = metadata_only or summary_only
+        sections = doc.sections
+        if status_filter:
+            invalid = [s for s in status_filter if s not in VALID_SECTION_STATES]
+            if invalid:
+                return {
+                    "error": (
+                        f"Invalid status_filter values: {invalid}. "
+                        f"Must be one of {sorted(VALID_SECTION_STATES)}"
+                    )
+                }
+            filter_set = set(status_filter)
+            sections = [s for s in sections if s.status.state in filter_set]
+
         return {
             "file_path": doc.file_path,
             "frontmatter": fm_dict,
-            "sections": [_section_to_dict(s) for s in doc.sections],
+            "sections": [_section_to_dict(s, metadata_only=use_metadata_only) for s in sections],
         }
 
     # ─── Tool: get_section ───────────────────────────────
@@ -247,11 +356,17 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
 
         result = parse_spec(content, ParseOptions(file_path=file_path))
 
+        # Check ai_exposure
+        config_default, restricted_tags = await _get_ai_exposure_config(d, owner, repo)
+        exposure = _resolve_exposure(result.document.frontmatter, config_default, restricted_tags)
+        if exposure == "none":
+            return {"error": f"Spec {file_path} is not available (ai_exposure: none)"}
+
         section = _find_section(result.document.sections, section_id)
         if section is None:
             return {"error": f"Section not found: {section_id}"}
 
-        return _section_to_dict(section)
+        return _section_to_dict(section, metadata_only=(exposure == "metadata"))
 
     # ─── Tool: get_doc ───────────────────────────────────
 
@@ -280,6 +395,32 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         except Exception:
             return {"error": f"File not found: {owner}/{repo}/{file_path}"}
 
+        # Check ai_exposure for spec files — parse errors are caught narrowly,
+        # but security checks must not be swallowed by a catch-all.
+        if file_path.endswith(".md"):
+            parsed_frontmatter = None
+            try:
+                from ..parser.models import ParseOptions
+                from ..parser.parse import parse_spec
+
+                result = parse_spec(content, ParseOptions(file_path=file_path))
+                parsed_frontmatter = result.document.frontmatter
+            except Exception:
+                pass  # Not a valid spec file — serve raw content
+
+            if parsed_frontmatter is not None:
+                config_default, restricted_tags = await _get_ai_exposure_config(d, owner, repo)
+                exposure = _resolve_exposure(parsed_frontmatter, config_default, restricted_tags)
+                if exposure == "none":
+                    return {"error": f"Document {file_path} is not available (ai_exposure: none)"}
+                if exposure == "metadata":
+                    return {
+                        "error": (
+                            f"Document {file_path} content is restricted "
+                            f"(ai_exposure: metadata). Use get_spec for metadata."
+                        )
+                    }
+
         return {"owner": owner, "repo": repo, "path": file_path, "content": content}
 
     # ─── Tool: list_specs ────────────────────────────────
@@ -288,14 +429,17 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         name="list_specs",
         description=(
             "List all spec documents in a repository (using configured doc_paths). "
-            "Returns metadata (title, status, owner) without full content."
+            "Returns metadata (title, status, owner) without full content. "
+            "Supports pagination with page and per_page parameters."
         ),
     )
     async def list_specs(
         owner: str,
         repo: str,
+        page: int = 1,
+        per_page: int = 50,
         ctx: Context = None,  # type: ignore[assignment]
-    ) -> list[dict] | dict:
+    ) -> dict:
         analytics.track(
             "mcp_tool_called", properties={"tool": "list_specs", "repo": f"{owner}/{repo}"}
         )
@@ -303,23 +447,50 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         if d.github_client is None:
             return {"error": "GitHub client not available"}
 
+        if page < 1:
+            return {"error": "page must be >= 1"}
+        if per_page < 1 or per_page > 200:
+            return {"error": "per_page must be between 1 and 200"}
+
         from ..github.spec_utils import load_repo_config, load_repo_specs
 
         config = await load_repo_config(d.github_client, owner, repo)
         specs = await load_repo_specs(d.github_client, owner, repo, patterns=config.specs.doc_paths)
 
-        return [
-            {
+        config_default = config.ide.ai_exposure.default
+        restricted_tags = config.ide.ai_exposure.restricted_tags
+
+        result_list: list[dict] = []
+        for s in specs:
+            fm = s["document"].frontmatter
+            exposure = _resolve_exposure(fm, config_default, restricted_tags)
+            if exposure == "none":
+                continue  # Omit none specs entirely
+            entry: dict[str, Any] = {
                 "file_path": s["file_path"],
-                "title": s["document"].frontmatter.title,
-                "status": s["document"].frontmatter.status,
-                "owner": s["document"].frontmatter.owner,
-                "team": s["document"].frontmatter.team,
-                "tags": s["document"].frontmatter.tags,
+                "title": fm.title,
+                "status": fm.status,
+                "owner": fm.owner,
+                "team": fm.team,
+                "tags": fm.tags,
                 "section_count": len(s["document"].sections),
+                "ai_exposure": exposure,
             }
-            for s in specs
-        ]
+            result_list.append(entry)
+
+        # Paginate — note: all specs are loaded before slicing.
+        # Fine for typical repo sizes; consider server-side pagination for 100+ specs.
+        total = len(result_list)
+        start = (page - 1) * per_page
+        end = start + per_page
+        paginated = result_list[start:end]
+
+        return {
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "specs": paginated,
+        }
 
     # ─── Tool: list_docs ─────────────────────────────────
 

@@ -1,0 +1,53 @@
+{
+  "description": "Canon spec-awareness hooks — inject context, suggest verification, gate commits",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Check if this repo uses Canon specs by looking for a CANON.yaml file in the project root. If CANON.yaml exists and ide.auto_context.on_prompt is not disabled, determine if the user's message relates to any documented spec. If it does, use the Canon MCP 'search' tool with relevant keywords to find matching specs, then briefly mention which specs are relevant. Cap at 5 specs. If the message is unrelated to specs or CANON.yaml doesn't exist, do nothing.",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/stop.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/pre-commit.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -52,13 +52,19 @@ def main(argv: list[str] | None = None) -> None:
 
         run_db(args)
     elif args.command == "setup":
-        from .setup_cmd import run_setup
+        if args.agent:
+            from .agent_setup import SUPPORTED_PLATFORMS, run_agent_setup
 
-        run_setup(
-            team=args.team,
-            ticket_system=args.ticket_system,
-            non_interactive=args.non_interactive,
-        )
+            platforms = list(SUPPORTED_PLATFORMS) if args.agent == "all" else [args.agent]
+            run_agent_setup(platforms=platforms, force=args.force)
+        else:
+            from .setup_cmd import run_setup
+
+            run_setup(
+                team=args.team,
+                ticket_system=args.ticket_system,
+                non_interactive=args.non_interactive,
+            )
     elif args.command == "login":
         from .login import run_login
 

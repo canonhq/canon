@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
 from pydantic import BaseModel
 
@@ -144,7 +145,12 @@ def estimate_tokens(text: str) -> int:
     return math.ceil(len(text) / 4)
 
 
-def build_user_message(context: PRAnalysisContext, max_diff_chars: int = 24000) -> str:
+def build_user_message(
+    context: PRAnalysisContext,
+    max_diff_chars: int = 24000,
+    ai_exposure_default: str = "full",
+    ai_exposure_restricted_tags: list[str] | None = None,
+) -> str:
     """Build the user message for the PR analysis prompt."""
     parts: list[str] = []
 
@@ -157,11 +163,18 @@ def build_user_message(context: PRAnalysisContext, max_diff_chars: int = 24000) 
         body = context.pr.body[:500]
         parts.append(f"\nDescription:\n{body}")
 
-    # Spec summaries
+    # Spec summaries (respecting ai_exposure)
     if context.specs:
-        parts.append("\n## Spec Documents")
+        spec_parts: list[str] = []
         for spec in context.specs:
-            parts.append(_summarize_spec(spec))
+            summary = _summarize_spec(spec, ai_exposure_default, ai_exposure_restricted_tags)
+            if summary is not None:
+                spec_parts.append(summary)
+        if spec_parts:
+            parts.append("\n## Spec Documents")
+            parts.extend(spec_parts)
+        else:
+            parts.append("\n## Spec Documents\nNo spec documents available for AI analysis.")
     else:
         parts.append("\n## Spec Documents\nNo spec documents found in this repository.")
 
@@ -209,22 +222,59 @@ def build_user_message(context: PRAnalysisContext, max_diff_chars: int = 24000) 
 # ─── Internal Helpers ─────────────────────────────────────
 
 
-def _summarize_spec(spec: RepoSpec) -> str:
-    from canon.parser.models import SpecDocument
+def _summarize_spec(
+    spec: RepoSpec,
+    config_default: str = "full",
+    restricted_tags: list[str] | None = None,
+) -> str | None:
+    """Summarize a spec for the PR analysis prompt.
+
+    Returns None if the spec's ai_exposure is 'none'.
+    """
+    from canon.parser.models import SpecDocument, resolve_ai_exposure
 
     doc: SpecDocument = spec.document  # type: ignore[assignment]
     fm = doc.frontmatter
+    exposure = resolve_ai_exposure(fm, restricted_tags, config_default)
+
+    if exposure == "none":
+        return None
+
     lines: list[str] = [
         f"### {spec.file_path}",
         f"Title: {fm.title} | Status: {fm.status} | Owner: {fm.owner} | Team: {fm.team}",
     ]
 
-    for section in doc.sections:
-        lines.append(_format_section_summary(section, 0))
-        for child in section.children:
-            lines.append(_format_section_summary(child, 1))
+    if exposure == "metadata":
+        # Only include section titles and AC counts, no content or AC text
+        _walk_sections(doc.sections, lines, _format_section_metadata, 0)
+    else:
+        _walk_sections(doc.sections, lines, _format_section_summary, 0)
 
     return "\n".join(lines)
+
+
+def _walk_sections(
+    sections: list[SpecSection],
+    lines: list[str],
+    formatter: Callable[[SpecSection, int], str],
+    depth: int,
+) -> None:
+    """Recursively walk sections at all depths, appending formatted lines."""
+    for section in sections:
+        lines.append(formatter(section, depth))
+        if section.children:
+            _walk_sections(section.children, lines, formatter, depth + 1)
+
+
+def _format_section_metadata(section: SpecSection, indent: int) -> str:
+    """Format a section as metadata only (title, status, AC count) — no content or AC text."""
+    prefix = "  " * indent
+    status = section.status.state
+    ac_total = len(section.acceptance_criteria)
+    ac_checked = sum(1 for ac in section.acceptance_criteria if ac.checked)
+    ac_info = f" ({ac_checked}/{ac_total} ACs)" if ac_total else ""
+    return f"{prefix}- [{section.id}] {section.title} ({status}){ac_info}"
 
 
 def _format_section_summary(section: SpecSection, indent: int) -> str:

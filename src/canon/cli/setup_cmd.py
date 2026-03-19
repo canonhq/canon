@@ -26,6 +26,16 @@ def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[ty
         action="store_true",
         help="Skip prompts (for CI/Actions)",
     )
+    parser.add_argument(
+        "--agent",
+        default=None,
+        help="Generate agent config file (claude, cursor, copilot, codex, gemini, or all)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing non-Canon agent config files",
+    )
 
 
 # ─── Helpers ──────────────────────────────────────────────

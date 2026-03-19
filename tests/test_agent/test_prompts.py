@@ -178,6 +178,96 @@ class TestBuildUserMessage:
         assert "## Related Documents" not in msg
 
 
+class TestAiExposureFiltering:
+    def _make_spec(
+        self, ai_exposure: str | None = "full", tags: list[str] | None = None
+    ) -> RepoSpec:
+        return RepoSpec(
+            file_path="docs/specs/secret.md",
+            document=SpecDocument(
+                file_path="docs/specs/secret.md",
+                frontmatter=SpecFrontmatter(
+                    title="Secret Spec",
+                    status="active",
+                    owner="alice",
+                    team="security",
+                    tags=tags or [],
+                    ai_exposure=ai_exposure,
+                ),
+                sections=[
+                    SpecSection(
+                        id="1-overview",
+                        section_number="1",
+                        title="Overview",
+                        depth=2,
+                        content="Sensitive content here.",
+                        status=SectionStatus(state="todo"),
+                        acceptance_criteria=[
+                            AcceptanceCriterion(text="Must be secure", checked=False, line=10),
+                        ],
+                        children=[],
+                        start_line=5,
+                        end_line=15,
+                    )
+                ],
+                raw="",
+            ),
+        )
+
+    def test_full_exposure_includes_content(self):
+        spec = self._make_spec(ai_exposure="full")
+        context = _make_context(specs=[spec])
+        msg = build_user_message(context)
+        assert "Sensitive content here" in msg
+        assert "Must be secure" in msg
+
+    def test_none_exposure_omits_spec_entirely(self):
+        spec = self._make_spec(ai_exposure="none")
+        context = _make_context(specs=[spec])
+        msg = build_user_message(context)
+        assert "Secret Spec" not in msg
+        assert "No spec documents available" in msg
+
+    def test_metadata_exposure_shows_title_but_not_content(self):
+        spec = self._make_spec(ai_exposure="metadata")
+        context = _make_context(specs=[spec])
+        msg = build_user_message(context)
+        assert "Secret Spec" in msg
+        assert "Overview" in msg
+        assert "Sensitive content here" not in msg
+        assert "Must be secure" not in msg
+
+    def test_restricted_tags_apply_when_not_set(self):
+        # ai_exposure not set in frontmatter — restricted_tags should apply
+        spec = self._make_spec(ai_exposure=None, tags=["security"])
+        context = _make_context(specs=[spec])
+        msg = build_user_message(context, ai_exposure_restricted_tags=["security"])
+        assert "Secret Spec" in msg
+        assert "Sensitive content here" not in msg
+
+    def test_explicit_full_overrides_restricted_tags(self):
+        # Spec explicitly says "full" — should win over restricted_tags
+        spec = self._make_spec(ai_exposure="full", tags=["security"])
+        context = _make_context(specs=[spec])
+        msg = build_user_message(context, ai_exposure_restricted_tags=["security"])
+        assert "Secret Spec" in msg
+        assert "Sensitive content here" in msg
+
+    def test_frontmatter_none_overrides_restricted_tags(self):
+        spec = self._make_spec(ai_exposure="none", tags=["security"])
+        context = _make_context(specs=[spec])
+        msg = build_user_message(context, ai_exposure_restricted_tags=["security"])
+        assert "Secret Spec" not in msg
+
+    def test_config_default_applies_when_not_set(self):
+        # ai_exposure not set in frontmatter, config says metadata
+        spec = self._make_spec(ai_exposure=None)
+        context = _make_context(specs=[spec])
+        msg = build_user_message(context, ai_exposure_default="metadata")
+        assert "Secret Spec" in msg
+        assert "Sensitive content here" not in msg
+
+
 class TestSystemPromptComposition:
     def test_system_prompt_contains_base(self):
         assert BASE_SYSTEM_PROMPT in SYSTEM_PROMPT

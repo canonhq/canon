@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Literal, get_args
 
 import yaml
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 
+from canon.parser.models import VALID_AI_EXPOSURES as VALID_AI_EXPOSURE_DEFAULTS
+from canon.parser.models import AiExposure as AiExposureDefault
 from canon.parser.models import Diagnostic
 from canon.sync.mapping import (
     AuthProfile,
@@ -29,14 +31,50 @@ KNOWN_TOP_KEYS = {
     "slack_channel",
     "specs",
     "agents",
+    "ide",
     "ticket_systems",
     "routing",
     "auth_profiles",
 }
 KNOWN_SPECS_KEYS = {"auto_tickets", "require_review", "doc_paths"}
 KNOWN_AGENTS_KEYS = {"doc_updates", "pr_analysis", "stale_detection", "realization_check"}
+KNOWN_IDE_KEYS = {"auto_context", "auto_verify", "ai_exposure"}
+KNOWN_IDE_AUTO_CONTEXT_KEYS = {"enabled", "on_session_start", "on_prompt", "max_specs"}
+KNOWN_IDE_AUTO_VERIFY_KEYS = {"enabled", "on_stop", "on_commit", "confidence"}
+KNOWN_IDE_AI_EXPOSURE_KEYS = {"default", "restricted_tags"}
+
+ConfidenceLevel = Literal["medium", "high"]
+VALID_CONFIDENCE_LEVELS: frozenset[str] = frozenset(get_args(ConfidenceLevel))
 
 DURATION_RE = re.compile(r"^\d+d$")
+
+
+class AutoContextConfig(BaseModel):
+    enabled: bool = True
+    on_session_start: bool = True
+    on_prompt: bool = True
+    max_specs: int = 5
+
+
+class AutoVerifyConfig(BaseModel):
+    enabled: bool = True
+    on_stop: bool = True
+    on_commit: bool = False
+    # Reserved for future use — not yet consumed by hook scripts.
+    confidence: ConfidenceLevel = "medium"
+
+
+class AiExposureConfig(BaseModel):
+    default: AiExposureDefault = "full"
+    # Tags that auto-restrict matching specs to "metadata" exposure.
+    # Cannot enforce "none" — that requires explicit per-spec frontmatter.
+    restricted_tags: list[str] = []
+
+
+class IdeConfig(BaseModel):
+    auto_context: AutoContextConfig = AutoContextConfig()
+    auto_verify: AutoVerifyConfig = AutoVerifyConfig()
+    ai_exposure: AiExposureConfig = AiExposureConfig()
 
 
 class SpecsConfig(BaseModel):
@@ -59,6 +97,7 @@ class CanonConfig(BaseModel):
     slack_channel: str | None = None
     specs: SpecsConfig = SpecsConfig()
     agents: AgentsConfig = AgentsConfig()
+    ide: IdeConfig = IdeConfig()
     ticket_mapping: TicketMappingConfig | None = None
 
 
@@ -227,6 +266,145 @@ def parse_canon_yaml(raw: str) -> ConfigResult:
                         )
                     )
                     del agents["stale_detection"]
+
+    # Validate ide section
+    if "ide" in obj:
+        if not isinstance(obj["ide"], dict):
+            diagnostics.append(Diagnostic(severity="error", message='"ide" must be a mapping'))
+            del obj["ide"]
+        else:
+            ide = obj["ide"]
+            assert isinstance(ide, dict)
+            for key in list(ide.keys()):
+                if key not in KNOWN_IDE_KEYS:
+                    diagnostics.append(
+                        Diagnostic(severity="warning", message=f'Unknown ide key: "{key}"')
+                    )
+
+            # Validate auto_context sub-section
+            if "auto_context" in ide:
+                if not isinstance(ide["auto_context"], dict):
+                    diagnostics.append(
+                        Diagnostic(severity="error", message='"ide.auto_context" must be a mapping')
+                    )
+                    del ide["auto_context"]
+                else:
+                    ac = ide["auto_context"]
+                    assert isinstance(ac, dict)
+                    for key in list(ac.keys()):
+                        if key not in KNOWN_IDE_AUTO_CONTEXT_KEYS:
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="warning",
+                                    message=f'Unknown ide.auto_context key: "{key}"',
+                                )
+                            )
+                    for key in ("enabled", "on_session_start", "on_prompt"):
+                        if key in ac and not isinstance(ac[key], bool):
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="error",
+                                    message=f'"ide.auto_context.{key}" must be a boolean',
+                                )
+                            )
+                            del ac[key]
+                    if "max_specs" in ac:
+                        ms = ac["max_specs"]
+                        if isinstance(ms, bool) or not isinstance(ms, int):
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="error",
+                                    message='"ide.auto_context.max_specs" must be an integer',
+                                )
+                            )
+                            del ac["max_specs"]
+                        elif ms < 1:
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="error",
+                                    message='"ide.auto_context.max_specs" must be >= 1',
+                                )
+                            )
+                            del ac["max_specs"]
+
+            # Validate auto_verify sub-section
+            if "auto_verify" in ide:
+                if not isinstance(ide["auto_verify"], dict):
+                    diagnostics.append(
+                        Diagnostic(severity="error", message='"ide.auto_verify" must be a mapping')
+                    )
+                    del ide["auto_verify"]
+                else:
+                    av = ide["auto_verify"]
+                    assert isinstance(av, dict)
+                    for key in list(av.keys()):
+                        if key not in KNOWN_IDE_AUTO_VERIFY_KEYS:
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="warning",
+                                    message=f'Unknown ide.auto_verify key: "{key}"',
+                                )
+                            )
+                    for key in ("enabled", "on_stop", "on_commit"):
+                        if key in av and not isinstance(av[key], bool):
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="error",
+                                    message=f'"ide.auto_verify.{key}" must be a boolean',
+                                )
+                            )
+                            del av[key]
+                    if "confidence" in av and av["confidence"] not in VALID_CONFIDENCE_LEVELS:
+                        diagnostics.append(
+                            Diagnostic(
+                                severity="error",
+                                message=(
+                                    f'"ide.auto_verify.confidence" must be one of: '
+                                    f"{', '.join(sorted(VALID_CONFIDENCE_LEVELS))}"
+                                ),
+                            )
+                        )
+                        del av["confidence"]
+
+            # Validate ai_exposure sub-section
+            if "ai_exposure" in ide:
+                if not isinstance(ide["ai_exposure"], dict):
+                    diagnostics.append(
+                        Diagnostic(severity="error", message='"ide.ai_exposure" must be a mapping')
+                    )
+                    del ide["ai_exposure"]
+                else:
+                    ae = ide["ai_exposure"]
+                    assert isinstance(ae, dict)
+                    for key in list(ae.keys()):
+                        if key not in KNOWN_IDE_AI_EXPOSURE_KEYS:
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="warning",
+                                    message=f'Unknown ide.ai_exposure key: "{key}"',
+                                )
+                            )
+                    if "default" in ae and ae["default"] not in VALID_AI_EXPOSURE_DEFAULTS:
+                        diagnostics.append(
+                            Diagnostic(
+                                severity="error",
+                                message=(
+                                    f'"ide.ai_exposure.default" must be one of: '
+                                    f"{', '.join(sorted(VALID_AI_EXPOSURE_DEFAULTS))}"
+                                ),
+                            )
+                        )
+                        del ae["default"]
+                    if "restricted_tags" in ae:
+                        rt = ae["restricted_tags"]
+                        if not isinstance(rt, list) or not all(isinstance(t, str) for t in rt):
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="error",
+                                    message='"ide.ai_exposure.restricted_tags" must be a list of strings',
+                                )
+                            )
+                            del ae["restricted_tags"]
 
     # Validate ticket_systems / routing / auth_profiles
     ticket_mapping = _parse_ticket_mapping(obj, diagnostics)
@@ -404,6 +582,58 @@ def _merge_with_defaults(
             else "30d",
         )
 
+    ide_data = partial.get("ide")
+    ide = IdeConfig()
+    if isinstance(ide_data, dict):
+        ac_data = ide_data.get("auto_context")
+        auto_context = AutoContextConfig()
+        if isinstance(ac_data, dict):
+            auto_context = AutoContextConfig(
+                enabled=ac_data["enabled"] if isinstance(ac_data.get("enabled"), bool) else True,
+                on_session_start=ac_data["on_session_start"]
+                if isinstance(ac_data.get("on_session_start"), bool)
+                else True,
+                on_prompt=ac_data["on_prompt"]
+                if isinstance(ac_data.get("on_prompt"), bool)
+                else True,
+                max_specs=ac_data["max_specs"]
+                if isinstance(ac_data.get("max_specs"), int)
+                and not isinstance(ac_data.get("max_specs"), bool)
+                and ac_data["max_specs"] >= 1
+                else 5,
+            )
+
+        av_data = ide_data.get("auto_verify")
+        auto_verify = AutoVerifyConfig()
+        if isinstance(av_data, dict):
+            auto_verify = AutoVerifyConfig(
+                enabled=av_data["enabled"] if isinstance(av_data.get("enabled"), bool) else True,
+                on_stop=av_data["on_stop"] if isinstance(av_data.get("on_stop"), bool) else True,
+                on_commit=av_data["on_commit"]
+                if isinstance(av_data.get("on_commit"), bool)
+                else False,
+                confidence=av_data["confidence"]
+                if isinstance(av_data.get("confidence"), str)
+                and av_data["confidence"] in VALID_CONFIDENCE_LEVELS
+                else "medium",
+            )
+
+        ae_data = ide_data.get("ai_exposure")
+        ai_exposure = AiExposureConfig()
+        if isinstance(ae_data, dict):
+            rt = ae_data.get("restricted_tags")
+            ai_exposure = AiExposureConfig(
+                default=ae_data["default"]
+                if isinstance(ae_data.get("default"), str)
+                and ae_data["default"] in VALID_AI_EXPOSURE_DEFAULTS
+                else "full",
+                restricted_tags=rt
+                if isinstance(rt, list) and all(isinstance(t, str) for t in rt)
+                else [],
+            )
+
+        ide = IdeConfig(auto_context=auto_context, auto_verify=auto_verify, ai_exposure=ai_exposure)
+
     return CanonConfig(
         team=partial["team"] if isinstance(partial.get("team"), str) else None,
         ticket_system=partial["ticket_system"]
@@ -416,5 +646,6 @@ def _merge_with_defaults(
         else None,
         specs=specs,
         agents=agents,
+        ide=ide,
         ticket_mapping=ticket_mapping,
     )

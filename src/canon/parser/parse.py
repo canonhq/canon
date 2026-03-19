@@ -8,6 +8,7 @@ from typing import Literal, cast
 import frontmatter
 
 from .models import (
+    VALID_AI_EXPOSURES,
     VALID_DOC_TYPES,
     VALID_REVIEW_STATUSES,
     AcceptanceCriterion,
@@ -345,6 +346,22 @@ def _parse_frontmatter(
             )
             review_status = None
 
+    # Parse ai_exposure (None = not specified, let resolve_ai_exposure decide)
+    raw_ai_exposure = data.get("ai_exposure")
+    ai_exposure = None
+    if raw_ai_exposure is not None:
+        ai_exposure_str = str(raw_ai_exposure)
+        if ai_exposure_str not in VALID_AI_EXPOSURES:
+            diagnostics.append(
+                Diagnostic(
+                    severity="error",
+                    message=f'Unknown ai_exposure: "{ai_exposure_str}", ignoring',
+                    file_path=file_path,
+                )
+            )
+        else:
+            ai_exposure = ai_exposure_str
+
     fm = SpecFrontmatter(
         title=get_str("title", "Untitled Spec"),
         status=get_str("status", "draft"),
@@ -362,6 +379,7 @@ def _parse_frontmatter(
         if data.get("supersedes") is not None
         else None,
         review_status=review_status,
+        ai_exposure=ai_exposure,
     )
 
     if "title" not in data or not data["title"]:
