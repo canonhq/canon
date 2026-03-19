@@ -9,6 +9,7 @@ export default withMermaid(
     description:
       "AI-native enterprise documentation platform. Living specs, agent-maintained docs, repo-native knowledge.",
     base: "/docs/",
+    cleanUrls: true,
     head: [
       ["link", { rel: "icon", type: "image/svg+xml", href: "/docs/logo.svg" }],
       ["link", { rel: "icon", type: "image/png", href: "/static/favicon.png" }],
@@ -34,7 +35,7 @@ export default withMermaid(
       const head: HeadConfig[] = [];
       const canonicalUrl = `${SITE_URL}/${pageData.relativePath}`
         .replace(/index\.md$/, "")
-        .replace(/\.md$/, ".html");
+        .replace(/\.md$/, "");
       head.push(["link", { rel: "canonical", href: canonicalUrl }]);
       return head;
     },
