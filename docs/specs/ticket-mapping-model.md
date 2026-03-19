@@ -488,7 +488,7 @@ Existing repos must work without changes. The migration path:
 
 ## 7. Adapter Protocol Changes
 
-<!-- specwright:system:7 status:done -->
+<!-- canon:system:7 status:in_progress -->
 
 Extend the `TicketAdapter` protocol to support the richer mapping model without breaking existing adapters.
 
