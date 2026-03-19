@@ -428,7 +428,6 @@ Documentation for open-source contributors.
 - [x] Code style guide documents linting, formatting, and type checking requirements
 - [ ] All commands in contributing docs are tested and work
 
-<!-- canon:ticket:github:304 -->
 <!-- canon:ticket:github:349 -->
 ## 10. Versioned Documentation
 
@@ -461,7 +460,6 @@ Use VitePress multi-version support (via directory-based versioning or a plugin 
 - [x] Canonical URLs point to latest version
 - [ ] Auto-generated reference pages are version-specific
 
-<!-- canon:ticket:github:305 -->
 <!-- canon:ticket:github:305 -->
 ## 11. Deployment & Hosting
 

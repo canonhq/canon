@@ -23,7 +23,7 @@ A security review identified three vulnerabilities that must be resolved before 
 
 ## 2. Secure Unauthenticated MCP Endpoint
 
-<!-- canon:system:2 status:in_progress -->
+<!-- canon:system:2 status:todo -->
 <!-- specwright:ticket:github:99 -->
 
 **Severity: HIGH**
