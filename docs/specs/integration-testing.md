@@ -56,7 +56,7 @@ Test webhook handlers through the full FastAPI request/response cycle using `htt
 
 ## 3. GitHub API Client Integration Tests
 
-<!-- specwright:system:3 status:todo -->
+<!-- canon:system:3 status:in_progress -->
 <!-- specwright:ticket:github:95 -->
 
 Test the GitHub API client (`github/client.py`) against a sandboxed environment to verify JWT generation, API call formatting, and response parsing.

@@ -200,7 +200,7 @@ Field mapping is optional. When absent, behavior matches today (summary = sectio
 
 ### 2.3 Hierarchy Templates
 
-<!-- specwright:system:2.3 status:done -->
+<!-- canon:system:2.3 status:in_progress -->
 
 Configurable mapping from spec section depth to ticket issue types and parent-child relationships.
 
@@ -372,7 +372,7 @@ When `auth_profile` is set, the adapter factory reads credentials from the named
 
 ### 4.3 Ticket Description Templates
 
-<!-- specwright:system:4.3 status:done -->
+<!-- canon:system:4.3 status:in_progress -->
 
 Configurable Jinja2-style templates for ticket body generation, replacing the current hardcoded `section.content[:2000]` truncation.
 
@@ -552,7 +552,7 @@ Changes:
 
 ## 9. Open Questions
 
-<!-- specwright:system:9 status:in_progress -->
+<!-- canon:system:9 status:done -->
 
 - ~~Should org defaults be loaded at startup or on each sync?~~ **Resolved**: On each sync with 5-minute TTL cache (`org_config.py`).
 - Do we need a `canon validate-config` CLI command for testing enterprise configs?

@@ -23,7 +23,7 @@ A security review identified three vulnerabilities that must be resolved before 
 
 ## 2. Secure Unauthenticated MCP Endpoint
 
-<!-- specwright:system:2 status:todo -->
+<!-- canon:system:2 status:in_progress -->
 <!-- specwright:ticket:github:99 -->
 
 **Severity: HIGH**
@@ -41,7 +41,7 @@ The MCP endpoint at `/mcp` provides read/write access to all connected GitHub re
 
 ## 3. Fix Authentication Bypass When Auth0 Is Disabled
 
-<!-- specwright:system:3 status:todo -->
+<!-- canon:system:3 status:in_progress -->
 <!-- specwright:ticket:github:98 -->
 
 **Severity: HIGH**

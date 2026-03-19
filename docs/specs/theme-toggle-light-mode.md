@@ -44,7 +44,7 @@ Define light-mode equivalents for the surface color tokens so components can use
 
 ## 3. Marketing Page Light Mode Polish
 
-<!-- specwright:system:3 status:done -->
+<!-- canon:system:3 status:in_progress -->
 
 Improve light mode appearance across all marketing/landing page components.
 

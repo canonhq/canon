@@ -155,7 +155,7 @@ Fix naming inconsistencies and clarify the two installation paths.
 
 ### 4.1 Fix Command Name Drift
 
-<!-- specwright:system:4.1 status:todo -->
+<!-- canon:system:4.1 status:in_progress -->
 
 #### Acceptance Criteria
 
@@ -165,7 +165,7 @@ Fix naming inconsistencies and clarify the two installation paths.
 
 ### 4.2 Clarify Installation Paths in Plugin README
 
-<!-- specwright:system:4.2 status:todo -->
+<!-- canon:system:4.2 status:in_progress -->
 
 #### Acceptance Criteria
 
@@ -175,7 +175,7 @@ Fix naming inconsistencies and clarify the two installation paths.
 
 ### 4.3 Add Environment Variable Reference
 
-<!-- specwright:system:4.3 status:todo -->
+<!-- canon:system:4.3 status:in_progress -->
 
 #### Acceptance Criteria
 

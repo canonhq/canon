@@ -30,7 +30,7 @@ Developers evaluating or adopting Canon have no single place to learn how it wor
 <!-- specwright:ticket:github:286 -->
 ## 2. Configurable Spec Paths (Prerequisite)
 
-<!-- specwright:system:2 status:in_progress -->
+<!-- canon:system:2 status:done -->
 
 Before moving docs into VitePress, fix the incomplete `doc_paths` configuration. CANON.yaml already has a `specs.doc_paths` field (default: `["docs/specs/*.md"]`), but 24+ hardcoded `docs/specs/` references throughout the codebase bypass it. These must be refactored so that spec discovery, creation, classification, and sync all respect the configured paths.
 
@@ -73,7 +73,8 @@ Key files with hardcoded `docs/specs/` paths:
 - [x] Spec classification uses configured patterns instead of hardcoded path prefix
 - [x] Cron jobs (sync, coverage) use configured patterns
 - [x] Default behavior (`docs/specs/*.md`) is preserved when no `doc_paths` is configured
-- [ ] Existing tests pass after refactor
+- [x] Existing tests pass after refactor
+<!-- canon:realized-in:audit file:tests/test_setup.py -->
 
 ## 3. VitePress Site Scaffold
 
@@ -351,7 +352,8 @@ Full `CANON.yaml` schema with JSON Schema or table format.
 <!-- specwright:realized-in:PR#TBD file:docs-site/.vitepress/scripts/gen-api-ref.py -->
 - [x] Spec format reference fully documents the markdown syntax including all comment types
 - [x] Configuration reference documents the complete `CANON.yaml` schema
-- [ ] Auto-generated pages include a "generated on" timestamp and link to source
+- [x] Auto-generated pages include a "generated on" timestamp and link to source
+<!-- canon:realized-in:audit file:docs-site/.vitepress/scripts/gen-cli-ref.py -->
 
 <!-- specwright:ticket:github:263 -->
 ## 8. Architecture
@@ -431,7 +433,7 @@ Documentation for open-source contributors.
 <!-- specwright:ticket:github:287 -->
 ## 10. Versioned Documentation
 
-<!-- specwright:system:10 status:todo -->
+<!-- canon:system:10 status:in_progress -->
 
 Support versioned documentation so users on older releases can reference the correct docs.
 
@@ -453,7 +455,8 @@ Use VitePress multi-version support (via directory-based versioning or a plugin 
 ### Acceptance Criteria
 
 - [x] Version selector in nav bar allows switching between doc versions
-- [ ] Each release creates a versioned docs snapshot
+- [x] Each release creates a versioned docs snapshot
+<!-- canon:realized-in:audit file:.github/workflows/publish.yml:63-88 -->
 - [x] `latest` always reflects the current `main` branch
 - [x] Older versions display a banner linking to latest
 - [x] Canonical URLs point to latest version

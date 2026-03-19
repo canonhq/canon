@@ -35,7 +35,7 @@ Meanwhile, the structured editor uses card-based section components with accent 
 
 ## 2. Spec Summary Header
 
-<!-- specwright:system:2 status:todo -->
+<!-- canon:system:2 status:in_progress -->
 
 Replace the current `SpecHeader.vue` metadata strip with a richer summary panel.
 
@@ -49,7 +49,7 @@ Replace the current `SpecHeader.vue` metadata strip with a richer summary panel.
 
 ## 3. Section Cards
 
-<!-- specwright:system:3 status:todo -->
+<!-- canon:system:3 status:in_progress -->
 
 Render each spec section as a read-only card matching the editor's `SectionCard` visual style.
 
@@ -66,7 +66,7 @@ Render each spec section as a read-only card matching the editor's `SectionCard`
 
 ## 4. AC Progress Bars
 
-<!-- specwright:system:4 status:todo -->
+<!-- canon:system:4 status:done -->
 
 Each section card shows a visual progress indicator for its acceptance criteria.
 
@@ -80,7 +80,7 @@ Each section card shows a visual progress indicator for its acceptance criteria.
 
 ## 5. Collapsible Sections
 
-<!-- specwright:system:5 status:todo -->
+<!-- canon:system:5 status:done -->
 
 Support collapse/expand for managing large specs.
 
@@ -108,7 +108,7 @@ Sticky sidebar for navigating large specs. Lower priority — implement if time 
 
 ## 7. Implementation Notes
 
-<!-- specwright:system:7 status:draft -->
+<!-- canon:system:7 status:done -->
 
 ### New components
 - `SpecSectionCard.vue` — read-only section card (mirrors editor `SectionCard` styling)

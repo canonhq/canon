@@ -1,6 +1,6 @@
 ---
 title: "Marketing Site Revamp"
-status: done
+status: in_progress
 owner: ng
 team: platform
 ticket_project: canonhq/canon
@@ -28,7 +28,7 @@ Moving into the Vue SPA with prerendering gives us: Tailwind CSS, component reus
 
 ## 2. Migrate to Vue SPA with Prerendering
 
-<!-- specwright:system:2 status:done -->
+<!-- canon:system:2 status:in_progress -->
 
 Move the landing page from `templates/landing.html` into the Vue 3 frontend as a prerendered route.
 
@@ -152,7 +152,7 @@ Show the MCP + skills workflow side-by-side:
 
 ## 5. Interactive Demo
 
-<!-- specwright:system:5 status:done -->
+<!-- canon:system:5 status:in_progress -->
 
 Replace the static PR comment mockup with an interactive, animated demonstration.
 
@@ -255,7 +255,7 @@ Update to reflect actual integration status:
 
 ## 8. Analytics & Performance
 
-<!-- specwright:system:8 status:done -->
+<!-- canon:system:8 status:in_progress -->
 
 Ensure the new landing page has proper analytics tracking and meets performance targets.
 

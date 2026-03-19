@@ -1,7 +1,7 @@
 ---
 title: "User Profile Page"
 type: spec
-status: done
+status: in_progress
 owner: ng
 team: canon
 ticket_project: canonhq/canon
@@ -44,7 +44,7 @@ The profile header presents the user's visual identity, including avatar, displa
 
 ## 3. Roles & Permissions
 
-<!-- specwright:system:3 status:done -->
+<!-- canon:system:3 status:in_progress -->
 
 This section displays the user's current Auth0 permissions and inferred role. Permissions are derived from the session's `permissions` array, populated by Auth0 access token claims or the fallback logic in `deps.py`.
 
@@ -60,7 +60,7 @@ The interface presents both the user's effective role and the granular permissio
 
 ## 4. Organization & Access
 
-<!-- specwright:system:4 status:done -->
+<!-- canon:system:4 status:in_progress -->
 
 This section displays the user's current organization context and enables switching between organizations when the user has multi-organization access.
 
@@ -73,7 +73,7 @@ This section displays the user's current organization context and enables switch
 
 ## 5. Backend API
 
-<!-- specwright:system:5 status:done -->
+<!-- canon:system:5 status:in_progress -->
 
 The `GET /api/profile` endpoint returns a complete profile payload by combining session data with database-stored fields, providing a single source of truth for profile information.
 
@@ -86,7 +86,7 @@ The `GET /api/profile` endpoint returns a complete profile payload by combining 
 
 ## 6. Frontend View
 
-<!-- specwright:system:6 status:done -->
+<!-- canon:system:6 status:in_progress -->
 
 The Vue 3 view at `/profile` renders a comprehensive profile interface using modular components for each section. The view primarily consumes data from `useAuthStore()`, supplemented by an API call for database-stored fields not available in the session.
 

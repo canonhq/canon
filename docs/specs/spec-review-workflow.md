@@ -52,7 +52,7 @@ draft → in_review → approved → active
 
 ## 3. Review Interface
 
-<!-- specwright:system:3 status:draft -->
+<!-- canon:system:3 status:in_progress -->
 <!-- specwright:ticket:github:19 -->
 
 ### 3.1 GitHub-Native Option
