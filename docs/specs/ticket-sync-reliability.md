@@ -56,6 +56,7 @@ These issues compound: a user runs `canon sync`, forgets to commit, runs it
 again, and ends up with duplicate issues they must manually close. Meanwhile,
 completed work leaves orphaned open issues that clutter the backlog.
 
+<!-- canon:ticket:github:376 -->
 ## 2. Lifecycle Sync: Auto-Close Done Sections
 
 <!-- canon:system:2 status:todo -->
@@ -91,6 +92,7 @@ CANON.yaml `specs.lifecycle_sync` setting.
 - [ ] Test: `lifecycle_sync: false` skips all close/reopen actions
 - [ ] Test: `--close-stale` works even when `lifecycle_sync: false`
 
+<!-- canon:ticket:github:377 -->
 ## 3. Robust Dedup via Section Fingerprints
 
 <!-- canon:system:3 status:todo -->
@@ -103,6 +105,7 @@ fragile: titles can match unrelated issues, and the "first result = canonical"
 heuristic assumes creation order. A fingerprint embedded in the issue body
 provides an exact match.
 
+<!-- canon:ticket:github:378 -->
 ### 3.1 Fingerprint Format
 
 <!-- canon:system:3.1 status:todo -->
@@ -118,6 +121,7 @@ number, embedded as a hidden marker in the issue body.
 - [ ] `render_description()` in `templates.py` includes the fingerprint in generated issue bodies
 - [ ] Custom description templates can reference `{{fingerprint}}` variable
 
+<!-- canon:ticket:github:379 -->
 ### 3.2 Fingerprint-Based Dedup
 
 <!-- canon:system:3.2 status:todo -->
@@ -133,6 +137,7 @@ Use the fingerprint as the primary dedup signal, falling back to title search.
 - [ ] Test: rename section title, re-sync, dedup still finds the original issue via fingerprint
 - [ ] Test: two sections with similar titles in different specs get distinct issues
 
+<!-- canon:ticket:github:380 -->
 ### 3.3 Backfill Existing Issues
 
 <!-- canon:system:3.3 status:todo -->
@@ -149,6 +154,7 @@ created before fingerprints were introduced.
 - [ ] Backfill runs once as a migration; subsequent syncs only add fingerprints to newly created issues
 - [ ] Test: backfill adds fingerprint to issue without one, skips issue that already has one
 
+<!-- canon:ticket:github:381 -->
 ## 4. Remove Legacy Specwright Labels
 
 <!-- canon:system:4 status:todo -->
@@ -168,6 +174,7 @@ depend on the old prefix.
 - [ ] No new `specwright:*` labels are created by any code path
 - [ ] Test: create ticket only produces `canon:*` labels
 
+<!-- canon:ticket:github:382 -->
 ## 5. Default to Local Adapter
 
 <!-- canon:system:5 status:todo -->
@@ -189,6 +196,7 @@ manages credentials.
 - [ ] Credential detection logged at debug level so users can diagnose which mode was selected
 - [ ] Test: GITHUB_TOKEN set → local adapter selected; unset + no gh → remote adapter selected
 
+<!-- canon:ticket:github:383 -->
 ## 6. Per-Spec Sync Control
 
 <!-- canon:system:6 status:todo -->
