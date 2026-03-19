@@ -106,6 +106,7 @@ class SpecFrontmatter(BaseModel):
     depends_on: list[str] = []
     supersedes: str | None = None
     review_status: ReviewStatus | None = None
+    sync: Literal["true", "false", "auto"] = "auto"
     ai_exposure: AiExposure | None = None
 
 

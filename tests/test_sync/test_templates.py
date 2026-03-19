@@ -110,7 +110,8 @@ class TestRenderDescription:
     def test_list_variable_as_comma_separated(self) -> None:
         config = TemplateConfig(description="Tags: {{spec.tags}}")
         result = render_description(_make_section(), _make_doc(), config)
-        assert result == "Tags: backend, api"
+        assert result.startswith("Tags: backend, api")
+        assert "canon:section:docs/specs/test:2.1" in result
 
     def test_empty_each_block(self) -> None:
         config = TemplateConfig(
@@ -118,7 +119,7 @@ class TestRenderDescription:
         )
         section = _make_section(acs=[])
         result = render_description(section, _make_doc(), config)
-        assert result == "ACs:\nDone."
+        assert result.startswith("ACs:\nDone.")
 
     def test_content_with_template_syntax_not_expanded(self) -> None:
         """Content containing {{var}} must NOT be further expanded."""
@@ -127,7 +128,7 @@ class TestRenderDescription:
         result = render_description(section, _make_doc(), config, spec_url="https://real.url")
         # The {{spec_url}} in the content should be preserved literally,
         # NOT expanded to the real URL
-        assert result == "See {{spec_url}} for details"
+        assert result.startswith("See {{spec_url}} for details")
 
     def test_content_with_template_syntax_in_each(self) -> None:
         """List items containing {{var}} must NOT be further expanded."""

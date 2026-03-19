@@ -17,6 +17,8 @@ from canon.sync.models import (
 )
 from canon.sync.status_map import github_to_spec_status, spec_status_to_github
 
+# All known canon/specwright status labels (used for label cleanup on status changes).
+# Includes legacy specwright:* labels so they get removed when updating an issue.
 CANON_LABELS = [
     "canon:draft",
     "canon:todo",
@@ -24,7 +26,6 @@ CANON_LABELS = [
     "canon:done",
     "canon:blocked",
     "canon:deprecated",
-    # Legacy labels for backwards compatibility
     "specwright:draft",
     "specwright:todo",
     "specwright:in-progress",
@@ -88,6 +89,8 @@ class GitHubAdapter:
             supports_subtasks=False,
             supports_labels=True,
             supports_issue_types=False,
+            supports_fingerprint_search=True,
+            supports_body_read=True,
         )
 
     async def create_ticket(self, input: CreateTicketInput) -> CreateTicketResult:
@@ -194,6 +197,26 @@ class GitHubAdapter:
             for item in data.get("items", [])
         ]
 
+    async def search_by_fingerprint(self, project_key: str, fingerprint: str) -> list[SearchResult]:
+        """Search for existing issues containing a fingerprint in the body."""
+        owner, repo = self.config.default_owner, self.config.default_repo
+        query = f'repo:{owner}/{repo} "{fingerprint}" in:body is:issue'
+        res = await self._client.get(
+            "https://api.github.com/search/issues",
+            params={"q": query, "per_page": 5},
+        )
+        res.raise_for_status()
+        data = res.json()
+        return [
+            SearchResult(
+                ticket_id=str(item["number"]),
+                title=item["title"],
+                ticket_url=item["html_url"],
+                state=item["state"],
+            )
+            for item in data.get("items", [])
+        ]
+
     async def update_task_list(
         self,
         parent_ticket_id: str,
@@ -228,6 +251,11 @@ class GitHubAdapter:
             json={"body": new_body},
         )
         res.raise_for_status()
+
+    async def get_ticket(self, ticket_id: str) -> dict[str, object]:
+        """Fetch full issue data including body."""
+        parsed = parse_github_ticket_id(ticket_id, self.config)
+        return await self._fetch_issue(parsed.owner, parsed.repo, parsed.issue_number)
 
     async def _resolve_milestone_id(self, owner: str, repo: str, milestone_name: str) -> int | None:
         """Resolve a milestone name to its GitHub ID."""

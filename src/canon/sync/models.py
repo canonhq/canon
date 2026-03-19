@@ -68,6 +68,16 @@ class SyncStatusChanged(BaseModel):
     new_state: str
 
 
+class SyncClosed(BaseModel):
+    section_id: str
+    ticket_id: str
+
+
+class SyncReopened(BaseModel):
+    section_id: str
+    ticket_id: str
+
+
 class SyncSkipped(BaseModel):
     section_id: str
     reason: str
@@ -82,6 +92,8 @@ class SyncResult(BaseModel):
     created: list[SyncCreated] = []
     updated: list[SyncUpdated] = []
     status_changed: list[SyncStatusChanged] = []
+    closed: list[SyncClosed] = []
+    reopened: list[SyncReopened] = []
     skipped: list[SyncSkipped] = []
     errors: list[SyncError] = []
 

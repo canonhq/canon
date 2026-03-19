@@ -36,7 +36,7 @@ KNOWN_TOP_KEYS = {
     "routing",
     "auth_profiles",
 }
-KNOWN_SPECS_KEYS = {"auto_tickets", "require_review", "doc_paths"}
+KNOWN_SPECS_KEYS = {"auto_tickets", "require_review", "doc_paths", "lifecycle_sync"}
 KNOWN_AGENTS_KEYS = {"doc_updates", "pr_analysis", "stale_detection", "realization_check"}
 KNOWN_IDE_KEYS = {"auto_context", "auto_verify", "ai_exposure"}
 KNOWN_IDE_AUTO_CONTEXT_KEYS = {"enabled", "on_session_start", "on_prompt", "max_specs"}
@@ -81,6 +81,7 @@ class SpecsConfig(BaseModel):
     auto_tickets: bool = True
     require_review: bool = True
     doc_paths: list[str] = ["docs/specs/*.md"]
+    lifecycle_sync: bool | Literal["close_only"] = True
 
 
 class AgentsConfig(BaseModel):
@@ -200,6 +201,17 @@ def parse_canon_yaml(raw: str) -> ConfigResult:
                         )
                     )
                     del specs[key]
+
+            if "lifecycle_sync" in specs:
+                ls = specs["lifecycle_sync"]
+                if ls is not True and ls is not False and ls != "close_only":
+                    diagnostics.append(
+                        Diagnostic(
+                            severity="error",
+                            message='"specs.lifecycle_sync" must be true, false, or "close_only"',
+                        )
+                    )
+                    del specs["lifecycle_sync"]
 
             if "doc_paths" in specs:
                 dp = specs["doc_paths"]
@@ -557,6 +569,13 @@ def _merge_with_defaults(
             and len(doc_paths_raw) > 0
             else ["docs/specs/*.md"]
         )
+        lifecycle_raw = specs_data.get("lifecycle_sync", True)
+        lifecycle_sync: bool | str = True
+        if lifecycle_raw is True or lifecycle_raw is False:
+            lifecycle_sync = lifecycle_raw
+        elif lifecycle_raw == "close_only":
+            lifecycle_sync = "close_only"
+
         specs = SpecsConfig(
             auto_tickets=specs_data.get("auto_tickets", True)
             if isinstance(specs_data.get("auto_tickets"), bool)
@@ -565,6 +584,7 @@ def _merge_with_defaults(
             if isinstance(specs_data.get("require_review"), bool)
             else True,
             doc_paths=doc_paths,
+            lifecycle_sync=lifecycle_sync,
         )
 
     agents = AgentsConfig()

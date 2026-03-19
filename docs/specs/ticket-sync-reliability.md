@@ -75,17 +75,19 @@ CANON.yaml `specs.lifecycle_sync` setting.
 
 ### Acceptance Criteria
 
-- [ ] Forward sync detects sections with `status: done` or `deprecated` that have an existing `ticket_link`
-- [ ] For those sections, sync calls `adapter.update_ticket()` to transition the ticket to its closed/done state
+- [x] Forward sync detects sections with `status: done` or `deprecated` that have an existing `ticket_link`
+<!-- canon:realized-in:PR#385 file:src/canon/sync/engine.py -->
+- [x] For those sections, sync calls `adapter.update_ticket()` to transition the ticket to its closed/done state
 - [ ] GitHub adapter closes the issue and applies `canon:done` label (removes `canon:todo`/`canon:in-progress`)
 - [ ] Jira adapter transitions to "Done" status
 - [ ] Linear adapter transitions to "Done" state
-- [ ] Forward sync detects sections that moved back from `done`/`deprecated` to `todo`/`in_progress` and reopens the linked ticket
+- [x] Forward sync detects sections that moved back from `done`/`deprecated` to `todo`/`in_progress` and reopens the linked ticket
 - [ ] GitHub adapter reopens the issue and applies the appropriate `canon:todo` or `canon:in-progress` label (removes `canon:done`)
 - [ ] Sections in `draft` or `blocked` state are still skipped (no ticket interaction)
 - [ ] `--dry-run` reports which tickets would be closed or reopened without acting
 - [ ] SyncResult gains new `closed: list[SyncClosed]` and `reopened: list[SyncReopened]` fields
-- [ ] CANON.yaml `specs.lifecycle_sync` accepts `true` (default), `false`, or `"close_only"` (no reopen)
+- [x] CANON.yaml `specs.lifecycle_sync` accepts `true` (default), `false`, or `"close_only"` (no reopen)
+<!-- canon:realized-in:PR#385 file:src/canon/config/parse.py -->
 - [ ] `canon sync --close-stale` explicitly closes tickets for all done/deprecated sections (same as lifecycle sync, but as a one-shot CLI flag independent of config)
 - [ ] Test: section moves todo→done between syncs, second sync closes the ticket
 - [ ] Test: section moves done→in_progress, sync reopens the ticket
@@ -115,10 +117,11 @@ number, embedded as a hidden marker in the issue body.
 
 #### Acceptance Criteria
 
-- [ ] Fingerprint format: `<!-- canon:section:{spec_slug}:{section_number} -->` embedded in issue description body
+- [x] Fingerprint format: `<!-- canon:section:{spec_slug}:{section_number} -->` embedded in issue description body
+<!-- canon:realized-in:PR#385 file:src/canon/sync/templates.py -->
 - [ ] `spec_slug` derived from spec file path relative to repo root (e.g., `docs/specs/auth-hardening` for `docs/specs/auth-hardening.md`)
-- [ ] Fingerprint is stable across section title renames (keyed on path + number, not title)
-- [ ] `render_description()` in `templates.py` includes the fingerprint in generated issue bodies
+- [x] Fingerprint is stable across section title renames (keyed on path + number, not title)
+- [x] `render_description()` in `templates.py` includes the fingerprint in generated issue bodies
 - [ ] Custom description templates can reference `{{fingerprint}}` variable
 
 <!-- canon:ticket:github:379 -->
@@ -132,7 +135,7 @@ Use the fingerprint as the primary dedup signal, falling back to title search.
 
 - [ ] Dedup first searches for fingerprint string in issue bodies (GitHub: `"canon:section:slug:num" in:body`)
 - [ ] If fingerprint match found, link to that issue (skip creation)
-- [ ] If no fingerprint match, fall back to existing title-based search
+- [x] If no fingerprint match, fall back to existing title-based search
 - [ ] Dedup result distinguishes fingerprint matches from title matches in logging
 - [ ] Test: rename section title, re-sync, dedup still finds the original issue via fingerprint
 - [ ] Test: two sections with similar titles in different specs get distinct issues
@@ -147,9 +150,9 @@ created before fingerprints were introduced.
 
 #### Acceptance Criteria
 
-- [ ] `canon sync --backfill-fingerprints` scans all spec sections with existing `ticket_link` comments
-- [ ] For each linked issue, appends the fingerprint comment to the issue body via `adapter.update_ticket()`
-- [ ] Skips issues that already contain a fingerprint comment (idempotent)
+- [x] `canon sync --backfill-fingerprints` scans all spec sections with existing `ticket_link` comments
+- [x] For each linked issue, appends the fingerprint comment to the issue body via `adapter.update_ticket()`
+- [x] Skips issues that already contain a fingerprint comment (idempotent)
 - [ ] `--dry-run` reports which issues would be updated without acting
 - [ ] Backfill runs once as a migration; subsequent syncs only add fingerprints to newly created issues
 - [ ] Test: backfill adds fingerprint to issue without one, skips issue that already has one
@@ -188,8 +191,9 @@ manages credentials.
 
 ### Acceptance Criteria
 
-- [ ] `canon sync` auto-detects local credentials: checks `GITHUB_TOKEN` env var, then `gh auth token` subprocess
-- [ ] If local credentials found, uses local adapter by default (no `--local` flag needed)
+- [x] `canon sync` auto-detects local credentials: checks `GITHUB_TOKEN` env var, then `gh auth token` subprocess
+<!-- canon:realized-in:PR#385 file:src/canon/cli/sync_cmd.py -->
+- [x] If local credentials found, uses local adapter by default (no `--local` flag needed)
 - [ ] If no local credentials, falls back to server proxy (current default behavior)
 - [ ] New `--remote` flag forces server proxy mode (replaces implicit default)
 - [ ] `--local` flag still works (explicit local, errors if no credentials instead of falling back)
@@ -206,12 +210,14 @@ the global `require_review` and `auto_tickets` settings.
 
 ### Acceptance Criteria
 
-- [ ] Spec frontmatter supports `sync: true | false | auto` field (default: `auto`, meaning use global config)
-- [ ] `sync: false` skips the spec entirely during forward and reverse sync
-- [ ] `sync: true` syncs the spec regardless of global `require_review` setting
+- [x] Spec frontmatter supports `sync: true | false | auto` field (default: `auto`, meaning use global config)
+<!-- canon:realized-in:PR#385 file:src/canon/parser/models.py -->
+- [x] `sync: false` skips the spec entirely during forward and reverse sync
+- [x] `sync: true` syncs the spec regardless of global `require_review` setting
 - [ ] `sync: auto` defers to global config (current behavior)
 - [ ] `canon sync --dry-run` reports which specs were skipped due to `sync: false`
-- [ ] Parser extracts `sync` field from frontmatter into `SpecDocument` model
+- [x] Parser extracts `sync` field from frontmatter into `SpecDocument` model
+<!-- canon:realized-in:PR#385 file:src/canon/parser/parse.py -->
 - [ ] Test: spec with `sync: false` is skipped even when global auto_tickets is true
 
 ## 7. Technical Design

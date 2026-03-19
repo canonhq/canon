@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -30,6 +33,21 @@ def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[ty
         "--local",
         action="store_true",
         help="Bypass server proxy and use GITHUB_TOKEN / gh CLI directly",
+    )
+    parser.add_argument(
+        "--backfill-fingerprints",
+        action="store_true",
+        help="Add section fingerprints to existing issue bodies (one-time migration)",
+    )
+    parser.add_argument(
+        "--close-stale",
+        action="store_true",
+        help="Close tickets for all done/deprecated sections (one-shot cleanup)",
+    )
+    parser.add_argument(
+        "--remote",
+        action="store_true",
+        help="Force server proxy mode (overrides auto-detection)",
     )
 
 
@@ -75,26 +93,72 @@ def _try_remote_adapter(
     return adapter, mapping
 
 
+def _has_local_credentials() -> bool:
+    """Check if local GitHub credentials are available via GITHUB_TOKEN or gh CLI."""
+    if os.environ.get("GITHUB_TOKEN"):
+        return True
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "token"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.returncode == 0 and bool(result.stdout.strip())
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _try_local_or_remote(config: CanonConfig, root: Path) -> tuple[object, TicketMappingConfig]:
+    """Auto-detect: prefer local credentials, then server proxy, then local as last resort."""
+    log = logging.getLogger(__name__)
+
+    if _has_local_credentials():
+        log.debug("Local GitHub credentials detected, using local adapter")
+        return create_adapter_local(config, root)
+
+    result = _try_remote_adapter(config, root)
+    if result is not None:
+        log.debug("No local credentials, using Canon server proxy")
+        print("Using Canon server proxy (no local GITHUB_TOKEN detected)")
+        return result
+
+    log.warning("No credentials found, falling back to local adapter (will likely fail)")
+    print(
+        "Warning: No GitHub credentials detected. "
+        "Set GITHUB_TOKEN, install gh CLI, or run 'canon login'.",
+        file=sys.stderr,
+    )
+    return create_adapter_local(config, root)
+
+
 def run_sync(
     *,
     reverse: bool = False,
     spec: str | None = None,
     dry_run: bool = False,
     local: bool = False,
+    remote: bool = False,
+    backfill_fingerprints: bool = False,
+    close_stale: bool = False,
     root: Path | None = None,
 ) -> None:
     root = root or Path.cwd()
     config = load_local_config(root)
 
-    if local:
-        adapter, mapping = create_adapter_local(config, root)
-    else:
+    if remote:
         result = _try_remote_adapter(config, root)
         if result is not None:
             adapter, mapping = result
-            print("Using Canon server proxy (no local GITHUB_TOKEN needed)")
+            print("Using Canon server proxy (--remote)")
         else:
-            adapter, mapping = create_adapter_local(config, root)
+            print("Error: --remote specified but server proxy is not available.")
+            sys.exit(1)
+    elif local:
+        adapter, mapping = create_adapter_local(config, root)
+    else:
+        # Auto-detect: prefer local credentials, fall back to server proxy
+        adapter, mapping = _try_local_or_remote(config, root)
 
     if not adapter and mapping.is_empty():
         print("Error: No ticket system configured and no GitHub token available.")
@@ -110,7 +174,13 @@ def run_sync(
         return
 
     from canon.sync.adapters.factory import from_config
-    from canon.sync.engine import forward_sync, reverse_sync
+    from canon.sync.engine import (
+        backfill_fingerprints as engine_backfill,
+    )
+    from canon.sync.engine import (
+        forward_sync,
+        reverse_sync,
+    )
 
     for doc in docs:
         print(f"\n{doc.frontmatter.title} ({doc.file_path})")
@@ -148,7 +218,10 @@ def run_sync(
             if single:
                 sys_config = single
 
-        if reverse:
+        if backfill_fingerprints:
+            result = asyncio.run(engine_backfill(doc, doc_adapter, dry_run=dry_run))
+            updated_md = doc.raw  # backfill doesn't modify spec markdown
+        elif reverse:
             updated_md, result = asyncio.run(
                 reverse_sync(doc, doc_adapter, system_config=sys_config)
             )
@@ -164,6 +237,12 @@ def run_sync(
             if not project_key:
                 print("  Skipped: no project key configured")
                 continue
+
+            # Resolve lifecycle_sync config
+            lifecycle_sync_cfg = config.specs.lifecycle_sync
+            # --close-stale forces close_only (never reopens)
+            effective_lifecycle = "close_only" if close_stale else lifecycle_sync_cfg
+
             updated_md, result = asyncio.run(
                 forward_sync(
                     doc,
@@ -172,6 +251,7 @@ def run_sync(
                     require_review=config.specs.require_review,
                     dry_run=dry_run,
                     system_config=sys_config,
+                    lifecycle_sync=effective_lifecycle,
                 )
             )
 
@@ -185,12 +265,26 @@ def run_sync(
         if result.status_changed:
             for sc in result.status_changed:
                 print(f"  Updated: {sc.section_id} {sc.old_state} → {sc.new_state}")
+        if result.closed:
+            for cl in result.closed:
+                print(f"  Closed: {cl.section_id} → {cl.ticket_id}")
+        if result.reopened:
+            for ro in result.reopened:
+                print(f"  Reopened: {ro.section_id} → {ro.ticket_id}")
         if result.skipped:
-            print(f"  Skipped: {len(result.skipped)} sections (not todo/in_progress)")
+            for sk in result.skipped:
+                print(f"  Skipped: {sk.section_id} — {sk.reason}")
         if result.errors:
             for e in result.errors:
                 print(f"  Error: {e.section_id}: {e.error}")
-        if not result.created and not result.status_changed and not result.errors:
+        has_changes = (
+            result.created
+            or result.status_changed
+            or result.closed
+            or result.reopened
+            or result.errors
+        )
+        if not has_changes:
             print("  No changes.")
 
         # Write back unless dry run

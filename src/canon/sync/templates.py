@@ -12,6 +12,7 @@ incorrect output — the inner ``{{/each}}`` closes the outer block.
 from __future__ import annotations
 
 import re
+from pathlib import PurePosixPath
 from typing import Any
 
 from canon.parser.models import SpecDocument, SpecSection
@@ -36,6 +37,7 @@ def _build_context(
     spec_url: str = "",
 ) -> dict[str, Any]:
     """Build the template variable context."""
+    fingerprint = make_fingerprint(doc, section) if section.section_number else ""
     return {
         "section.title": section.title,
         "section.content": section.content,
@@ -51,6 +53,7 @@ def _build_context(
         "spec.tags": doc.frontmatter.tags,
         "spec.file_path": doc.file_path,
         "spec_url": spec_url,
+        "fingerprint": fingerprint,
     }
 
 
@@ -110,6 +113,26 @@ def _render(template: str, context: dict[str, Any]) -> str:
     return "".join(parts)
 
 
+# ─── Fingerprints ────────────────────────────────────────
+
+
+def make_fingerprint(doc: SpecDocument, section: SpecSection) -> str:
+    """Generate a deterministic section fingerprint.
+
+    Format: ``<!-- canon:section:{spec_slug}:{section_number} -->``
+
+    The slug is derived from the spec file path (without extension),
+    so fingerprints are stable across section title renames.
+    """
+    path = doc.file_path
+    if path:
+        p = PurePosixPath(path)
+        slug = str(p.with_suffix("")) if p.name else path
+    else:
+        slug = "unknown"
+    return f"<!-- canon:section:{slug}:{section.section_number} -->"
+
+
 # ─── Public API ──────────────────────────────────────────
 
 
@@ -148,8 +171,18 @@ def render_description(
 
     Uses the structured default template which includes a spec link,
     clean content (without canon/specwright HTML comments), acceptance criteria
-    checkboxes, and a Canon footer.
+    checkboxes, and a Canon footer. A section fingerprint is appended for
+    dedup unless the rendered body already contains it (e.g. via a custom
+    template that uses ``{{fingerprint}}``).
     """
     template = (config.description if config else None) or DEFAULT_DESCRIPTION_TEMPLATE
     context = _build_context(section, doc, spec_url)
-    return _render(template, context)
+    body = _render(template, context)
+
+    # Append fingerprint for dedup — skip if template already included it
+    if section.section_number:
+        fingerprint = make_fingerprint(doc, section)
+        if fingerprint not in body:
+            body = body + "\n\n" + fingerprint
+
+    return body

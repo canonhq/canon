@@ -100,7 +100,15 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "sync":
         from .sync_cmd import run_sync
 
-        run_sync(reverse=args.reverse, spec=args.spec, dry_run=args.dry_run, local=args.local)
+        run_sync(
+            reverse=args.reverse,
+            spec=args.spec,
+            dry_run=args.dry_run,
+            local=args.local,
+            remote=args.remote,
+            backfill_fingerprints=args.backfill_fingerprints,
+            close_stale=args.close_stale,
+        )
     elif args.command == "dedup":
         from .dedup import run_dedup
 

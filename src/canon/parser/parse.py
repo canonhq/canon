@@ -346,6 +346,22 @@ def _parse_frontmatter(
             )
             review_status = None
 
+    # Parse sync field (per-spec sync control)
+    raw_sync = data.get("sync")
+    sync_value = "auto"
+    if raw_sync is not None:
+        sync_str = str(raw_sync).lower()
+        if sync_str in ("true", "false", "auto"):
+            sync_value = sync_str
+        else:
+            diagnostics.append(
+                Diagnostic(
+                    severity="warning",
+                    message=f'Unknown sync value: "{raw_sync}", expected true/false/auto',
+                    file_path=file_path,
+                )
+            )
+
     # Parse ai_exposure (None = not specified, let resolve_ai_exposure decide)
     raw_ai_exposure = data.get("ai_exposure")
     ai_exposure = None
@@ -379,6 +395,7 @@ def _parse_frontmatter(
         if data.get("supersedes") is not None
         else None,
         review_status=review_status,
+        sync=sync_value,
         ai_exposure=ai_exposure,
     )
 

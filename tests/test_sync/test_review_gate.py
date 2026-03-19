@@ -32,6 +32,12 @@ class MockAdapter:
     def system_name(self) -> str:
         return "jira"
 
+    @property
+    def capabilities(self):
+        from canon.sync.adapters.base import AdapterCapabilities
+
+        return AdapterCapabilities()
+
 
 def _make_spec(review_status: str | None = None) -> str:
     frontmatter_lines = [
