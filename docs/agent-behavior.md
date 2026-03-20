@@ -71,7 +71,7 @@ Establishes the agent's role and rules:
 - Keep explanations to **short fragments** (5-10 words)
 - Severity levels: `conflict` (PR directly contradicts spec) and `warning` (potential mismatch)
 - **Never flag discrepancies** for sections with status `todo`, `draft`, or `blocked` — incomplete sections are expected gaps
-- Doc updates must target real prose content, never metadata HTML comments (`<!-- specwright:system:... -->` or `<!-- specwright:ticket:... -->`)
+- Doc updates must target real prose content, never metadata HTML comments (`<!-- canon:system:... -->` or `<!-- canon:ticket:... -->`)
 - Context documents (ADRs, guides) are treated the same as specs for conflict detection
 - Empty arrays are preferred over weak matches
 
@@ -326,10 +326,10 @@ The upgrade from Haiku to Sonnet already happened. A Haiku triage layer is a **c
 
 | File | Role |
 |------|------|
-| `src/specwright/agent/client.py` | Anthropic SDK wrapper, model config, error types |
-| `src/specwright/agent/analyzer.py` | Analysis orchestration, response parsing, comment formatting |
-| `src/specwright/agent/prompts.py` | System prompt, user message builder, token estimation |
-| `src/specwright/github/handlers/on_pull_request.py` | Webhook handler, context assembly, skip conditions |
-| `src/specwright/github/handlers/on_issue_comment.py` | Interactive commands (`dismiss`, `reanalyze`, `apply docs`) |
-| `src/specwright/github/spec_utils.py` | Spec file detection, `CONFIG_ONLY_RE`, doc loading |
-| `src/specwright/config/parse.py` | `CANON.yaml` parsing and validation |
+| `src/canon/agent/client.py` | Anthropic SDK wrapper, model config, error types |
+| `src/canon/agent/analyzer.py` | Analysis orchestration, response parsing, comment formatting |
+| `src/canon/agent/prompts.py` | System prompt, user message builder, token estimation |
+| `src/canon/github/handlers/on_pull_request.py` | Webhook handler, context assembly, skip conditions |
+| `src/canon/github/handlers/on_issue_comment.py` | Interactive commands (`dismiss`, `reanalyze`, `apply docs`) |
+| `src/canon/github/spec_utils.py` | Spec file detection, `CONFIG_ONLY_RE`, doc loading |
+| `src/canon/config/parse.py` | `CANON.yaml` parsing and validation |
