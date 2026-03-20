@@ -1,0 +1,1045 @@
+"""High-level data access for the Spec Explorer web app."""
+
+from __future__ import annotations
+
+import html
+import logging
+import re
+
+from ..config.parse import CanonConfig, parse_canon_yaml
+from ..github.client import GitHubClient
+from ..github.spec_utils import load_repo_specs
+from ..parser.classify import classify_doc_type
+from ..parser.models import SpecDocument, SpecSection
+from .cache import TTLCache
+from .models import (
+    CoverageApiResponse,
+    CoverageSummary,
+    CoverageTrendPoint,
+    DocDetail,
+    DocFile,
+    FacetCounts,
+    OrgOverview,
+    RepoSummary,
+    SpecDetail,
+    SpecSearchResult,
+    SpecSummary,
+    TaskItem,
+    TasksApiResponse,
+)
+from .render import render_markdown_html, render_spec_html
+
+logger = logging.getLogger(__name__)
+
+
+def _summarize_spec(doc: SpecDocument) -> SpecSummary:
+    """Build a SpecSummary from a parsed SpecDocument."""
+
+    def _count_sections(sections: list) -> tuple[int, int]:
+        total = 0
+        done = 0
+        for s in sections:
+            total += 1
+            if s.status.state == "done":
+                done += 1
+            ct, cd = _count_sections(s.children)
+            total += ct
+            done += cd
+        return total, done
+
+    def _count_ac(sections: list) -> tuple[int, int]:
+        total = 0
+        done = 0
+        for s in sections:
+            total += len(s.acceptance_criteria)
+            done += sum(1 for ac in s.acceptance_criteria if ac.checked)
+            ct, cd = _count_ac(s.children)
+            total += ct
+            done += cd
+        return total, done
+
+    total_sections, done_sections = _count_sections(doc.sections)
+    total_ac, done_ac = _count_ac(doc.sections)
+
+    return SpecSummary(
+        file_path=doc.file_path,
+        title=doc.frontmatter.title,
+        status=doc.frontmatter.status,
+        owner=doc.frontmatter.owner,
+        team=doc.frontmatter.team,
+        tags=doc.frontmatter.tags,
+        total_sections=total_sections,
+        done_sections=done_sections,
+        total_ac=total_ac,
+        done_ac=done_ac,
+        review_status=doc.frontmatter.review_status,
+    )
+
+
+async def _load_config(
+    client: GitHubClient, owner: str, repo: str, cache: TTLCache
+) -> CanonConfig | None:
+    """Load CANON.yaml (or legacy SPECWRIGHT.yaml) for a repo, using cache."""
+    cache_key = f"config:{owner}/{repo}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        try:
+            content, _ = await client.get_file_content(owner, repo, "CANON.yaml")
+        except Exception:
+            content, _ = await client.get_file_content(owner, repo, "SPECWRIGHT.yaml")
+        result = parse_canon_yaml(content)
+        cache.set(cache_key, result.config)
+        return result.config
+    except Exception:
+        cache.set(cache_key, None)
+        return None
+
+
+def _classify_doc_type(path: str) -> str:
+    """Classify a document type from its file path.
+
+    Delegates to shared classifier.
+    """
+    return classify_doc_type(path)
+
+
+async def _list_indexed_docs(
+    client: GitHubClient,
+    owner: str,
+    repo: str,
+    *,
+    search_index: object | None = None,
+    indexed_paths: dict[str, dict] | None = None,
+    spec_patterns: list[str] | None = None,
+) -> list[DocFile]:
+    """List non-spec docs — from search index when available, else GitHub API."""
+    from ..github.spec_utils import matches_doc_patterns
+
+    full_name = f"{owner}/{repo}"
+    docs: list[DocFile] = []
+
+    def _is_spec(path: str) -> bool:
+        if spec_patterns is not None:
+            return matches_doc_patterns(path, spec_patterns)
+        return classify_doc_type(path) == "spec"
+
+    # When we have indexed paths, use them to find docs
+    if indexed_paths:
+        prefix = f"{full_name}/"
+        for key in indexed_paths:
+            if not key.startswith(prefix):
+                continue
+            file_path = key[len(prefix) :]
+            if _is_spec(file_path):
+                continue  # Specs are listed separately
+            doc_type = _classify_doc_type(file_path)
+            name = file_path.rsplit("/", 1)[-1] if "/" in file_path else file_path
+            docs.append(
+                DocFile(
+                    path=file_path,
+                    name=name,
+                    github_url=f"https://github.com/{owner}/{repo}/blob/main/{file_path}",
+                    doc_type=doc_type,
+                    is_indexed=True,
+                )
+            )
+        return docs
+
+    # Fallback: check root and docs/ via GitHub API
+    try:
+        entries = await client.list_directory(owner, repo, "")
+        for e in entries:
+            name = e.get("name", "")
+            if (
+                name.lower() in ("readme.md", "changelog.md", "contributing.md")
+                and e.get("type") == "file"
+            ):
+                docs.append(
+                    DocFile(
+                        path=e["path"],
+                        name=name,
+                        github_url=e.get(
+                            "html_url", f"https://github.com/{owner}/{repo}/blob/main/{e['path']}"
+                        ),
+                        doc_type=_classify_doc_type(e["path"]),
+                    )
+                )
+    except Exception:
+        pass
+
+    try:
+        entries = await client.list_directory(owner, repo, "docs")
+        for e in entries:
+            name = e.get("name", "")
+            if e.get("type") == "file" and name.endswith(".md") and not _is_spec(e.get("path", "")):
+                docs.append(
+                    DocFile(
+                        path=e["path"],
+                        name=name,
+                        github_url=e.get(
+                            "html_url", f"https://github.com/{owner}/{repo}/blob/main/{e['path']}"
+                        ),
+                        doc_type=_classify_doc_type(e["path"]),
+                    )
+                )
+    except Exception:
+        pass
+
+    return docs
+
+
+async def get_org_overview(
+    client: GitHubClient,
+    org: str,
+    cache: TTLCache,
+    *,
+    search_index: object | None = None,
+) -> OrgOverview:
+    """Get the full org dashboard overview."""
+    cache_key = f"org_overview:{org}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    repos = await client.list_installation_repos()
+
+    repos_with_specs: list[RepoSummary] = []
+    repos_without_specs: list[RepoSummary] = []
+    total_specs = 0
+    total_docs = 0
+
+    # Query indexed paths once if search_index is available
+    indexed_paths: dict[str, dict] = {}
+    if search_index is not None:
+        try:
+            indexed_paths = await search_index.get_indexed_paths()
+        except Exception:
+            logger.warning("Failed to query indexed paths", exc_info=True)
+
+    for repo_data in repos:
+        owner = repo_data["owner"]["login"]
+        repo_name = repo_data["name"]
+        full_name = repo_data["full_name"]
+        description = repo_data.get("description") or ""
+        default_branch = repo_data.get("default_branch", "main")
+
+        config = await _load_config(client, owner, repo_name, cache)
+        doc_paths = config.specs.doc_paths if config else None
+        specs_data = await load_repo_specs(client, owner, repo_name, patterns=doc_paths)
+        # Cache full documents for section-level search
+        for sd in specs_data:
+            doc_cache_key = f"spec_doc:{full_name}/{sd['document'].file_path}"
+            cache.set(doc_cache_key, sd["document"])
+        docs = await _list_indexed_docs(
+            client,
+            owner,
+            repo_name,
+            search_index=search_index,
+            indexed_paths=indexed_paths if indexed_paths else None,
+            spec_patterns=doc_paths,
+        )
+
+        spec_summaries = [_summarize_spec(s["document"]) for s in specs_data]
+
+        # Mark indexed specs
+        if indexed_paths:
+            for spec in spec_summaries:
+                key = f"{full_name}/{spec.file_path}"
+                if key in indexed_paths:
+                    spec.is_indexed = True
+
+        summary = RepoSummary(
+            owner=owner,
+            repo=repo_name,
+            full_name=full_name,
+            description=description,
+            default_branch=default_branch,
+            has_specs=len(spec_summaries) > 0,
+            spec_count=len(spec_summaries),
+            specs=spec_summaries,
+            config=config,
+            docs=docs,
+        )
+
+        if spec_summaries:
+            repos_with_specs.append(summary)
+            total_specs += len(spec_summaries)
+        else:
+            repos_without_specs.append(summary)
+        total_docs += len(docs)
+
+    overview = OrgOverview(
+        org=org,
+        repos_with_specs=repos_with_specs,
+        repos_without_specs=repos_without_specs,
+        total_specs=total_specs,
+        total_repos=len(repos),
+        total_docs=total_docs,
+    )
+    cache.set(cache_key, overview)
+    return overview
+
+
+async def get_repo_detail(
+    client: GitHubClient,
+    owner: str,
+    repo: str,
+    cache: TTLCache,
+    *,
+    search_index: object | None = None,
+) -> RepoSummary | None:
+    """Get detailed view of a single repo's specs."""
+    cache_key = f"repo:{owner}/{repo}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        repo_data = await client._get(f"/repos/{owner}/{repo}")
+    except Exception:
+        return None
+
+    # Query indexed paths for this repo if search index available
+    indexed_paths: dict[str, dict] | None = None
+    if search_index is not None:
+        try:
+            indexed_paths = await search_index.get_indexed_paths()
+        except Exception:
+            logger.warning("Failed to query indexed paths for repo detail", exc_info=True)
+
+    config = await _load_config(client, owner, repo, cache)
+    doc_paths = config.specs.doc_paths if config else None
+    specs_data = await load_repo_specs(client, owner, repo, patterns=doc_paths)
+    docs = await _list_indexed_docs(
+        client,
+        owner,
+        repo,
+        search_index=search_index,
+        indexed_paths=indexed_paths,
+        spec_patterns=doc_paths,
+    )
+
+    spec_summaries = [_summarize_spec(s["document"]) for s in specs_data]
+
+    summary = RepoSummary(
+        owner=owner,
+        repo=repo,
+        full_name=repo_data["full_name"],
+        description=repo_data.get("description") or "",
+        default_branch=repo_data.get("default_branch", "main"),
+        has_specs=len(spec_summaries) > 0,
+        spec_count=len(spec_summaries),
+        specs=spec_summaries,
+        config=config,
+        docs=docs,
+    )
+
+    cache.set(cache_key, summary)
+    return summary
+
+
+async def get_spec_detail(
+    client: GitHubClient, owner: str, repo: str, file_path: str, cache: TTLCache
+) -> SpecDetail | None:
+    """Get full spec detail with rendered HTML."""
+    cache_key = f"spec:{owner}/{repo}/{file_path}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        content, _ = await client.get_file_content(owner, repo, file_path)
+    except Exception:
+        return None
+
+    from ..parser.models import ParseOptions
+    from ..parser.parse import parse_spec
+
+    result = parse_spec(content, ParseOptions(file_path=file_path))
+    rendered_html = render_spec_html(result.document, repo_owner=owner, repo_name=repo)
+    config = await _load_config(client, owner, repo, cache)
+
+    detail = SpecDetail(
+        document=result.document,
+        rendered_html=rendered_html,
+        repo_owner=owner,
+        repo_name=repo,
+        github_url=f"https://github.com/{owner}/{repo}/blob/main/{file_path}",
+        config=config,
+    )
+
+    cache.set(cache_key, detail)
+    return detail
+
+
+async def get_doc_detail(
+    client: GitHubClient,
+    owner: str,
+    repo: str,
+    file_path: str,
+    cache: TTLCache,
+) -> DocDetail | None:
+    """Get full doc detail with rendered HTML."""
+    cache_key = f"doc:{owner}/{repo}/{file_path}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        content, _ = await client.get_file_content(owner, repo, file_path)
+    except Exception:
+        return None
+
+    rendered_html = render_markdown_html(content)
+
+    # Extract title from first heading or filename
+    title = file_path.rsplit("/", 1)[-1]
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            title = stripped[2:].strip()
+            break
+
+    detail = DocDetail(
+        path=file_path,
+        title=title,
+        rendered_html=rendered_html,
+        repo_owner=owner,
+        repo_name=repo,
+        github_url=f"https://github.com/{owner}/{repo}/blob/main/{file_path}",
+        doc_type=_classify_doc_type(file_path),
+    )
+
+    cache.set(cache_key, detail)
+    return detail
+
+
+def _search_cache_key(
+    org: str, query: str, team: str, status: str, tag: str, repo: str, review_status: str = ""
+) -> str:
+    """Build a normalized cache key for search results."""
+    return f"search:{org}:{query}:{team}:{status}:{tag}:{repo}:{review_status}"
+
+
+def invalidate_search_cache(cache: TTLCache, org: str) -> None:
+    """Invalidate all search and facet caches for an org."""
+    cache.invalidate_prefix(f"search:{org}:")
+    cache.invalidate_prefix(f"facets:{org}:")
+
+
+async def search_specs(
+    client: GitHubClient,
+    org: str,
+    cache: TTLCache,
+    *,
+    query: str = "",
+    team: str = "",
+    status: str = "",
+    tag: str = "",
+    repo: str = "",
+    review_status: str = "",
+    search_index=None,
+    embed_client=None,
+) -> list[SpecSearchResult]:
+    """Search across specs — uses DB hybrid search when available, falls back to in-memory."""
+    # Try DB search when available and we have a query or status filter
+    if (query or status) and search_index is not None:
+        cache_key = _search_cache_key(org, query, team, status, tag, repo, review_status)
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            db_results = await _db_search(
+                search_index,
+                embed_client,
+                query=query,
+                repo=repo or None,
+                status=status or None,
+                limit=30,
+            )
+            if db_results is not None:
+                # Apply team/tag/review_status filters in-memory (DB doesn't support these yet)
+                if team:
+                    db_results = [r for r in db_results if r.team.lower() == team.lower()]
+                if tag:
+                    db_results = [
+                        r for r in db_results if tag.lower() in [t.lower() for t in r.tags]
+                    ]
+                if review_status:
+                    db_results = [
+                        r for r in db_results if getattr(r, "review_status", None) == review_status
+                    ]
+                results = _deduplicate_results(db_results)
+                cache.set(cache_key, results)
+                return results
+        except Exception:
+            logger.warning("DB search failed, falling back to in-memory", exc_info=True)
+
+    # In-memory search with section-level matching
+    overview = await get_org_overview(client, org, cache)
+    results: list[SpecSearchResult] = []
+    query_lower = query.lower()
+    query_words = query_lower.split() if query_lower else []
+
+    for r in overview.repos_with_specs:
+        if repo and r.full_name.lower() != repo.lower():
+            continue
+        for spec in r.specs:
+            # Apply filters
+            if team and spec.team.lower() != team.lower():
+                continue
+            if status and spec.status.lower() != status.lower():
+                continue
+            if tag and tag.lower() not in [t.lower() for t in spec.tags]:
+                continue
+            if review_status and getattr(spec, "review_status", None) != review_status:
+                continue
+
+            if not query_lower:
+                # No query — return all specs matching filters
+                results.append(
+                    SpecSearchResult(
+                        file_path=spec.file_path,
+                        title=spec.title,
+                        status=spec.status,
+                        owner=spec.owner,
+                        team=spec.team,
+                        repo_full_name=r.full_name,
+                        repo_owner=r.owner,
+                        repo_name=r.repo,
+                        tags=spec.tags,
+                        review_status=getattr(spec, "review_status", None),
+                    )
+                )
+                continue
+
+            # Section-level search: try to find matches in sections/ACs
+            doc_cache_key = f"spec_doc:{r.full_name}/{spec.file_path}"
+            doc: SpecDocument | None = cache.get(doc_cache_key)
+
+            if doc is not None:
+                section_results = _search_document_sections(
+                    doc, query_lower, query_words, spec, r.full_name, r.owner, r.repo
+                )
+                results.extend(section_results)
+            elif query_lower in spec.title.lower():
+                # Fallback: title-only match if doc not cached
+                results.append(
+                    SpecSearchResult(
+                        file_path=spec.file_path,
+                        title=spec.title,
+                        status=spec.status,
+                        owner=spec.owner,
+                        team=spec.team,
+                        repo_full_name=r.full_name,
+                        repo_owner=r.owner,
+                        repo_name=r.repo,
+                        tags=spec.tags,
+                        review_status=getattr(spec, "review_status", None),
+                        score=1.0,
+                    )
+                )
+
+    # Sort by score descending
+    if query_lower:
+        results.sort(key=lambda r: r.score, reverse=True)
+
+    return results
+
+
+def _search_document_sections(
+    doc: SpecDocument,
+    query_lower: str,
+    query_words: list[str],
+    spec: SpecSummary,
+    repo_full_name: str,
+    repo_owner: str,
+    repo_name: str,
+) -> list[SpecSearchResult]:
+    """Search within a parsed spec document at section and AC level.
+
+    Returns one result per matching section (or a spec-level result if only title matches).
+    """
+    results: list[SpecSearchResult] = []
+    seen_spec = False
+
+    all_sections = _flatten_all_sections(doc.sections)
+    for section in all_sections:
+        heading = (
+            f"{section.section_number}. {section.title}"
+            if section.section_number
+            else section.title
+        )
+        heading_lower = heading.lower()
+        content_lower = (section.content or "").lower()
+        ac_texts = [ac.text.lower() for ac in section.acceptance_criteria]
+        ac_joined = " ".join(ac_texts)
+
+        # Score: title match (3), heading match (2), AC match (1.5), content match (1)
+        score = 0.0
+        snippet = ""
+
+        if query_lower in heading_lower:
+            score += 2.0
+        if query_lower in content_lower:
+            score += 1.0
+            snippet = _extract_snippet(section.content or "", query_lower)
+        if query_lower in ac_joined:
+            score += 1.5
+            # Find the matching AC for snippet
+            for ac_text in ac_texts:
+                if query_lower in ac_text:
+                    snippet = snippet or _extract_snippet(
+                        next(
+                            ac.text
+                            for ac in section.acceptance_criteria
+                            if ac.text.lower() == ac_text
+                        ),
+                        query_lower,
+                    )
+                    break
+
+        # Also try word-level matching for multi-word queries
+        if score == 0 and len(query_words) > 1:
+            searchable = f"{heading_lower} {content_lower} {ac_joined}"
+            matched_words = sum(1 for w in query_words if w in searchable)
+            if matched_words >= len(query_words) * 0.6:
+                score = 0.5 * (matched_words / len(query_words))
+                snippet = (
+                    _extract_snippet(section.content or "", query_words[0])
+                    if section.content
+                    else ""
+                )
+
+        if score > 0:
+            seen_spec = True
+            results.append(
+                SpecSearchResult(
+                    file_path=spec.file_path,
+                    title=spec.title,
+                    status=spec.status,
+                    owner=spec.owner,
+                    team=spec.team,
+                    repo_full_name=repo_full_name,
+                    repo_owner=repo_owner,
+                    repo_name=repo_name,
+                    tags=spec.tags,
+                    heading=heading,
+                    snippet=snippet,
+                    score=score,
+                    review_status=getattr(spec, "review_status", None),
+                )
+            )
+
+    # If no section matched, try spec title
+    if not seen_spec and query_lower in spec.title.lower():
+        results.append(
+            SpecSearchResult(
+                file_path=spec.file_path,
+                title=spec.title,
+                status=spec.status,
+                owner=spec.owner,
+                team=spec.team,
+                repo_full_name=repo_full_name,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                tags=spec.tags,
+                score=3.0,
+                review_status=getattr(spec, "review_status", None),
+            )
+        )
+
+    return results
+
+
+def _extract_snippet(text: str, query: str, max_length: int = 160) -> str:
+    """Extract a snippet around the first occurrence of the query in text."""
+    lower = text.lower()
+    idx = lower.find(query)
+    if idx == -1:
+        return text[:max_length].strip()
+
+    # Expand to include surrounding context
+    start = max(0, idx - 40)
+    end = min(len(text), idx + len(query) + 120)
+
+    snippet = text[start:end].strip()
+    if start > 0:
+        snippet = "..." + snippet
+    if end < len(text):
+        snippet = snippet + "..."
+    return snippet
+
+
+async def get_facet_counts(
+    client: GitHubClient,
+    org: str,
+    cache: TTLCache,
+    *,
+    search_index=None,
+    repo: str = "",
+) -> FacetCounts:
+    """Get aggregate facet counts for filtering UI.
+
+    Uses DB aggregation when search_index is available, falls back to in-memory counting.
+    """
+    if search_index is not None:
+        facet_cache_key = f"facets:{org}:{repo}"
+        cached = cache.get(facet_cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            raw = await search_index.get_facet_counts(repo=repo or None)
+            result = FacetCounts(
+                status=raw.get("status", {}),
+                repo=raw.get("repo", {}),
+                team=raw.get("team", {}),
+                tag=raw.get("tag", {}),
+            )
+            cache.set(facet_cache_key, result)
+            return result
+        except Exception:
+            logger.warning("DB facet counts failed, falling back to in-memory", exc_info=True)
+
+    # In-memory fallback: count from org overview
+    overview = await get_org_overview(client, org, cache)
+    status_counts: dict[str, int] = {}
+    repo_counts: dict[str, int] = {}
+    team_counts: dict[str, int] = {}
+    tag_counts: dict[str, int] = {}
+    for r in overview.repos_with_specs:
+        if repo and r.full_name.lower() != repo.lower():
+            continue
+        for spec in r.specs:
+            s = spec.status or "unknown"
+            status_counts[s] = status_counts.get(s, 0) + 1
+            if spec.team:
+                team_counts[spec.team] = team_counts.get(spec.team, 0) + 1
+            for t in spec.tags:
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+        repo_counts[r.full_name] = r.spec_count
+
+    return FacetCounts(status=status_counts, repo=repo_counts, team=team_counts, tag=tag_counts)
+
+
+async def get_indexing_overview(registry, indexer) -> dict:
+    """Get indexing status across all installations for the admin page."""
+    installations = []
+    recent_jobs = []
+    active_tasks = []
+
+    if registry is not None:
+        try:
+            installations = await registry.get_all_installations()
+        except Exception:
+            logger.warning("Failed to load installations", exc_info=True)
+
+        try:
+            jobs = await registry.get_index_jobs(limit=50)
+            recent_jobs = jobs
+        except Exception:
+            logger.warning("Failed to load index jobs", exc_info=True)
+
+    if indexer is not None:
+        active_tasks = indexer.get_tasks()
+
+    return {
+        "installations": installations,
+        "recent_jobs": recent_jobs,
+        "active_tasks": active_tasks,
+    }
+
+
+def compute_coverage_summary(
+    *,
+    total_specs: int = 0,
+    total_sections: int = 0,
+    done_sections: int = 0,
+    total_ac: int = 0,
+    done_ac: int = 0,
+    realized_ac: int = 0,
+) -> CoverageSummary:
+    """Compute coverage percentages and health score from raw counts."""
+    section_pct = (done_sections / total_sections * 100) if total_sections else 0.0
+    ac_pct = (done_ac / total_ac * 100) if total_ac else 0.0
+    realization_pct = (realized_ac / total_ac * 100) if total_ac else 0.0
+    health = section_pct * 0.3 + ac_pct * 0.3 + realization_pct * 0.4
+
+    return CoverageSummary(
+        total_specs=total_specs,
+        total_sections=total_sections,
+        done_sections=done_sections,
+        total_ac=total_ac,
+        done_ac=done_ac,
+        realized_ac=realized_ac,
+        section_coverage_pct=round(section_pct, 1),
+        ac_coverage_pct=round(ac_pct, 1),
+        realization_rate_pct=round(realization_pct, 1),
+        health_score=round(health, 1),
+    )
+
+
+async def get_coverage(
+    client: GitHubClient,
+    org: str,
+    cache: TTLCache,
+    *,
+    repo: str = "",
+    team: str = "",
+    days: int = 30,
+    agent_store=None,
+) -> CoverageApiResponse:
+    """Get aggregate coverage metrics with optional time-series trend.
+
+    Uses DB snapshots when agent_store is available, falls back to in-memory
+    counting from the org overview (no trend data in that case).
+    """
+    cache_key = f"coverage:{org}:{repo}:{team}:{days}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # DB path — use coverage snapshots
+    if agent_store is not None:
+        try:
+            raw = await agent_store.get_coverage_summary(org, repo=repo or None, team=team or None)
+            summary = compute_coverage_summary(
+                total_specs=raw.get("total_specs", 0),
+                total_sections=raw.get("total_sections", 0),
+                done_sections=raw.get("done_sections", 0),
+                total_ac=raw.get("total_ac", 0),
+                done_ac=raw.get("done_ac", 0),
+                realized_ac=raw.get("realized_ac", 0),
+            )
+
+            trend_raw = await agent_store.get_coverage_trend(
+                org, repo=repo or None, team=team or None, days=days
+            )
+            trend = [
+                CoverageTrendPoint(
+                    date=t["date"],
+                    total_sections=t["total_sections"],
+                    done_sections=t["done_sections"],
+                    total_ac=t["total_ac"],
+                    done_ac=t["done_ac"],
+                    realized_ac=t["realized_ac"],
+                )
+                for t in trend_raw
+            ]
+
+            result = CoverageApiResponse(summary=summary, trend=trend)
+            cache.set(cache_key, result)
+            return result
+        except Exception:
+            logger.warning("DB coverage query failed, falling back to in-memory", exc_info=True)
+
+    # In-memory fallback — aggregate from org overview
+    overview = await get_org_overview(client, org, cache)
+    total_sections = 0
+    done_sections = 0
+    total_ac = 0
+    done_ac = 0
+    total_specs = 0
+
+    for r in overview.repos_with_specs:
+        if repo and r.full_name.lower() != repo.lower():
+            continue
+        for spec in r.specs:
+            if team and spec.team.lower() != team.lower():
+                continue
+            total_specs += 1
+            total_sections += spec.total_sections
+            done_sections += spec.done_sections
+            total_ac += spec.total_ac
+            done_ac += spec.done_ac
+
+    summary = compute_coverage_summary(
+        total_specs=total_specs,
+        total_sections=total_sections,
+        done_sections=done_sections,
+        total_ac=total_ac,
+        done_ac=done_ac,
+        realized_ac=0,  # Not available without DB
+    )
+
+    result = CoverageApiResponse(summary=summary, trend=[])
+    cache.set(cache_key, result)
+    return result
+
+
+def _highlight_terms(text: str, query: str) -> str:
+    """Escape HTML in text, then wrap matching query terms in <mark> tags."""
+    if not query or not text:
+        return html.escape(text)
+
+    escaped = html.escape(text)
+    for term in query.split():
+        if len(term) < 2:
+            continue
+        pattern = re.compile(re.escape(html.escape(term)), re.IGNORECASE)
+        escaped = pattern.sub(lambda m: f"<mark>{m.group(0)}</mark>", escaped)
+    return escaped
+
+
+def _deduplicate_results(
+    results: list[SpecSearchResult],
+) -> list[SpecSearchResult]:
+    """Group results by spec — keep the top-scoring section per spec."""
+    seen: dict[str, SpecSearchResult] = {}
+    counts: dict[str, int] = {}
+
+    for r in results:
+        key = f"{r.repo_full_name}/{r.file_path}"
+        counts[key] = counts.get(key, 0) + 1
+        if key not in seen or r.score > seen[key].score:
+            seen[key] = r
+
+    deduped: list[SpecSearchResult] = []
+    for key, r in seen.items():
+        extra = counts[key] - 1
+        if extra > 0:
+            r = r.model_copy(
+                update={"heading": f"{r.heading} (+{extra} more match{'es' if extra != 1 else ''})"}
+            )
+        deduped.append(r)
+
+    deduped.sort(key=lambda r: r.score, reverse=True)
+    return deduped
+
+
+async def _db_search(
+    search_index,
+    embed_client,
+    query: str,
+    repo: str | None = None,
+    status: str | None = None,
+    limit: int = 30,
+) -> list[SpecSearchResult]:
+    """Execute DB hybrid search and convert results to SpecSearchResult."""
+    query_embedding = None
+    if query and embed_client is not None and getattr(embed_client, "is_available", False):
+        try:
+            query_embedding = embed_client.embed_query(query)
+        except Exception:
+            logger.warning("Failed to embed query — searching without vector", exc_info=True)
+
+    results = await search_index.hybrid_search(
+        query_embedding=query_embedding,
+        query_text=query or "",
+        repo=repo,
+        status=status,
+        limit=limit,
+    )
+
+    search_results: list[SpecSearchResult] = []
+    for r in results:
+        parts = r.repo.split("/", 1)
+        repo_owner = parts[0] if len(parts) == 2 else ""
+        repo_name = parts[1] if len(parts) == 2 else r.repo
+
+        # Truncate body for snippet, then highlight query terms
+        snippet = r.body[:150].strip()
+        if len(r.body) > 150:
+            snippet += "..."
+        snippet = _highlight_terms(snippet, query)
+
+        search_results.append(
+            SpecSearchResult(
+                file_path=r.path,
+                title=r.doc_title,
+                status=r.status,
+                owner="",
+                team="",
+                repo_full_name=r.repo,
+                repo_owner=repo_owner,
+                repo_name=repo_name,
+                tags=[],
+                heading=r.heading,
+                snippet=snippet,
+                score=r.rrf_score,
+                doc_type=_classify_doc_type(r.path),
+            )
+        )
+
+    return search_results
+
+
+# ─── Tasks ───────────────────────────────────────────────
+
+
+ACTIVE_STATUSES = {"todo", "in_progress", "blocked"}
+
+
+def _flatten_all_sections(sections: list[SpecSection]) -> list[SpecSection]:
+    result: list[SpecSection] = []
+    for section in sections:
+        result.append(section)
+        result.extend(_flatten_all_sections(section.children))
+    return result
+
+
+async def get_tasks(
+    client: GitHubClient,
+    org: str,
+    cache: TTLCache,
+    *,
+    status: str | None = None,
+    repo_filter: str | None = None,
+    search_index: object | None = None,
+) -> TasksApiResponse:
+    """Extract actionable tasks from all specs across the org."""
+    overview = await get_org_overview(client, org, cache, search_index=search_index)
+    tasks: list[TaskItem] = []
+
+    target_statuses = {status} if status else ACTIVE_STATUSES
+
+    for repo in overview.repos_with_specs:
+        if repo_filter and repo.full_name != repo_filter:
+            continue
+
+        for spec_summary in repo.specs:
+            try:
+                detail = await get_spec_detail(
+                    client, repo.owner, repo.repo, spec_summary.file_path, cache
+                )
+                if not detail:
+                    continue
+
+                all_sections = _flatten_all_sections(detail.document.sections)
+                for section in all_sections:
+                    if section.status.state not in target_statuses:
+                        continue
+
+                    total_ac = len(section.acceptance_criteria)
+                    done_ac = sum(1 for ac in section.acceptance_criteria if ac.checked)
+
+                    tasks.append(
+                        TaskItem(
+                            section_id=section.id,
+                            section_number=section.section_number,
+                            title=section.title,
+                            status=section.status.state,
+                            blocked_by=section.status.blocked_by,
+                            total_ac=total_ac,
+                            done_ac=done_ac,
+                            ticket_system=section.ticket_link.system
+                            if section.ticket_link
+                            else None,
+                            ticket_id=section.ticket_link.ticket_id
+                            if section.ticket_link
+                            else None,
+                            spec_title=detail.document.frontmatter.title,
+                            spec_file_path=detail.document.file_path,
+                            repo_owner=repo.owner,
+                            repo_name=repo.repo,
+                        )
+                    )
+            except Exception:
+                logger.warning("Failed to load spec %s for tasks", spec_summary.file_path)
+
+    return TasksApiResponse(tasks=tasks, total=len(tasks))

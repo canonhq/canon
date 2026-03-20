@@ -62,6 +62,10 @@ spec:
             - secretRef:
                 name: {{ include "canon.auth0SecretName" . }}
           {{- end }}
+          {{- if or .Values.secrets.oidc.existingSecret (and .Values.secrets.oidc.issuer .Values.secrets.oidc.clientId .Values.secrets.oidc.clientSecret) }}
+            - secretRef:
+                name: {{ include "canon.oidcSecretName" . }}
+          {{- end }}
           {{- if or .Values.secrets.mcp.apiKey .Values.secrets.mcp.existingSecret }}
             - secretRef:
                 name: {{ include "canon.mcpSecretName" . }}

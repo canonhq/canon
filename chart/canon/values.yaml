@@ -84,6 +84,19 @@ secrets:
     deviceClientId: ""
     existingSecret: ""
 
+  ## @section OIDC secrets (optional — alternative to Auth0, for generic OIDC providers)
+  ## @param secrets.oidc.issuer OIDC provider issuer URL
+  ## @param secrets.oidc.clientId OIDC application client ID
+  ## @param secrets.oidc.clientSecret OIDC application client secret
+  ## @param secrets.oidc.audience OIDC API audience (optional)
+  ## @param secrets.oidc.existingSecret Use existing secret
+  oidc:
+    issuer: ""
+    clientId: ""
+    clientSecret: ""
+    audience: ""
+    existingSecret: ""
+
   ## @section MCP secrets (optional — API key for MCP HTTP endpoint)
   ## @param secrets.mcp.apiKey API key for MCP HTTP endpoint (open if empty)
   ## @param secrets.mcp.existingSecret Use existing secret
@@ -237,3 +250,12 @@ networkPolicy:
 podDisruptionBudget:
   enabled: false
   minAvailable: 1
+
+## @section Zitadel (optional — bundled identity provider for self-hosting)
+## @param zitadel.enabled Deploy Zitadel alongside Canon
+zitadel:
+  enabled: false
+  ## @param zitadel.setup Enable Zitadel auto-provisioning job (not yet implemented — has no effect)
+  setup: false
+  # Upstream Zitadel Helm chart values pass through here
+  # See: https://github.com/zitadel/zitadel-charts

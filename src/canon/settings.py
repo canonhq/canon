@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -67,12 +70,52 @@ class Settings(BaseSettings):
     def auth0_enabled(self) -> bool:
         return bool(self.auth0_domain and self.auth0_client_id and self.auth0_client_secret)
 
+    @property
+    def oidc_enabled(self) -> bool:
+        """True if generic OIDC credentials are fully configured."""
+        return bool(self.oidc_issuer and self.oidc_client_id and self.oidc_client_secret)
+
+    @property
+    def auth_enabled(self) -> bool:
+        """True if any auth provider is configured."""
+        return self.auth0_enabled or self.oidc_enabled
+
+    @property
+    def auth_mode(self) -> str:
+        """Effective auth mode: 'auth0', 'oidc', or '' (disabled).
+
+        Mirrors the auto-detection logic in ``create_provider()`` so the
+        frontend renders the correct login UI.
+        """
+        if self.auth_provider:
+            return self.auth_provider
+        if self.auth0_enabled:
+            return "auth0"
+        if self.oidc_enabled:
+            return "oidc"
+        return ""
+
     # Auth0 Organizations — opt-in, requires an Auth0 Organization to be created
-    # and linked via set_auth0_org_id() in the installation registry.
+    # and linked via set_oidc_org_id() in the installation registry.
     auth0_orgs_enabled: bool = False
 
+    # Generic OIDC (OSS — bring-your-own identity provider)
+    auth_provider: Literal["auth0", "oidc", ""] = ""  # "" = auto-detect
+    oidc_issuer: str = ""  # https://your-idp.example.com
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""
+    oidc_audience: str = ""
+    oidc_scopes: str = "openid email profile"
+
+    @field_validator("oidc_issuer")
+    @classmethod
+    def _validate_oidc_issuer(cls, v: str) -> str:
+        if v and not v.startswith("https://"):
+            raise ValueError("oidc_issuer must start with https:// (RFC 8414)")
+        return v
+
     # Auth0 M2M credentials for Management API (org membership queries).
-    # Falls back to auth0_client_id/secret when not set.
+    # When not set, org membership lookups are skipped.
     auth0_m2m_client_id: str = ""
     auth0_m2m_client_secret: str = ""
 

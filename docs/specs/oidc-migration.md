@@ -15,7 +15,7 @@ Replace Canon's Auth0 dependency with a generic OIDC provider abstraction. Cloud
 
 ## 1. Background
 
-<!-- specwright:system:1 status:todo -->
+<!-- canon:system:1 status:done -->
 
 Canon currently authenticates web users via Auth0 Universal Login, validates JWTs against Auth0's JWKS endpoint, and uses Auth0 Organizations for multi-tenant isolation. Auth0 is deeply integrated across ~35 files with ~185 references.
 
@@ -49,7 +49,7 @@ Several subsystems require no changes:
 
 ## 2. Provider Abstraction Layer
 
-<!-- specwright:system:2 status:todo -->
+<!-- canon:system:2 status:done -->
 
 Introduce an `OIDCProvider` protocol that all auth code programs against. Auth0 becomes one implementation among several.
 
@@ -107,7 +107,7 @@ src/canon/auth/
 
 ## 3. Generic OIDC Provider
 
-<!-- specwright:system:3 status:todo -->
+<!-- canon:system:3 status:done -->
 
 Implement a discovery-based OIDC provider that works with any compliant identity provider (Okta, Keycloak, Zitadel, Google Workspace, Entra ID, etc.) using the `.well-known/openid-configuration` endpoint.
 
@@ -185,7 +185,7 @@ If not:
 
 ## 4. Settings Refactor
 
-<!-- specwright:system:4 status:todo -->
+<!-- canon:system:4 status:done -->
 
 Add generic OIDC settings alongside existing Auth0 settings for backward compatibility during migration.
 
@@ -231,7 +231,7 @@ def auth_enabled(self) -> bool:
 
 ## 5. Database Migration
 
-<!-- specwright:system:5 status:todo -->
+<!-- canon:system:5 status:done -->
 
 Rename Auth0-specific column names to generic OIDC terminology.
 
@@ -274,7 +274,7 @@ No data transformation needed. The `sub` claim is an opaque string (`auth0|abc12
 
 ## 6. Auth Module Refactor
 
-<!-- specwright:system:6 status:todo -->
+<!-- canon:system:6 status:done -->
 
 Refactor the 7 Auth0-coupled files to use the provider abstraction.
 
@@ -322,7 +322,7 @@ async def _resolve_permissions(user_record: dict, claims: dict, settings: Settin
 
 ## 7. Helm Chart Updates
 
-<!-- specwright:system:7 status:todo -->
+<!-- canon:system:7 status:done -->
 
 Add generic OIDC configuration to the Helm chart alongside existing Auth0 values.
 
@@ -392,7 +392,7 @@ Conditionally mount OIDC secret in deployment template, same pattern as Auth0:
 
 ## 8. Bundled Zitadel (Optional Subchart)
 
-<!-- specwright:system:8 status:todo -->
+<!-- canon:system:8 status:in_progress -->
 
 Ship Zitadel as an optional Helm subchart for self-hosters who don't have an existing identity provider.
 
@@ -482,7 +482,7 @@ Bundled Zitadel uses its own PostgreSQL instance via the Zitadel subchart's buil
 
 ## 9. OSS Export Updates
 
-<!-- specwright:system:9 status:todo -->
+<!-- canon:system:9 status:done -->
 
 Update `export-oss.sh` to include the auth module (minus cloud-only files) and the web platform.
 
@@ -554,7 +554,7 @@ Add the OIDC migration spec to the export (it contains no proprietary informatio
 
 ## 10. CI/CD Updates
 
-<!-- specwright:system:10 status:todo -->
+<!-- canon:system:10 status:todo -->
 
 Update deployment workflows for the new OIDC configuration. Cloud deployments continue using Auth0 secrets. No breaking change.
 
@@ -575,7 +575,7 @@ The OSS CI workflow (`oss/ci.yml`) needs to test with OIDC configuration in addi
 
 ## 11. Documentation Updates
 
-<!-- specwright:system:11 status:todo -->
+<!-- canon:system:11 status:todo -->
 
 Rewrite self-hosting docs for OIDC-first setup with Auth0 as one option among many.
 
@@ -609,7 +609,7 @@ Each guide covers: create application, configure redirect URIs, note issuer/clie
 
 ## 12. Frontend Updates
 
-<!-- specwright:system:12 status:todo -->
+<!-- canon:system:12 status:done -->
 
 Minimal frontend changes — the frontend is already provider-agnostic.
 
@@ -639,7 +639,7 @@ The login page (`LoginView.vue`) renders provider buttons (GitHub, Google, Email
 
 ## 13. Test Updates
 
-<!-- specwright:system:13 status:todo -->
+<!-- canon:system:13 status:done -->
 
 Update test suite to support both Auth0 and generic OIDC configurations.
 
@@ -666,7 +666,7 @@ Each auth test should run against both provider configurations:
 
 ## 14. Rollout Plan
 
-<!-- specwright:system:14 status:todo -->
+<!-- canon:system:14 status:todo -->
 
 ### Phase 1: Provider Abstraction (no behavior change)
 

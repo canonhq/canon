@@ -127,6 +127,17 @@ Secret name for Auth0 credentials
 {{- end }}
 
 {{/*
+Secret name for OIDC credentials
+*/}}
+{{- define "canon.oidcSecretName" -}}
+{{- if .Values.secrets.oidc.existingSecret -}}
+{{ .Values.secrets.oidc.existingSecret }}
+{{- else -}}
+{{ include "canon.fullname" . }}-oidc
+{{- end -}}
+{{- end }}
+
+{{/*
 Secret name for MCP API key
 */}}
 {{- define "canon.mcpSecretName" -}}

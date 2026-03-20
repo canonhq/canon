@@ -1,0 +1,1 @@
+"""Spec Explorer web application."""
