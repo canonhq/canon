@@ -23,7 +23,7 @@ Engineers and PMs currently need to navigate GitHub repos or the Spec Explorer w
 
 ## 2. Slack App Setup
 
-<!-- specwright:system:2 status:todo -->
+<!-- canon:system:2 status:done -->
 <!-- specwright:ticket:github:5 -->
 
 ### 2.1 Configuration
