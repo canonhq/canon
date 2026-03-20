@@ -50,7 +50,7 @@ Replace the current `SpecHeader.vue` metadata strip with a richer summary panel.
 
 ## 3. Section Cards
 
-<!-- canon:system:3 status:in_progress -->
+<!-- canon:system:3 status:todo -->
 <!-- canon:ticket:github:307 -->
 
 Render each spec section as a read-only card matching the editor's `SectionCard` visual style.
