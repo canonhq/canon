@@ -228,7 +228,8 @@ Add a `helm-template-test` job to CI that runs these tests. Faster than `helm li
 - [ ] CronJob conditional tests: enabled in production, disabled in preview
 - [ ] Ingress tests: correct hostname and TLS for production and preview
 - [ ] OIDC secret template test: created when `secrets.oidc.issuer` set, absent when empty
-- [ ] Zitadel setup Job test: exists when `zitadel.enabled=true`, absent when false
+- [x] Zitadel setup Job test: exists when `zitadel.enabled=true`, absent when false
+<!-- canon:realized-in:PR#390 file:tests/test_helm/test_template_rendering.py -->
 - [ ] Environment variable tests: PORT, LOG_LEVEL, ENVIRONMENT set correctly per profile
 - [ ] No `helm template` errors for any values combination (production, preview, dev, bare defaults)
 - [ ] Tests integrated into CI as a job parallel to existing `helm-lint`

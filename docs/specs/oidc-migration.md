@@ -518,9 +518,12 @@ Bundled Zitadel uses its own PostgreSQL instance via the Zitadel subchart's buil
 ### Acceptance Criteria
 
 - [x] `Chart.yaml` declares Zitadel as optional dependency (`condition: zitadel.enabled`)
+<!-- canon:realized-in:PR#390 file:chart/canon/Chart.yaml -->
 - [x] `values.yaml` has `zitadel.enabled: false` with upstream chart values pass-through
 <!-- canon:realized-in:PR#386 file:chart/canon/values.yaml:254-262 -->
+<!-- canon:realized-in:PR#390 file:chart/canon/values.yaml -->
 - [x] Post-install Job creates Zitadel project + web app + device app
+<!-- canon:realized-in:PR#390 file:chart/canon/templates/job-zitadel-setup.yaml -->
 - [x] Job writes OIDC client credentials to K8s Secret
 - [x] Canon auto-discovers credentials via `secrets.oidc.existingSecret`
 <!-- canon:realized-in:PR#386 file:chart/canon/templates/_helpers.tpl:130-138 file:chart/canon/templates/deployment.yaml:65-68 -->
@@ -598,6 +601,7 @@ Add the OIDC migration spec to the export (it contains no proprietary informatio
 - [x] `export-oss.sh` includes `db/`, `main.py`, `web/`, `cron/`
 <!-- canon:realized-in:PR#386 file:.github/scripts/export-oss.sh:70-73 -->
 - [x] OSS Dockerfile installs with server extra for auth dependencies
+<!-- canon:realized-in:PR#390 file:oss/Dockerfile -->
 - [x] OSS `.env.example` has OIDC configuration section
 <!-- canon:realized-in:PR#386 file:oss/.env.example:10-19 -->
 - [x] `auth/providers/auth0.py` and `auth/management.py` confirmed absent from OSS build
@@ -627,6 +631,7 @@ The OSS CI workflow (`oss/ci.yml`) needs to test with OIDC configuration in addi
 - [x] Cloud `preview.yml` unchanged
 <!-- canon:realized-in:PR#386 file:.github/workflows/preview.yml:84-115 -->
 - [x] OSS CI runs tests with both auth-disabled and OIDC-configured modes
+<!-- canon:realized-in:PR#390 file:oss/ci.yml -->
 - [x] No Doppler configuration changes required for initial rollout
 
 <!-- canon:ticket:github:407 -->
@@ -659,6 +664,7 @@ Each guide covers: create application, configure redirect URIs, note issuer/clie
 ### Acceptance Criteria
 
 - [x] `docs/self-hosting.md` auth section rewritten with 4 options (Zitadel, BYOIDC, Auth0, none)
+<!-- canon:realized-in:PR#390 file:docs/self-hosting.md -->
 - [x] Bundled Zitadel listed as recommended default for new self-hosted deployments
 - [x] Provider-specific setup snippets for at least Zitadel, Keycloak, and Okta
 - [x] Auth0 instructions preserved for backward compatibility
