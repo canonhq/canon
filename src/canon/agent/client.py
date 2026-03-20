@@ -111,7 +111,14 @@ async def get_claude_client_for_org(
             byok_key = await billing_service.get_anthropic_key(org_login)
             if byok_key:
                 return default_client.for_api_key(byok_key)
-            logger.warning("Starter plan org %s has no BYOK key — agent unavailable", org_login)
+            # Key missing or marked invalid — check status for a specific log message
+            key_status = await billing_service.get_anthropic_key_status(org_login)
+            if key_status.exists and key_status.status == "invalid":
+                logger.warning(
+                    "Starter plan org %s has invalid BYOK key — agent unavailable", org_login
+                )
+            else:
+                logger.warning("Starter plan org %s has no BYOK key — agent unavailable", org_login)
             raise AgentUnavailableError()
 
         # Pro and Enterprise use Canon's key

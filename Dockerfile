@@ -25,7 +25,7 @@ WORKDIR /app
 
 # Install the wheel
 COPY --from=build /dist/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl && rm -rf /tmp/*.whl
+RUN pip install --no-cache-dir '/tmp/canonhq-*.whl[server]' && rm -rf /tmp/*.whl
 
 # Switch to non-root user
 USER 1001

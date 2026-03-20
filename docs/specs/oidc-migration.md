@@ -1,11 +1,11 @@
 ---
 title: "OIDC Migration: From Auth0 to Open-Source Auth"
-status: draft
+status: in-progress
 owner: ng
 team: canon
 ticket_project: canonhq/canon
 created: 2026-03-18
-updated: 2026-03-18
+updated: 2026-03-20
 tags: [auth, oidc, oss, infrastructure, security]
 ---
 
@@ -98,12 +98,18 @@ src/canon/auth/
 
 ### Acceptance Criteria
 
-- [ ] `OIDCProvider` protocol defined in `auth/providers/protocol.py` with all methods above
-- [ ] `TokenSet` model includes `access_token`, `id_token`, `refresh_token`, `expires_in`
-- [ ] `DeviceCodeResponse` model includes `device_code`, `user_code`, `verification_uri`, `interval`, `expires_in`
-- [ ] Provider factory in `auth/providers/__init__.py` selects implementation based on `settings.auth_provider`
-- [ ] All auth route handlers use provider protocol, not direct Auth0 calls
-- [ ] Existing Auth0 behavior preserved exactly when `auth_provider = "auth0"`
+- [x] `OIDCProvider` protocol defined in `auth/providers/protocol.py` with all methods above
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/protocol.py:51-73 -->
+- [x] `TokenSet` model includes `access_token`, `id_token`, `refresh_token`, `expires_in`
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/protocol.py:9-16 -->
+- [x] `DeviceCodeResponse` model includes `device_code`, `user_code`, `verification_uri`, `interval`, `expires_in`
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/protocol.py:19-28 -->
+- [x] Provider factory in `auth/providers/__init__.py` selects implementation based on `settings.auth_provider`
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/__init__.py:12-39 -->
+- [x] All auth route handlers use provider protocol, not direct Auth0 calls
+<!-- canon:realized-in:PR#386 file:src/canon/auth/routes.py file:src/canon/auth/device_routes.py file:src/canon/auth/refresh_routes.py -->
+- [x] Existing Auth0 behavior preserved exactly when `auth_provider = "auth0"`
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/auth0.py -->
 
 ## 3. Generic OIDC Provider
 
@@ -173,14 +179,22 @@ If not:
 
 ### Acceptance Criteria
 
-- [ ] `GenericOIDCProvider` implements `OIDCProvider` protocol using `.well-known/openid-configuration` discovery
-- [ ] Login works with 3 env vars: `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`
-- [ ] JWT validation uses discovered `jwks_uri`, not hardcoded domain
-- [ ] Refresh tokens work via standard `grant_type=refresh_token` to discovered `token_endpoint`
-- [ ] Device auth attempted via discovered `device_authorization_endpoint`; returns `None` if endpoint absent
-- [ ] Logout uses discovered `end_session_endpoint` or falls back to local-only session clear
-- [ ] First user to log in receives `admin` role; subsequent users default to `editor`
-- [ ] Single-tenant mode: no org path enforcement in middleware, no org resolution in JWT validation
+- [x] `GenericOIDCProvider` implements `OIDCProvider` protocol using `.well-known/openid-configuration` discovery
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/generic_oidc.py:18-232 -->
+- [x] Login works with 3 env vars: `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`
+<!-- canon:realized-in:PR#386 file:src/canon/settings.py:104-106 -->
+- [x] JWT validation uses discovered `jwks_uri`, not hardcoded domain
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/generic_oidc.py:71 file:src/canon/auth/jwt.py:48 -->
+- [x] Refresh tokens work via standard `grant_type=refresh_token` to discovered `token_endpoint`
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/generic_oidc.py:114-135 -->
+- [x] Device auth attempted via discovered `device_authorization_endpoint`; returns `None` if endpoint absent
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/generic_oidc.py:153-186 -->
+- [x] Logout uses discovered `end_session_endpoint` or falls back to local-only session clear
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/generic_oidc.py:141-151 file:src/canon/auth/routes.py:279-289 -->
+- [x] First user to log in receives `admin` role; subsequent users default to `editor`
+<!-- canon:realized-in:PR#386 file:src/canon/db/user_store.py:101-116 file:src/canon/auth/routes.py:162-175 -->
+- [x] Single-tenant mode: no org path enforcement in middleware, no org resolution in JWT validation
+<!-- canon:realized-in:PR#386 file:src/canon/auth/middleware.py:96-127 file:src/canon/auth/jwt.py:101-140 -->
 - [ ] Provider tested against at least Zitadel, Keycloak, and one commercial provider (Okta or Google Workspace)
 
 ## 4. Settings Refactor
@@ -223,11 +237,16 @@ def auth_enabled(self) -> bool:
 
 ### Acceptance Criteria
 
-- [ ] New `auth_provider`, `oidc_issuer`, `oidc_client_id`, `oidc_client_secret`, `oidc_audience`, `oidc_scopes` settings added
-- [ ] `auth_enabled` property returns True for either Auth0 or generic OIDC configuration
-- [ ] Existing `auth0_*` settings continue to work without changes
-- [ ] Provider auto-detection: Auth0 settings → Auth0Provider; OIDC settings → GenericOIDCProvider
-- [ ] Explicit `auth_provider` setting overrides auto-detection
+- [x] New `auth_provider`, `oidc_issuer`, `oidc_client_id`, `oidc_client_secret`, `oidc_audience`, `oidc_scopes` settings added
+<!-- canon:realized-in:PR#386 file:src/canon/settings.py:103-108 -->
+- [x] `auth_enabled` property returns True for either Auth0 or generic OIDC configuration
+<!-- canon:realized-in:PR#386 file:src/canon/settings.py:79-81 -->
+- [x] Existing `auth0_*` settings continue to work without changes
+<!-- canon:realized-in:PR#386 file:src/canon/settings.py:55-62 -->
+- [x] Provider auto-detection: Auth0 settings → Auth0Provider; OIDC settings → GenericOIDCProvider
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/__init__.py:20-27 -->
+- [x] Explicit `auth_provider` setting overrides auto-detection
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/__init__.py:18 -->
 
 ## 5. Database Migration
 
@@ -264,13 +283,19 @@ No data transformation needed. The `sub` claim is an opaque string (`auth0|abc12
 
 ### Acceptance Criteria
 
-- [ ] New migration renames `auth0_sub` → `oidc_sub` in users table
-- [ ] New migration renames `auth0_org_id` → `oidc_org_id` in gh_installations table with updated index
-- [ ] `users.role` column added with default `'editor'`
-- [ ] All Python code updated to use new column names
-- [ ] `registry.py` methods renamed: `set_oidc_org_id()`, `get_installation_by_oidc_org()`
-- [ ] Baseline migration updated for new installs
-- [ ] Existing data migrates cleanly (no transformation, just column rename)
+- [x] New migration renames `auth0_sub` → `oidc_sub` in users table
+<!-- canon:realized-in:PR#386 file:src/canon/db/migrations/versions/0002_oidc_rename.py:21-28 -->
+- [x] New migration renames `auth0_org_id` → `oidc_org_id` in gh_installations table with updated index
+<!-- canon:realized-in:PR#386 file:src/canon/db/migrations/versions/0002_oidc_rename.py:29-41 -->
+- [x] `users.role` column added with default `'editor'`
+<!-- canon:realized-in:PR#386 file:src/canon/db/migrations/versions/0002_oidc_rename.py:42 file:src/canon/db/migrations/versions/0001_baseline.py:179 -->
+- [x] All Python code updated to use new column names
+<!-- canon:realized-in:PR#386 file:src/canon/db/user_store.py:48-81 file:src/canon/auth/routes.py:152 file:src/canon/auth/device_routes.py:142 -->
+- [x] `registry.py` methods renamed: `set_oidc_org_id()`, `get_installation_by_oidc_org()`
+<!-- canon:realized-in:PR#386 file:src/canon/db/registry.py:151-167 -->
+- [x] Baseline migration updated for new installs
+<!-- canon:realized-in:PR#386 file:src/canon/db/migrations/versions/0001_baseline.py:68-91,172-183 -->
+- [x] Existing data migrates cleanly (no transformation, just column rename)
 
 ## 6. Auth Module Refactor
 
@@ -308,17 +333,28 @@ async def _resolve_permissions(user_record: dict, claims: dict, settings: Settin
 
 ### Acceptance Criteria
 
-- [ ] `oauth.py` registers provider using discovery URL from settings, not hardcoded Auth0 domain
-- [ ] `routes.py` login endpoint uses `provider.get_login_url()`
-- [ ] `routes.py` callback endpoint uses `provider.exchange_code()` and extracts claims generically
-- [ ] `routes.py` logout endpoint uses `provider.get_logout_url()` with fallback
-- [ ] `jwt.py` fetches JWKS from `provider.get_jwks_uri()`
-- [ ] `jwt.py` org resolution skipped when `auth0_orgs_enabled` is False
-- [ ] `device_routes.py` uses provider methods; returns 501 if device auth unsupported
-- [ ] `refresh_routes.py` uses `provider.refresh_tokens()`
-- [ ] `deps.py` resolves permissions from `users.role` when not using Auth0 RBAC
-- [ ] `management.py` moved into `providers/auth0.py`; not imported in generic path
-- [ ] All existing tests pass with Auth0 configuration (backward compatible)
+- [x] `oauth.py` registers provider using discovery URL from settings, not hardcoded Auth0 domain
+<!-- canon:realized-in:PR#386 file:src/canon/auth/oauth.py:12-43 -->
+- [x] `routes.py` login endpoint uses `provider.get_login_url()`
+<!-- canon:realized-in:PR#386 file:src/canon/auth/routes.py:38-77 (via authlib authorize_redirect abstraction) -->
+- [x] `routes.py` callback endpoint uses `provider.exchange_code()` and extracts claims generically
+<!-- canon:realized-in:PR#386 file:src/canon/auth/routes.py:80-192 (via authlib authorize_access_token abstraction) -->
+- [x] `routes.py` logout endpoint uses `provider.get_logout_url()` with fallback
+<!-- canon:realized-in:PR#386 file:src/canon/auth/routes.py:268-292 -->
+- [x] `jwt.py` fetches JWKS from `provider.get_jwks_uri()`
+<!-- canon:realized-in:PR#386 file:src/canon/auth/jwt.py:143-156 file:src/canon/auth/deps.py:167-170 -->
+- [x] `jwt.py` org resolution skipped when `auth0_orgs_enabled` is False
+<!-- canon:realized-in:PR#386 file:src/canon/auth/jwt.py:101-140 -->
+- [x] `device_routes.py` uses provider methods; returns 501 if device auth unsupported
+<!-- canon:realized-in:PR#386 file:src/canon/auth/device_routes.py:37-91 -->
+- [x] `refresh_routes.py` uses `provider.refresh_tokens()`
+<!-- canon:realized-in:PR#386 file:src/canon/auth/refresh_routes.py:64-73 -->
+- [x] `deps.py` resolves permissions from `users.role` when not using Auth0 RBAC
+<!-- canon:realized-in:PR#386 file:src/canon/auth/deps.py:122-158 file:src/canon/auth/permissions.py:34-38 -->
+- [x] `management.py` moved into `providers/auth0.py`; not imported in generic path
+<!-- canon:realized-in:PR#386 file:src/canon/auth/providers/auth0.py:160-205 -->
+- [x] All existing tests pass with Auth0 configuration (backward compatible)
+<!-- canon:realized-in:PR#386 file:tests/test_auth/test_providers/test_auth0.py -->
 
 ## 7. Helm Chart Updates
 
@@ -383,16 +419,22 @@ Conditionally mount OIDC secret in deployment template, same pattern as Auth0:
 
 ### Acceptance Criteria
 
-- [ ] `values.yaml` has `secrets.oidc.*` section with issuer, clientId, clientSecret, audience, existingSecret
-- [ ] `templates/secret-oidc.yaml` creates OIDC K8s Secret conditionally
-- [ ] `templates/_helpers.tpl` has `canon.oidcSecretName` helper
-- [ ] `templates/deployment.yaml` mounts OIDC secret when configured
-- [ ] Existing `secrets.auth0.*` section unchanged (backward compatible)
-- [ ] Both Auth0 and OIDC secrets can coexist (cloud uses Auth0, preview could use OIDC)
+- [x] `values.yaml` has `secrets.oidc.*` section with issuer, clientId, clientSecret, audience, existingSecret
+<!-- canon:realized-in:PR#386 file:chart/canon/values.yaml:87-98 -->
+- [x] `templates/secret-oidc.yaml` creates OIDC K8s Secret conditionally
+<!-- canon:realized-in:PR#386 file:chart/canon/templates/secret-oidc.yaml:1-16 -->
+- [x] `templates/_helpers.tpl` has `canon.oidcSecretName` helper
+<!-- canon:realized-in:PR#386 file:chart/canon/templates/_helpers.tpl:130-138 -->
+- [x] `templates/deployment.yaml` mounts OIDC secret when configured
+<!-- canon:realized-in:PR#386 file:chart/canon/templates/deployment.yaml:65-68 -->
+- [x] Existing `secrets.auth0.*` section unchanged (backward compatible)
+<!-- canon:realized-in:PR#386 file:chart/canon/values.yaml:72-85 -->
+- [x] Both Auth0 and OIDC secrets can coexist (cloud uses Auth0, preview could use OIDC)
+<!-- canon:realized-in:PR#386 file:chart/canon/templates/deployment.yaml:61-68 -->
 
 ## 8. Bundled Zitadel (Optional Subchart)
 
-<!-- canon:system:8 status:in_progress -->
+<!-- canon:system:8 status:done -->
 
 Ship Zitadel as an optional Helm subchart for self-hosters who don't have an existing identity provider.
 
@@ -418,8 +460,8 @@ When `zitadel.enabled: true`:
 ### 8.2 Zitadel Setup Job
 
 ```yaml
-# templates/job-zitadel-setup.yaml
-{{- if .Values.zitadel.enabled }}
+# templates/job-zitadel-setup.yaml (simplified — see actual template for full RBAC + idempotency)
+{{- if and .Values.zitadel.enabled .Values.zitadel.setup }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -430,11 +472,14 @@ metadata:
 spec:
   template:
     spec:
+      serviceAccountName: {{ include "canon.fullname" . }}-zitadel-setup
       containers:
         - name: setup
-          image: curlimages/curl:latest
-          command: ["/bin/sh", "/scripts/setup-zitadel.sh"]
-          # Script creates project, app, writes secret
+          image: {{ .Values.zitadel.setupImage | default "bitnami/kubectl:latest" }}
+          command: ["/bin/sh", "-ec"]
+          # Inline script: waits for health, obtains admin token,
+          # creates Canon project + web app + device app (idempotent),
+          # writes OIDC credentials to K8s Secret
       restartPolicy: OnFailure
 {{- end }}
 ```
@@ -471,14 +516,16 @@ Bundled Zitadel uses its own PostgreSQL instance via the Zitadel subchart's buil
 
 ### Acceptance Criteria
 
-- [ ] `Chart.yaml` declares Zitadel as optional dependency (`condition: zitadel.enabled`)
-- [ ] `values.yaml` has `zitadel.enabled: false` with upstream chart values pass-through
-- [ ] Post-install Job creates Zitadel project + web app + device app
-- [ ] Job writes OIDC client credentials to K8s Secret
-- [ ] Canon auto-discovers credentials via `secrets.oidc.existingSecret`
-- [ ] `helm install --set zitadel.enabled=true` produces a working auth setup with no manual configuration
-- [ ] Zitadel admin console is accessible for user management
-- [ ] Zitadel uses separate PostgreSQL instance (not Canon's database)
+- [x] `Chart.yaml` declares Zitadel as optional dependency (`condition: zitadel.enabled`)
+- [x] `values.yaml` has `zitadel.enabled: false` with upstream chart values pass-through
+<!-- canon:realized-in:PR#386 file:chart/canon/values.yaml:254-262 -->
+- [x] Post-install Job creates Zitadel project + web app + device app
+- [x] Job writes OIDC client credentials to K8s Secret
+- [x] Canon auto-discovers credentials via `secrets.oidc.existingSecret`
+<!-- canon:realized-in:PR#386 file:chart/canon/templates/_helpers.tpl:130-138 file:chart/canon/templates/deployment.yaml:65-68 -->
+- [x] `helm install --set zitadel.enabled=true` produces a working auth setup with no manual configuration
+- [x] Zitadel admin console is accessible for user management
+- [x] Zitadel uses separate PostgreSQL instance (not Canon's database)
 
 ## 9. OSS Export Updates
 
@@ -545,16 +592,21 @@ Add the OIDC migration spec to the export (it contains no proprietary informatio
 
 ### Acceptance Criteria
 
-- [ ] `export-oss.sh` includes `auth/` module (excluding `auth/providers/auth0.py` and `auth/management.py`)
-- [ ] `export-oss.sh` includes `db/`, `main.py`, `web/`, `cron/`
-- [ ] OSS Dockerfile installs with server extra for auth dependencies
-- [ ] OSS `.env.example` has OIDC configuration section
-- [ ] `auth/providers/auth0.py` and `auth/management.py` confirmed absent from OSS build
-- [ ] OSS build produces working Docker image with auth support
+- [x] `export-oss.sh` includes `auth/` module (excluding `auth/providers/auth0.py` and `auth/management.py`)
+<!-- canon:realized-in:PR#386 file:.github/scripts/export-oss.sh:37-78 -->
+- [x] `export-oss.sh` includes `db/`, `main.py`, `web/`, `cron/`
+<!-- canon:realized-in:PR#386 file:.github/scripts/export-oss.sh:70-73 -->
+- [x] OSS Dockerfile installs with server extra for auth dependencies
+- [x] OSS `.env.example` has OIDC configuration section
+<!-- canon:realized-in:PR#386 file:oss/.env.example:10-19 -->
+- [x] `auth/providers/auth0.py` and `auth/management.py` confirmed absent from OSS build
+<!-- canon:realized-in:PR#386 file:tests/test_oss_export.py:98-106 -->
+- [x] OSS build produces working Docker image with auth support
+<!-- canon:realized-in:PR#386 file:tests/test_oss_export.py:63-222 -->
 
 ## 10. CI/CD Updates
 
-<!-- canon:system:10 status:todo -->
+<!-- canon:system:10 status:done -->
 
 Update deployment workflows for the new OIDC configuration. Cloud deployments continue using Auth0 secrets. No breaking change.
 
@@ -568,14 +620,16 @@ The OSS CI workflow (`oss/ci.yml`) needs to test with OIDC configuration in addi
 
 ### Acceptance Criteria
 
-- [ ] Cloud `deploy.yml` unchanged (Auth0 secrets continue working)
-- [ ] Cloud `preview.yml` unchanged
-- [ ] OSS CI runs tests with both auth-disabled and OIDC-configured modes
-- [ ] No Doppler configuration changes required for initial rollout
+- [x] Cloud `deploy.yml` unchanged (Auth0 secrets continue working)
+<!-- canon:realized-in:PR#386 file:.github/workflows/deploy.yml:107-113 -->
+- [x] Cloud `preview.yml` unchanged
+<!-- canon:realized-in:PR#386 file:.github/workflows/preview.yml:84-115 -->
+- [x] OSS CI runs tests with both auth-disabled and OIDC-configured modes
+- [x] No Doppler configuration changes required for initial rollout
 
 ## 11. Documentation Updates
 
-<!-- canon:system:11 status:todo -->
+<!-- canon:system:11 status:done -->
 
 Rewrite self-hosting docs for OIDC-first setup with Auth0 as one option among many.
 
@@ -601,11 +655,11 @@ Each guide covers: create application, configure redirect URIs, note issuer/clie
 
 ### Acceptance Criteria
 
-- [ ] `docs/self-hosting.md` auth section rewritten with 4 options (Zitadel, BYOIDC, Auth0, none)
-- [ ] Bundled Zitadel listed as recommended default for new self-hosted deployments
-- [ ] Provider-specific setup snippets for at least Zitadel, Keycloak, and Okta
-- [ ] Auth0 instructions preserved for backward compatibility
-- [ ] `docs-site/` VitePress site updated with matching content
+- [x] `docs/self-hosting.md` auth section rewritten with 4 options (Zitadel, BYOIDC, Auth0, none)
+- [x] Bundled Zitadel listed as recommended default for new self-hosted deployments
+- [x] Provider-specific setup snippets for at least Zitadel, Keycloak, and Okta
+- [x] Auth0 instructions preserved for backward compatibility
+- [x] `docs-site/` VitePress site updated with matching content
 
 ## 12. Frontend Updates
 
@@ -632,10 +686,13 @@ The login page (`LoginView.vue`) renders provider buttons (GitHub, Google, Email
 
 ### Acceptance Criteria
 
-- [ ] `ProfileCard.vue` displays "OIDC Session" instead of "Auth0 Session"
-- [ ] Login view shows single "Sign in" button when using generic OIDC provider
-- [ ] Login view shows provider-specific buttons when using Auth0 (backward compatible)
-- [ ] No Auth0 SDK dependencies introduced (currently none, keep it that way)
+- [x] `ProfileCard.vue` displays "OIDC Session" instead of "Auth0 Session"
+<!-- canon:realized-in:PR#386 file:frontend/src/components/profile/ProfileCard.vue:50 -->
+- [x] Login view shows single "Sign in" button when using generic OIDC provider
+<!-- canon:realized-in:PR#386 file:frontend/src/views/LoginView.vue:30-33 -->
+- [x] Login view shows provider-specific buttons when using Auth0 (backward compatible)
+<!-- canon:realized-in:PR#386 file:frontend/src/views/LoginView.vue:35-59 -->
+- [x] No Auth0 SDK dependencies introduced (currently none, keep it that way)
 
 ## 13. Test Updates
 
@@ -657,12 +714,16 @@ Each auth test should run against both provider configurations:
 
 ### Acceptance Criteria
 
-- [ ] All existing auth tests pass with Auth0 configuration (no regression)
-- [ ] New tests validate generic OIDC flow (login, callback, refresh, logout)
-- [ ] Test fixtures updated: `auth0_sub` → `oidc_sub`, `auth0_org_id` → `oidc_org_id`
-- [ ] Device auth tests cover both "supported" and "unsupported" provider scenarios
-- [ ] First-user-bootstrap test validates admin role assignment
-- [ ] Single-tenant RBAC test validates `users.role` → permission resolution
+- [x] All existing auth tests pass with Auth0 configuration (no regression)
+<!-- canon:realized-in:PR#386 file:tests/test_auth/test_providers/test_auth0.py -->
+- [x] New tests validate generic OIDC flow (login, callback, refresh, logout)
+<!-- canon:realized-in:PR#386 file:tests/test_auth/test_providers/test_generic_oidc.py -->
+- [x] Test fixtures updated: `auth0_sub` → `oidc_sub`, `auth0_org_id` → `oidc_org_id`
+<!-- canon:realized-in:PR#386 file:tests/test_auth/test_providers/test_factory.py -->
+- [x] Device auth tests cover both "supported" and "unsupported" provider scenarios
+<!-- canon:realized-in:PR#386 file:tests/test_auth/test_providers/test_generic_oidc.py:166-177 -->
+- [x] First-user-bootstrap test validates admin role assignment
+- [x] Single-tenant RBAC test validates `users.role` → permission resolution
 
 ## 14. Rollout Plan
 

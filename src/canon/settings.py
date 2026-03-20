@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -161,6 +161,19 @@ class Settings(BaseSettings):
 
     # Enterprise contact
     enterprise_contact_email: str = "sales@canonhq.co"
+
+    # SMTP (optional — for enterprise contact email notifications)
+    # Port 465 always uses implicit TLS (SMTP_SSL); smtp_tls enables STARTTLS on other ports.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_from: str = ""
+    smtp_tls: bool = True
+
+    @property
+    def smtp_enabled(self) -> bool:
+        return bool(self.smtp_host and self.smtp_from)
 
     @property
     def stripe_enabled(self) -> bool:

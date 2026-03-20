@@ -67,26 +67,66 @@ secrets:
     existingSecret: "canon-jira"
 ```
 
-### Auth0 (Optional)
+### Authentication (Optional)
 
-If you want web login, CLI auth (`canon login`), or role-based access control, configure an Auth0 tenant. See the [GitHub App Setup](./github-app) guide for Auth0 configuration, then create the secret:
+Canon supports four authentication modes. Choose the one that fits your deployment.
+
+**Option A: Bundled Zitadel** (recommended for teams without an IDP)
+
+Two-step bootstrap — first deploy Zitadel, then enable the setup job:
+
+```bash
+# 1. Deploy Canon + Zitadel (without setup job)
+helm install canon chart/canon/ --set zitadel.enabled=true
+
+# 2. Create an admin service account in Zitadel Console, then:
+kubectl create secret generic canon-zitadel-admin \
+  --from-literal=client-secret=<your-admin-sa-secret>
+
+helm upgrade canon chart/canon/ \
+  --set zitadel.enabled=true \
+  --set zitadel.setup=true \
+  --set zitadel.adminClientId=<your-admin-sa-client-id> \
+  --set zitadel.adminSecretName=canon-zitadel-admin
+```
+
+The setup job auto-provisions a Canon project, web app, and CLI device auth app.
+
+**Option B: Bring Your Own OIDC Provider** (Keycloak, Okta, Zitadel, Google Workspace, Entra ID, etc.)
+
+```bash
+kubectl create secret generic canon-oidc \
+  --from-literal=OIDC_ISSUER=https://your-idp.example.com \
+  --from-literal=OIDC_CLIENT_ID=your-client-id \
+  --from-literal=OIDC_CLIENT_SECRET=your-client-secret
+```
+
+```yaml
+secrets:
+  oidc:
+    existingSecret: "canon-oidc"
+```
+
+Configure your provider with redirect URI: `https://<your-domain>/auth/callback`
+
+**Option C: Auth0** (legacy — existing deployments)
 
 ```bash
 kubectl create secret generic canon-auth0 \
   --from-literal=domain=your-tenant.auth0.com \
   --from-literal=client-id=your-client-id \
-  --from-literal=client-secret=your-client-secret \
-  --from-literal=audience=https://canon.yourcompany.com/api \
-  --from-literal=device-client-id=your-device-client-id  # optional
+  --from-literal=client-secret=your-client-secret
 ```
-
-`AUTH0_AUDIENCE` is **required** for JWT validation — without it, device auth (CLI login) and server-proxied ticket sync will not work.
 
 ```yaml
 secrets:
   auth0:
     existingSecret: "canon-auth0"
 ```
+
+**Option D: No Auth** (dev/trusted network)
+
+No auth secrets configured — anonymous access with all permissions.
 
 ## 2. Install with Helm
 

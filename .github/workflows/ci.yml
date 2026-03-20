@@ -9,6 +9,9 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        auth-mode: [disabled, oidc]
     steps:
       - uses: actions/checkout@v4
 
@@ -18,11 +21,23 @@ jobs:
 
       - run: uv sync --extra dev
 
+      # Lint and type-check only run once (disabled leg) — they are env-independent.
       - name: Lint
+        if: matrix.auth-mode == 'disabled'
         run: uv run ruff check
 
       - name: Type check
+        if: matrix.auth-mode == 'disabled'
         run: uv run mypy src/canon --ignore-missing-imports
 
-      - name: Test
+      - name: Test (auth-disabled)
+        if: matrix.auth-mode == 'disabled'
+        run: uv run pytest --tb=short -q
+
+      - name: Test (oidc-configured)
+        if: matrix.auth-mode == 'oidc'
+        env:
+          OIDC_ISSUER: "https://test.example.com"
+          OIDC_CLIENT_ID: "test"
+          OIDC_CLIENT_SECRET: "test"
         run: uv run pytest --tb=short -q

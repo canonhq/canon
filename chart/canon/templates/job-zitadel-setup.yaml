@@ -1,4 +1,50 @@
 {{- if and .Values.zitadel.enabled .Values.zitadel.setup }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "canon.fullname" . }}-zitadel-setup
+  labels:
+    {{- include "canon.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "canon.fullname" . }}-zitadel-setup
+  labels:
+    {{- include "canon.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "canon.fullname" . }}-zitadel-setup
+  labels:
+    {{- include "canon.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "canon.fullname" . }}-zitadel-setup
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ include "canon.fullname" . }}-zitadel-setup
+  apiGroup: rbac.authorization.k8s.io
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -8,6 +54,8 @@ metadata:
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "10"
+    # Intentionally omits hook-succeeded — keep the Job pod for log inspection on failure.
+    # RBAC resources (weight 5) use hook-succeeded since they have no useful logs.
     "helm.sh/hook-delete-policy": before-hook-creation
 spec:
   backoffLimit: 3
@@ -16,16 +64,204 @@ spec:
       labels:
         {{- include "canon.selectorLabels" . | nindent 8 }}
     spec:
+      serviceAccountName: {{ include "canon.fullname" . }}-zitadel-setup
       restartPolicy: OnFailure
       containers:
         - name: setup
-          image: curlimages/curl:latest
-          command: ["/bin/sh", "-c"]
+          image: {{ .Values.zitadel.setupImage | quote }}
+          command: ["/bin/sh", "-ec"]
+          env:
+            - name: ZITADEL_ADMIN_CLIENT_ID
+              value: {{ required "zitadel.adminClientId is required when zitadel.setup=true" .Values.zitadel.adminClientId | quote }}
+            - name: ZITADEL_ADMIN_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "zitadel.adminSecretName is required when zitadel.setup=true" .Values.zitadel.adminSecretName | quote }}
+                  key: client-secret
           args:
             - |
-              echo "WARNING: Zitadel setup job is not yet implemented"
-              echo "TODO: Create Canon project, web app, device app"
-              echo "TODO: Write client credentials to K8s secret"
-              echo "Set zitadel.setup=false to suppress this job"
-              exit 0
+              set -e
+
+              ZITADEL_HOST="{{ include "canon.fullname" . }}-zitadel.{{ .Release.Namespace }}.svc.cluster.local:8080"
+              SECRET_NAME="{{ include "canon.fullname" . }}-oidc-zitadel"
+              {{- if .Values.ingress.hostname }}
+              CANON_BASE_URL="https://{{ .Values.ingress.hostname }}"
+              {{- else }}
+              CANON_BASE_URL="http://localhost:3000"
+              {{- end }}
+              CANON_REDIRECT_URI="${CANON_BASE_URL}/auth/callback"
+
+              echo "Waiting for Zitadel to become healthy..."
+              ATTEMPTS=0
+              MAX_ATTEMPTS=60
+              until curl -sf --max-time 10 "http://${ZITADEL_HOST}/debug/healthz" > /dev/null 2>&1; do
+                ATTEMPTS=$((ATTEMPTS + 1))
+                if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
+                  echo "ERROR: Zitadel did not become healthy after ${MAX_ATTEMPTS} attempts"
+                  exit 1
+                fi
+                echo "  Attempt ${ATTEMPTS}/${MAX_ATTEMPTS} — waiting 5s..."
+                sleep 5
+              done
+              echo "Zitadel is healthy."
+
+              # Obtain admin token
+              TOKEN_RESPONSE=$(curl -sf --max-time 10 "http://${ZITADEL_HOST}/oauth/v2/token" \
+                -d "grant_type=client_credentials" \
+                -d "scope=openid urn:zitadel:iam:org:project:id:zitadel:aud" \
+                -d "client_id=${ZITADEL_ADMIN_CLIENT_ID}" \
+                -d "client_secret=${ZITADEL_ADMIN_CLIENT_SECRET}") || {
+                echo "ERROR: Token request failed. Check zitadel.adminClientId and adminSecretName."
+                exit 1
+              }
+
+              ADMIN_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token // empty')
+
+              if [ -z "$ADMIN_TOKEN" ]; then
+                echo "ERROR: Token response did not contain access_token."
+                echo "Response keys: $(echo "$TOKEN_RESPONSE" | jq -r 'keys | join(", ")' 2>/dev/null || echo '(not JSON)')"
+                exit 1
+              fi
+              echo "Admin token acquired."
+
+              AUTH_HEADER="Authorization: Bearer ${ADMIN_TOKEN}"
+
+              # --- Helper: search for an existing entity by name ---
+              search_by_name() {
+                local url="$1" name="$2"
+                curl -sf --max-time 10 "$url" \
+                  -H "Content-Type: application/json" \
+                  -H "$AUTH_HEADER" \
+                  -d "{\"queries\":[{\"nameQuery\":{\"name\":\"${name}\",\"method\":\"TEXT_QUERY_METHOD_EQUALS\"}}]}" \
+                  | jq -r '.result[0].id // empty'
+              }
+
+              # Check if Canon project already exists (idempotent)
+              EXISTING_PROJECT=$(search_by_name "http://${ZITADEL_HOST}/management/v1/projects/_search" "Canon")
+
+              if [ -n "$EXISTING_PROJECT" ]; then
+                echo "Canon project already exists (id: ${EXISTING_PROJECT})"
+                PROJECT_ID="$EXISTING_PROJECT"
+              else
+                echo "Creating Canon project..."
+                PROJECT_RESPONSE=$(curl -sf --max-time 10 "http://${ZITADEL_HOST}/management/v1/projects" \
+                  -H "Content-Type: application/json" \
+                  -H "$AUTH_HEADER" \
+                  -d '{"name":"Canon","projectRoleAssertion":true}')
+                PROJECT_ID=$(echo "$PROJECT_RESPONSE" | jq -r '.id // empty')
+                if [ -z "$PROJECT_ID" ]; then
+                  echo "ERROR: Failed to create Canon project. Response:"
+                  echo "$PROJECT_RESPONSE"
+                  exit 1
+                fi
+                echo "Created project: ${PROJECT_ID}"
+              fi
+
+              # Search for existing "Canon Web" app (idempotent)
+              EXISTING_WEB_APP=$(search_by_name "http://${ZITADEL_HOST}/management/v1/projects/${PROJECT_ID}/apps/_search" "Canon Web")
+
+              if [ -n "$EXISTING_WEB_APP" ]; then
+                echo "Canon Web app already exists (id: ${EXISTING_WEB_APP})"
+                # If the K8s secret already has credentials, we're done
+                EXISTING_SECRET=$(kubectl get secret "${SECRET_NAME}" -o jsonpath='{.data.OIDC_CLIENT_ID}' 2>/dev/null || true)
+                if [ -n "$EXISTING_SECRET" ]; then
+                  echo "OIDC secret already exists with credentials. Setup complete (idempotent)."
+                  exit 0
+                fi
+                # NB: Deleting the app issues new clientId/clientSecret, which invalidates
+                # all active user sessions and refresh tokens. This is a last-resort recovery
+                # for when the K8s secret was accidentally deleted.
+                echo "WARNING: Web app exists but K8s secret is missing — deleting app to recreate with fresh credentials."
+                if ! curl -sf --max-time 10 -X DELETE "http://${ZITADEL_HOST}/management/v1/projects/${PROJECT_ID}/apps/${EXISTING_WEB_APP}" \
+                  -H "$AUTH_HEADER"; then
+                  echo "ERROR: Could not delete existing web app. Creation of a new app will likely fail."
+                  echo "Manual fix: delete the 'Canon Web' app in Zitadel Console and re-run the job."
+                  exit 1
+                fi
+              fi
+
+              # Create web OIDC application
+              echo "Creating web OIDC application..."
+              WEB_APP=$(curl -sf --max-time 10 "http://${ZITADEL_HOST}/management/v1/projects/${PROJECT_ID}/apps/oidc" \
+                -H "Content-Type: application/json" \
+                -H "$AUTH_HEADER" \
+                -d "{
+                  \"name\": \"Canon Web\",
+                  \"redirectUris\": [\"${CANON_REDIRECT_URI}\"],
+                  \"responseTypes\": [\"OIDC_RESPONSE_TYPE_CODE\"],
+                  \"grantTypes\": [\"OIDC_GRANT_TYPE_AUTHORIZATION_CODE\", \"OIDC_GRANT_TYPE_REFRESH_TOKEN\"],
+                  \"appType\": \"OIDC_APP_TYPE_WEB\",
+                  \"authMethodType\": \"OIDC_AUTH_METHOD_TYPE_BASIC\",
+                  \"postLogoutRedirectUris\": [\"${CANON_BASE_URL}\"],
+                  \"devMode\": false
+                }")
+
+              WEB_CLIENT_ID=$(echo "$WEB_APP" | jq -r '.clientId // empty')
+              WEB_CLIENT_SECRET=$(echo "$WEB_APP" | jq -r '.clientSecret // empty')
+
+              if [ -z "$WEB_CLIENT_ID" ] || [ -z "$WEB_CLIENT_SECRET" ]; then
+                echo "ERROR: Failed to create web OIDC application. Response:"
+                echo "$WEB_APP"
+                exit 1
+              fi
+              echo "Web app created successfully."
+
+              # Search for existing "Canon CLI" app (idempotent)
+              CLI_CLIENT_ID=""
+              EXISTING_CLI_APP=$(search_by_name "http://${ZITADEL_HOST}/management/v1/projects/${PROJECT_ID}/apps/_search" "Canon CLI")
+
+              if [ -n "$EXISTING_CLI_APP" ]; then
+                echo "Canon CLI app already exists — retrieving client ID."
+                CLI_DETAIL=$(curl -sf --max-time 10 "http://${ZITADEL_HOST}/management/v1/projects/${PROJECT_ID}/apps/${EXISTING_CLI_APP}" \
+                  -H "$AUTH_HEADER" || true)
+                CLI_CLIENT_ID=$(echo "$CLI_DETAIL" | jq -r '.app.oidcConfig.clientId // empty')
+              else
+                echo "Creating device auth native application..."
+                CLI_APP=$(curl -sf --max-time 10 "http://${ZITADEL_HOST}/management/v1/projects/${PROJECT_ID}/apps/oidc" \
+                  -H "Content-Type: application/json" \
+                  -H "$AUTH_HEADER" \
+                  -d "{
+                    \"name\": \"Canon CLI\",
+                    \"responseTypes\": [\"OIDC_RESPONSE_TYPE_CODE\"],
+                    \"grantTypes\": [\"OIDC_GRANT_TYPE_DEVICE_CODE\", \"OIDC_GRANT_TYPE_REFRESH_TOKEN\"],
+                    \"appType\": \"OIDC_APP_TYPE_NATIVE\",
+                    \"authMethodType\": \"OIDC_AUTH_METHOD_TYPE_NONE\",
+                    \"devMode\": false
+                  }")
+                CLI_CLIENT_ID=$(echo "$CLI_APP" | jq -r '.clientId // empty')
+                if [ -z "$CLI_CLIENT_ID" ]; then
+                  echo "WARNING: Failed to create CLI device auth app (non-fatal). Response:"
+                  echo "$CLI_APP"
+                else
+                  echo "Device auth app created successfully."
+                fi
+              fi
+
+              # OIDC issuer: uses ingress.hostname, assuming Zitadel is reachable at
+              # the same hostname (default when bundled). If Zitadel runs on a separate
+              # domain, use Option B (BYOIDC) instead of the setup job.
+              {{- if .Values.ingress.hostname }}
+              OIDC_ISSUER="https://{{ .Values.ingress.hostname }}"
+              {{- else }}
+              OIDC_ISSUER="http://${ZITADEL_HOST}"
+              {{- end }}
+
+              # Write credentials to K8s secret (using kubectl apply with individual quoted args)
+              echo "Writing OIDC credentials to secret ${SECRET_NAME}..."
+              if [ -n "$CLI_CLIENT_ID" ]; then
+                kubectl create secret generic "${SECRET_NAME}" \
+                  --from-literal="OIDC_ISSUER=${OIDC_ISSUER}" \
+                  --from-literal="OIDC_CLIENT_ID=${WEB_CLIENT_ID}" \
+                  --from-literal="OIDC_CLIENT_SECRET=${WEB_CLIENT_SECRET}" \
+                  --from-literal="OIDC_DEVICE_CLIENT_ID=${CLI_CLIENT_ID}" \
+                  --dry-run=client -o yaml | kubectl apply -f -
+              else
+                kubectl create secret generic "${SECRET_NAME}" \
+                  --from-literal="OIDC_ISSUER=${OIDC_ISSUER}" \
+                  --from-literal="OIDC_CLIENT_ID=${WEB_CLIENT_ID}" \
+                  --from-literal="OIDC_CLIENT_SECRET=${WEB_CLIENT_SECRET}" \
+                  --dry-run=client -o yaml | kubectl apply -f -
+              fi
+
+              echo "Zitadel setup complete."
 {{- end }}

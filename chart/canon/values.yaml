@@ -253,9 +253,15 @@ podDisruptionBudget:
 
 ## @section Zitadel (optional — bundled identity provider for self-hosting)
 ## @param zitadel.enabled Deploy Zitadel alongside Canon
+## @param zitadel.setup Enable Zitadel auto-provisioning job (creates Canon project, web app, device app)
+## @param zitadel.setupImage Container image for the setup job (needs curl, kubectl, jq)
+## @param zitadel.adminClientId Zitadel service account client ID for setup job (required when setup=true)
+## @param zitadel.adminSecretName K8s secret containing key "client-secret" for the admin SA (required when setup=true)
 zitadel:
   enabled: false
-  ## @param zitadel.setup Enable Zitadel auto-provisioning job (not yet implemented — has no effect)
   setup: false
+  setupImage: "dtzar/helm-kubectl:3.16@sha256:732b9752c447ce91cbd908c15f9f450e2d94cd3cfec47ce1072956df532cb0bf"
+  adminClientId: ""
+  adminSecretName: ""
   # Upstream Zitadel Helm chart values pass through here
   # See: https://github.com/zitadel/zitadel-charts

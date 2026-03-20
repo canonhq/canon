@@ -5,18 +5,21 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import logging
 import re
 from enum import StrEnum
 from urllib.parse import quote
 
 from pydantic import BaseModel
 
-from .client import DEFAULT_AGENT_CONFIG, AgentConfig, ClaudeClient
+from .client import DEFAULT_AGENT_CONFIG, AgentAPIError, AgentConfig, ClaudeClient
 from .prompts import (
     SYSTEM_PROMPT,
     PRAnalysisContext,
     build_user_message,
 )
+
+logger = logging.getLogger(__name__)
 
 # ─── Types ────────────────────────────────────────────────
 
@@ -96,16 +99,24 @@ def _get_client() -> ClaudeClient:
 def analyze_pr(
     context: PRAnalysisContext,
     config: AgentConfig = DEFAULT_AGENT_CONFIG,
+    client: ClaudeClient | None = None,
 ) -> PRAnalysisResult | None:
     """Analyze a PR against repo specs using Claude. Returns None if unavailable."""
-    c = _get_client()
+    c = client or _get_client()
     if not c.is_available:
         return None
 
     max_diff_chars = max((config.max_input_tokens - 2000) * 4, 4000)
     user_message = build_user_message(context, max_diff_chars)
 
-    result = c.complete(SYSTEM_PROMPT, user_message, config)
+    try:
+        result = c.complete(SYSTEM_PROMPT, user_message, config)
+    except AgentAPIError as e:
+        if e.status_code in (401, 403):
+            logger.warning("BYOK key rejected (HTTP %s) during PR analysis", e.status_code)
+            return None
+        raise
+
     parsed = parse_analysis_response(result.text)
 
     return PRAnalysisResult(

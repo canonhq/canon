@@ -38,13 +38,16 @@ Repository = "https://github.com/canonhq/canon"
 Issues = "https://github.com/canonhq/canon/issues"
 
 [project.optional-dependencies]
-cloud = [
+server = [
     "authlib>=1.3",
     "itsdangerous>=2.1",
     "asyncpg>=0.30",
-    "google-genai>=1.0",
     "alembic>=1.14",
     "sqlalchemy[asyncio]>=2.0",
+]
+cloud = [
+    "canonhq[server]",
+    "google-genai>=1.0",
     "stripe>=11.0",
 ]
 dev = [

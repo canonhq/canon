@@ -12,9 +12,8 @@ keywords:
   - github
   - documentation
   - canon
-# Zitadel subchart dependency (uncomment when ready for integration):
-# dependencies:
-#   - name: zitadel
-#     version: "8.x.x"
-#     repository: https://charts.zitadel.com
-#     condition: zitadel.enabled
+dependencies:
+  - name: zitadel
+    version: "~8.6.0"
+    repository: https://charts.zitadel.com
+    condition: zitadel.enabled

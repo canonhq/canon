@@ -87,24 +87,65 @@ secrets:
     existingSecret: "canon-jira"
 ```
 
-### Auth0 (optional — required for web login, CLI auth, or RBAC)
+### Authentication (Optional)
 
-If you want web login, CLI auth, or role-based access control, configure an Auth0 tenant:
+Canon supports four authentication modes. Choose the one that fits your deployment.
 
-1. **Create an Auth0 Application** (type: Regular Web Application)
-   - Allowed Callback URLs: `https://<your-domain>/auth/callback`
-   - Allowed Logout URLs: `https://<your-domain>`
-2. **Enable connections** (under Authentication > Social / Enterprise):
-   - GitHub (social connection) — for developer login
-   - Google Workspace (enterprise OIDC) — for org SSO
-   - Passwordless email (magic link) — fallback for non-SSO users
-3. **Enable Device Authorization Grant** (under Application Settings > Advanced > Grant Types) — required for `canon login` CLI auth
-4. **Configure refresh token rotation** (under Application Settings > Refresh Token Rotation):
-   - Rotation: enabled
-   - Absolute lifetime: 7 days
-   - Reuse interval: 0 (rotate on every use)
+#### Option A: Bundled Zitadel (recommended for teams without an IDP)
 
-Create the Auth0 secret:
+Deploy Zitadel alongside Canon with automatic OIDC provisioning. This is a two-step process:
+
+**Step 1: Install with Zitadel enabled (without the setup job):**
+
+```bash
+helm install canon chart/canon/ --set zitadel.enabled=true
+```
+
+Wait for Zitadel to become ready, then create an admin service account via the Zitadel Console UI (`https://<your-domain>/ui/console`) or the Zitadel API. Note the client ID and secret.
+
+**Step 2: Create the admin secret and upgrade with the setup job:**
+
+```bash
+kubectl create secret generic canon-zitadel-admin \
+  --from-literal=client-secret=<your-admin-sa-secret>
+
+helm upgrade canon chart/canon/ \
+  --set zitadel.enabled=true \
+  --set zitadel.setup=true \
+  --set zitadel.adminClientId=<your-admin-sa-client-id> \
+  --set zitadel.adminSecretName=canon-zitadel-admin
+```
+
+The setup job auto-configures Zitadel with a Canon project, web app, and device auth app, then writes the OIDC credentials to a K8s secret.
+
+#### Option B: Bring Your Own OIDC Provider
+
+Works with any OIDC-compliant provider (Keycloak, Okta, Google Workspace, Entra ID, etc.). You need three values from your provider:
+
+```bash
+kubectl create secret generic canon-oidc \
+  --from-literal=OIDC_ISSUER=https://your-idp.example.com \
+  --from-literal=OIDC_CLIENT_ID=your-client-id \
+  --from-literal=OIDC_CLIENT_SECRET=your-client-secret
+```
+
+Then in `values.yaml`:
+
+```yaml
+secrets:
+  oidc:
+    existingSecret: "canon-oidc"
+```
+
+**Provider-specific setup:**
+
+- **Zitadel (external):** Create a Web Application in your Zitadel project. Set redirect URI to `https://<your-domain>/auth/callback`. Enable Device Authorization grant for CLI auth.
+- **Keycloak:** Create a Client in your realm (Client type: OpenID Connect, Access type: confidential). Add `https://<your-domain>/auth/callback` as a valid redirect URI. The issuer is `https://<keycloak-host>/realms/<realm-name>`.
+- **Okta:** Create a Web Application integration. Add `https://<your-domain>/auth/callback` as a sign-in redirect URI. The issuer is `https://<org>.okta.com` (or your custom authorization server URL).
+
+#### Option C: Auth0 (legacy — existing deployments)
+
+If you already have an Auth0 tenant configured:
 
 ```bash
 kubectl create secret generic canon-auth0 \
@@ -121,21 +162,31 @@ secrets:
     existingSecret: "canon-auth0"
 ```
 
+New deployments should prefer Option A or B. Auth0 support is maintained for backward compatibility.
+
+#### Option D: No Auth (dev/trusted network)
+
+If no auth secrets are configured, Canon runs with anonymous access and all permissions granted. Suitable for local development or trusted internal networks.
+
 ### Database Tables
 
-Auth hardening requires two additional tables (`sessions` and `org_members`). These are created automatically on startup via `ensure_schema` — the same mechanism used for all other tables. If `ensure_schema` fails (e.g., insufficient DB permissions), the server will fail to start — check pod logs for SQL errors. Be aware of the new tables when planning upgrades:
+Auth requires two additional tables (`sessions` and `org_members`). These are created automatically on startup via `ensure_schema` — the same mechanism used for all other tables. If `ensure_schema` fails (e.g., insufficient DB permissions), the server will fail to start — check pod logs for SQL errors. Be aware of the new tables when planning upgrades:
 
 - `sessions` — per-device session tracking with refresh token hashes, device labels, and revocation support
 - `org_members` — per-org role assignments (viewer/editor/admin) with an `assigned_by` audit trail
 
-### Additional Environment Variables
+### Auth Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `AUTH0_DOMAIN` | Yes (if auth enabled) | Auth0 tenant domain |
-| `AUTH0_CLIENT_ID` | Yes (if auth enabled) | Auth0 application client ID |
-| `AUTH0_CLIENT_SECRET` | Yes (if auth enabled) | Auth0 application client secret |
-| `AUTH0_DEVICE_CLIENT_ID` | No | Separate client ID for device auth, if using a dedicated Auth0 app for CLI |
+| `OIDC_ISSUER` | Yes (if OIDC auth) | OIDC provider issuer URL (must start with `https://`) |
+| `OIDC_CLIENT_ID` | Yes (if OIDC auth) | OIDC application client ID |
+| `OIDC_CLIENT_SECRET` | Yes (if OIDC auth) | OIDC application client secret |
+| `OIDC_AUDIENCE` | No | OIDC API audience (for API-specific tokens) |
+| `AUTH0_DOMAIN` | Yes (if Auth0 auth) | Auth0 tenant domain (legacy) |
+| `AUTH0_CLIENT_ID` | Yes (if Auth0 auth) | Auth0 application client ID (legacy) |
+| `AUTH0_CLIENT_SECRET` | Yes (if Auth0 auth) | Auth0 application client secret (legacy) |
+| `AUTH0_DEVICE_CLIENT_ID` | No | Separate client ID for device auth (legacy) |
 
 All secrets should be managed via K8s secrets or your preferred secret manager — never in config files.
 
