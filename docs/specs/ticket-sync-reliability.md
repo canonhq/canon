@@ -17,7 +17,7 @@ proxy configuration.
 
 ## 1. Background
 
-<!-- canon:system:1 status:done -->
+<!-- canon:system:1 status:todo -->
 
 A full spec audit and issue cleanup on 2026-03-18 exposed several reliability
 gaps in the ticket sync pipeline:

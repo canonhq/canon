@@ -160,7 +160,7 @@ and reports actionable fixes.
 <!-- canon:ticket:github:363 -->
 ## 4. Unify Documentation and Naming
 
-<!-- specwright:system:4 status:todo -->
+<!-- canon:system:4 status:in_progress -->
 
 Fix naming inconsistencies and clarify the two installation paths.
 
