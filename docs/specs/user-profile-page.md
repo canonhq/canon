@@ -30,7 +30,7 @@ This visibility is essential as we deploy the Auth0 role-assignment Action and e
 
 ## 2. Profile Header
 
-<!-- specwright:system:2 status:done -->
+<!-- canon:system:2 status:in_progress -->
 
 The profile header presents the user's visual identity, including avatar, display name, email address, and GitHub account linkage.
 
