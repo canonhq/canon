@@ -198,7 +198,7 @@ Field mapping is optional. When absent, behavior matches today (summary = sectio
 - [x] MUST validate field map sources against known spec model fields at config parse time
 - [x] SHOULD support array/list field sources (tags → labels)
 
-<!-- canon:ticket:github:368 -->
+<!-- canon:ticket:github:432 -->
 ### 2.3 Hierarchy Templates
 
 <!-- canon:system:2.3 status:in_progress -->
@@ -229,6 +229,7 @@ When `hierarchy` is absent, all sections create "Task" issues (current behavior)
 - [x] MUST validate issue type names are non-empty strings
 - [ ] SHOULD support Linear team-specific workflow states in hierarchy context
 
+<!-- canon:ticket:github:433 -->
 ## 3. Multi-System Routing
 
 <!-- canon:system:3 status:in_progress -->
@@ -276,6 +277,7 @@ Routing matches against section-level or frontmatter-level metadata. When no rou
 - [x] SHOULD support routing by spec file path glob
 
 <!-- section done: old ticket #266 closed -->
+<!-- canon:ticket:github:434 -->
 ## 4. Enterprise Configuration Layers
 
 <!-- canon:system:4 status:in_progress -->
@@ -371,7 +373,7 @@ When `auth_profile` is set, the adapter factory reads credentials from the named
 - [x] MUST validate that referenced auth profiles exist in config
 - [x] MUST NOT store credentials in config files (env vars only)
 
-<!-- canon:ticket:github:369 -->
+<!-- canon:ticket:github:435 -->
 ### 4.3 Ticket Description Templates
 
 <!-- canon:system:4.3 status:in_progress -->
@@ -477,7 +479,7 @@ Existing repos must work without changes. The migration path:
 
 1. **No config change needed**: Repos with today's simple config (`ticket_system: jira`, `project_key: PAY`) continue to work. The parser synthesizes a `TicketMappingConfig` from the legacy fields.
 2. **Gradual adoption**: Repos can add `ticket_systems:` alongside legacy fields. If both exist, `ticket_systems:` takes precedence with a deprecation warning on the legacy fields.
-3. **Existing comments preserved**: The `<!-- specwright:ticket:jira:PAY-142 -->` format remains unchanged. No migration of spec files required.
+3. **Existing comments preserved**: The `<!-- canon:ticket:{system}:{id} -->` format remains unchanged. No migration of spec files required.
 
 ### Acceptance Criteria
 
@@ -488,6 +490,7 @@ Existing repos must work without changes. The migration path:
 - [x] MUST NOT break the CLI (canon sync) or GitHub webhook handler
 <!-- specwright:realized-in:PR#291 file:src/specwright/cli/sync_cmd.py -->
 
+<!-- canon:ticket:github:436 -->
 ## 7. Adapter Protocol Changes
 
 <!-- canon:system:7 status:in_progress -->

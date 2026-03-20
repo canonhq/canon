@@ -21,10 +21,10 @@ Engineers and PMs currently need to navigate GitHub repos or the Spec Explorer w
 
 **Related:** [#5](https://github.com/canonhq/canon/issues/5)
 
+<!-- canon:ticket:github:426 -->
 ## 2. Slack App Setup
 
 <!-- canon:system:2 status:done -->
-<!-- specwright:ticket:github:5 -->
 
 ### 2.1 Configuration
 
@@ -40,10 +40,10 @@ Engineers and PMs currently need to navigate GitHub repos or the Spec Explorer w
 - [ ] `@canon` mention handler processing natural language queries
 - [ ] Bot deployed alongside the main Canon application
 
+<!-- canon:ticket:github:427 -->
 ## 3. Query Capabilities
 
 <!-- specwright:system:3 status:todo -->
-<!-- specwright:ticket:github:5 -->
 
 ### 3.1 Structured Commands
 

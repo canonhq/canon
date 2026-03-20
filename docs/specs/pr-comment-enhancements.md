@@ -24,7 +24,6 @@ When the Canon agent posts comments on PRs (spec coverage, analysis results), th
 ## 2. Web App Links in PR Comments
 
 <!-- specwright:system:2 status:done -->
-<!-- specwright:ticket:github:94 -->
 
 Update the GitHub comment templates in the agent/analyzer to include deep links to the Canon web app for each referenced spec.
 
@@ -58,7 +57,6 @@ For each spec mentioned in a PR comment, include a link like:
 ## 3. Preview Deployments for Spec Explorer
 
 <!-- specwright:system:3 status:done -->
-<!-- specwright:ticket:github:41 -->
 
 Enable preview deployments for the Spec Explorer web UI so reviewers can see UI changes before merging. The main webhook handler cannot be previewed (single webhook URL), but the read-only web UI can.
 

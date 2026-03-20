@@ -24,7 +24,6 @@ Today specs are just files in a repo with no review gates. Anyone can merge a sp
 ## 2. Review States
 
 <!-- specwright:system:2 status:done -->
-<!-- specwright:ticket:github:19 -->
 
 ### 2.1 Spec Lifecycle
 
@@ -50,10 +49,10 @@ draft → in_review → approved → active
 - [ ] Review status is tracked in spec frontmatter or status comments
 - [ ] Only `approved` specs trigger automatic ticket generation (when `auto_tickets: true`)
 
+<!-- canon:ticket:github:428 -->
 ## 3. Review Interface
 
 <!-- canon:system:3 status:in_progress -->
-<!-- specwright:ticket:github:19 -->
 
 ### 3.1 GitHub-Native Option
 

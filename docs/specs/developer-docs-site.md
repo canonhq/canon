@@ -283,7 +283,6 @@ Using Canon in CI/CD pipelines:
 - [x] CI integration guide shows GitHub Actions workflow examples
 - [x] Each guide is task-oriented (not reference-oriented) with clear steps
 
-<!-- specwright:ticket:github:262 -->
 ## 7. Reference
 
 <!-- specwright:system:7 status:done -->
@@ -354,7 +353,6 @@ Full `CANON.yaml` schema with JSON Schema or table format.
 - [x] Auto-generated pages include a "generated on" timestamp and link to source
 <!-- canon:realized-in:audit file:docs-site/.vitepress/scripts/gen-cli-ref.py -->
 
-<!-- specwright:ticket:github:263 -->
 ## 8. Architecture
 
 <!-- specwright:system:8 status:done -->
@@ -460,7 +458,7 @@ Use VitePress multi-version support (via directory-based versioning or a plugin 
 - [x] Canonical URLs point to latest version
 - [ ] Auto-generated reference pages are version-specific
 
-<!-- canon:ticket:github:305 -->
+<!-- canon:ticket:github:186 -->
 ## 11. Deployment & Hosting
 
 <!-- specwright:system:11 status:in_progress -->

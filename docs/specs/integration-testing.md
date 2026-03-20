@@ -24,7 +24,6 @@ All existing tests are unit tests that mock external dependencies (GitHub API, A
 ## 2. Webhook Handler Integration Tests
 
 <!-- specwright:system:2 status:done -->
-<!-- specwright:ticket:github:95 -->
 
 Test webhook handlers through the full FastAPI request/response cycle using `httpx.AsyncClient` with the real app instance.
 
@@ -54,10 +53,10 @@ Test webhook handlers through the full FastAPI request/response cycle using `htt
 - [ ] Integration tests run in CI alongside unit tests
 <!-- specwright:realized-in:PR#118 file:.github/workflows/ci.yml -->
 
+<!-- canon:ticket:github:401 -->
 ## 3. GitHub API Client Integration Tests
 
 <!-- canon:system:3 status:in_progress -->
-<!-- specwright:ticket:github:95 -->
 
 Test the GitHub API client (`github/client.py`) against a sandboxed environment to verify JWT generation, API call formatting, and response parsing.
 

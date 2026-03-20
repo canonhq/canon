@@ -21,10 +21,10 @@ A security review identified three vulnerabilities that must be resolved before 
 
 **Related:** [#97](https://github.com/canonhq/canon/issues/97), [#98](https://github.com/canonhq/canon/issues/98), [#99](https://github.com/canonhq/canon/issues/99)
 
+<!-- canon:ticket:github:409 -->
 ## 2. Secure Unauthenticated MCP Endpoint
 
 <!-- canon:system:2 status:todo -->
-<!-- specwright:ticket:github:99 -->
 
 **Severity: HIGH**
 
@@ -39,10 +39,10 @@ The MCP endpoint at `/mcp` provides read/write access to all connected GitHub re
 - [ ] Existing authenticated MCP access continues to work
 - [ ] MCP endpoint returns appropriate error messages for auth failures
 
+<!-- canon:ticket:github:410 -->
 ## 3. Fix Authentication Bypass When Auth0 Is Disabled
 
 <!-- canon:system:3 status:todo -->
-<!-- specwright:ticket:github:98 -->
 
 **Severity: HIGH**
 
@@ -59,10 +59,10 @@ When Auth0 is not configured, all users receive anonymous access with full admin
 - [ ] Auth middleware logs a warning when Auth0 is not configured
 - [ ] Development mode can optionally bypass auth with an explicit `DEV_AUTH_BYPASS=true` env var (never set in production)
 
+<!-- canon:ticket:github:411 -->
 ## 4. Remove Hardcoded Session Secret Fallback
 
 <!-- specwright:system:4 status:todo -->
-<!-- specwright:ticket:github:97 -->
 
 **Severity: HIGH**
 

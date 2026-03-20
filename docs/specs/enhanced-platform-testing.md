@@ -13,6 +13,7 @@ tags: [testing, ci, infrastructure, oidc, oss, helm]
 
 Establish a robust testing ecosystem for Canon's platform that validates all deployment configurations, infrastructure models, and auth provider modes — ensuring conviction that changes work before they hit the public FOSS repo.
 
+<!-- canon:ticket:github:231 -->
 ## 1. Background
 
 <!-- canon:system:1 status:todo -->
@@ -44,6 +45,7 @@ Canon has 1,800+ unit tests with strong coverage of individual modules, but sign
 - `oidc-migration.md` — introduces the provider abstraction this testing spec validates
 - `integration-testing.md` — partially implemented webhook integration tests; this spec supersedes its scope
 
+<!-- canon:ticket:github:392 -->
 ## 2. Configuration Matrix Testing
 
 <!-- canon:system:2 status:todo -->
@@ -93,6 +95,7 @@ def config_profile(request) -> Settings:
 <!-- canon:realized-in:PR#388 file:tests/helpers/profiles.py -->
 - [ ] All configuration tests run in <2 seconds (no I/O, no network)
 
+<!-- canon:ticket:github:393 -->
 ## 3. Auth Integration Tests
 
 <!-- canon:system:3 status:todo -->
@@ -172,6 +175,7 @@ Test middleware ordering and behavior:
 - [ ] Token refresh integration tested: expired access token + valid refresh token → new session
 - [ ] All integration tests marked with `@pytest.mark.integration`
 
+<!-- canon:ticket:github:394 -->
 ## 4. Helm Template Rendering Tests
 
 <!-- canon:system:4 status:todo -->
@@ -229,6 +233,7 @@ Add a `helm-template-test` job to CI that runs these tests. Faster than `helm li
 - [ ] No `helm template` errors for any values combination (production, preview, dev, bare defaults)
 - [ ] Tests integrated into CI as a job parallel to existing `helm-lint`
 
+<!-- canon:ticket:github:395 -->
 ## 5. Docker Smoke Tests
 
 <!-- canon:system:5 status:todo -->
@@ -301,6 +306,7 @@ Add after the existing `docker build` step in CI:
 - [ ] Auth-disabled smoke: `/app/` accessible without auth
 - [ ] Container exits cleanly on SIGTERM (graceful shutdown)
 
+<!-- canon:ticket:github:396 -->
 ## 6. OSS Export Validation
 
 <!-- canon:system:6 status:todo -->
@@ -399,6 +405,7 @@ oss-validation:
 - [ ] Import integrity test verifies all exported modules are importable
 - [ ] Export validation runs on every PR (catches export breakage early)
 
+<!-- canon:ticket:github:397 -->
 ## 7. Database Migration Testing
 
 <!-- canon:system:7 status:todo -->
@@ -488,6 +495,7 @@ integration-test:
 - [ ] Migration tests run in CI with Postgres service container
 - [ ] Migration tests marked with `@pytest.mark.integration`
 
+<!-- canon:ticket:github:398 -->
 ## 8. CI Pipeline Updates
 
 <!-- canon:system:8 status:todo -->
@@ -551,6 +559,7 @@ Add Postgres service container and migration tests to the existing `integration-
 - [ ] Total CI time under 10 minutes for a typical PR
 - [ ] Coverage report job unchanged (still combines unit + integration)
 
+<!-- canon:ticket:github:399 -->
 ## 9. Test Utilities and Fixtures
 
 <!-- canon:system:9 status:todo -->
@@ -630,6 +639,7 @@ def helm_template(
 - [ ] All helpers are importable from `tests/` without external service dependencies
 - [ ] Helpers documented with docstrings and usage examples
 
+<!-- canon:ticket:github:400 -->
 ## 10. Rollout Plan
 
 <!-- canon:system:10 status:todo -->

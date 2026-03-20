@@ -16,7 +16,6 @@ A read-only dashboard that provides centralized discovery and viewing of specifi
 ## 1. Background
 
 <!-- specwright:system:1 status:done -->
-<!-- specwright:ticket:github:32 -->
 
 Specifications are distributed across multiple repositories in `docs/specs/*.md` files. This distribution forces product managers and engineers to manually navigate GitHub directory structures to locate specifications, verify their status, or identify work in progress. The Spec Explorer consolidates this information into a unified interface, providing organization-wide visibility into all specifications and their current state.
 
@@ -123,7 +122,6 @@ The page includes:
 ## 5. Live Search
 
 <!-- specwright:system:5 status:done -->
-<!-- specwright:ticket:github:36 -->
 
 The search functionality indexes all specifications and documentation (ADRs, guides, READMEs) across the organization. The hybrid search index supports PR analysis by retrieving relevant context documents based on PR metadata and file changes.
 
@@ -172,9 +170,6 @@ Cache invalidation uses prefix-based matching to efficiently clear all related e
 ## 7. Search Infrastructure
 
 <!-- specwright:system:7 status:deprecated -->
-<!-- specwright:ticket:github:33 -->
-<!-- specwright:ticket:github:34 -->
-<!-- specwright:ticket:github:35 -->
 
 The search infrastructure provides semantic search capabilities through Neon Postgres with pgvector extension, Voyage AI embedding service, and an automated indexing pipeline triggered by repository push events.
 
@@ -198,7 +193,6 @@ The search API returns ranked results with snippet highlights for improved disco
 ## 8. Production Hardening
 
 <!-- specwright:system:8 status:done -->
-<!-- specwright:ticket:github:38 -->
 
 Production readiness requirements include HTTP caching headers, structured logging, error handling, and deployment configuration updates for web-specific settings.
 

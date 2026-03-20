@@ -33,10 +33,10 @@ Meanwhile, the structured editor uses card-based section components with accent 
 2. New Vue components render sections as read-only cards
 3. `rendered_html` field becomes unused for web view (kept for email/export)
 
+<!-- canon:ticket:github:429 -->
 ## 2. Spec Summary Header
 
 <!-- canon:system:2 status:in_progress -->
-<!-- canon:ticket:github:306 -->
 
 Replace the current `SpecHeader.vue` metadata strip with a richer summary panel.
 
@@ -48,10 +48,10 @@ Replace the current `SpecHeader.vue` metadata strip with a richer summary panel.
 - [ ] Keep Edit and View on GitHub action buttons
 - [ ] Show review status badge alongside spec status badge
 
+<!-- canon:ticket:github:430 -->
 ## 3. Section Cards
 
 <!-- canon:system:3 status:todo -->
-<!-- canon:ticket:github:307 -->
 
 Render each spec section as a read-only card matching the editor's `SectionCard` visual style.
 

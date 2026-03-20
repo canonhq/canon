@@ -432,6 +432,7 @@ Conditionally mount OIDC secret in deployment template, same pattern as Auth0:
 - [x] Both Auth0 and OIDC secrets can coexist (cloud uses Auth0, preview could use OIDC)
 <!-- canon:realized-in:PR#386 file:chart/canon/templates/deployment.yaml:61-68 -->
 
+<!-- canon:ticket:github:405 -->
 ## 8. Bundled Zitadel (Optional Subchart)
 
 <!-- canon:system:8 status:done -->
@@ -604,6 +605,7 @@ Add the OIDC migration spec to the export (it contains no proprietary informatio
 - [x] OSS build produces working Docker image with auth support
 <!-- canon:realized-in:PR#386 file:tests/test_oss_export.py:63-222 -->
 
+<!-- canon:ticket:github:406 -->
 ## 10. CI/CD Updates
 
 <!-- canon:system:10 status:done -->
@@ -627,6 +629,7 @@ The OSS CI workflow (`oss/ci.yml`) needs to test with OIDC configuration in addi
 - [x] OSS CI runs tests with both auth-disabled and OIDC-configured modes
 - [x] No Doppler configuration changes required for initial rollout
 
+<!-- canon:ticket:github:407 -->
 ## 11. Documentation Updates
 
 <!-- canon:system:11 status:done -->
@@ -725,6 +728,7 @@ Each auth test should run against both provider configurations:
 - [x] First-user-bootstrap test validates admin role assignment
 - [x] Single-tenant RBAC test validates `users.role` → permission resolution
 
+<!-- canon:ticket:github:408 -->
 ## 14. Rollout Plan
 
 <!-- canon:system:14 status:todo -->

@@ -182,69 +182,69 @@ def run_sync(
         reverse_sync,
     )
 
-    for doc in docs:
-        print(f"\n{doc.frontmatter.title} ({doc.file_path})")
-        print("-" * 50)
+    async def _sync_all() -> None:
+        for doc in docs:
+            print(f"\n{doc.frontmatter.title} ({doc.file_path})")
+            print("-" * 50)
 
-        # Resolve adapter per-doc via routing (when multiple systems exist).
-        # Note: when an external adapter is provided, routing is skipped and
-        # sys_config stays None. Multi-system configs with an external adapter
-        # won't get custom templates/hierarchy/status_map — this matches the
-        # webhook path where _resolve_adapter handles routing centrally.
-        doc_adapter = adapter
-        project_key = ""
-        sys_config = None
-        if not doc_adapter and not mapping.is_empty():
-            # Route per-doc for now; per-section routing is Phase 3
-            target_name = resolve_target(
-                doc.sections[0] if doc.sections else None,
-                doc,
-                mapping.routing,
-                mapping.ticket_systems,
-            )
-            if target_name:
-                sys_config = mapping.ticket_systems[target_name]
-                doc_adapter = from_config(target_name, sys_config, mapping.auth_profiles or None)
-                project_key = sys_config.project or ""
-
-        if not doc_adapter:
-            print("  Skipped: no adapter resolved for this spec")
-            continue
-
-        # Resolve single-system config before the forward/reverse split so
-        # both directions get the sys_config (not just forward).
-        if not sys_config:
-            single = mapping.single_system()
-            if single:
-                sys_config = single
-
-        if backfill_fingerprints:
-            result = asyncio.run(engine_backfill(doc, doc_adapter, dry_run=dry_run))
-            updated_md = doc.raw  # backfill doesn't modify spec markdown
-        elif reverse:
-            updated_md, result = asyncio.run(
-                reverse_sync(doc, doc_adapter, system_config=sys_config)
-            )
-        else:
-            # Resolve project key from mapping config or legacy config
-            if not project_key:
-                project_key = (
-                    doc.frontmatter.ticket_project
-                    or (sys_config.project if sys_config else None)
-                    or config.project_key
-                    or ""
+            # Resolve adapter per-doc via routing (when multiple systems exist).
+            # Note: when an external adapter is provided, routing is skipped and
+            # sys_config stays None. Multi-system configs with an external adapter
+            # won't get custom templates/hierarchy/status_map — this matches the
+            # webhook path where _resolve_adapter handles routing centrally.
+            doc_adapter = adapter
+            project_key = ""
+            sys_config = None
+            if not doc_adapter and not mapping.is_empty():
+                # Route per-doc for now; per-section routing is Phase 3
+                target_name = resolve_target(
+                    doc.sections[0] if doc.sections else None,
+                    doc,
+                    mapping.routing,
+                    mapping.ticket_systems,
                 )
-            if not project_key:
-                print("  Skipped: no project key configured")
+                if target_name:
+                    sys_config = mapping.ticket_systems[target_name]
+                    doc_adapter = from_config(target_name, sys_config, mapping.auth_profiles or None)
+                    project_key = sys_config.project or ""
+
+            if not doc_adapter:
+                print("  Skipped: no adapter resolved for this spec")
                 continue
 
-            # Resolve lifecycle_sync config
-            lifecycle_sync_cfg = config.specs.lifecycle_sync
-            # --close-stale forces close_only (never reopens)
-            effective_lifecycle = "close_only" if close_stale else lifecycle_sync_cfg
+            # Resolve single-system config before the forward/reverse split so
+            # both directions get the sys_config (not just forward).
+            if not sys_config:
+                single = mapping.single_system()
+                if single:
+                    sys_config = single
 
-            updated_md, result = asyncio.run(
-                forward_sync(
+            if backfill_fingerprints:
+                result = await engine_backfill(doc, doc_adapter, dry_run=dry_run)
+                updated_md = doc.raw  # backfill doesn't modify spec markdown
+            elif reverse:
+                updated_md, result = await reverse_sync(
+                    doc, doc_adapter, system_config=sys_config
+                )
+            else:
+                # Resolve project key from mapping config or legacy config
+                if not project_key:
+                    project_key = (
+                        doc.frontmatter.ticket_project
+                        or (sys_config.project if sys_config else None)
+                        or config.project_key
+                        or ""
+                    )
+                if not project_key:
+                    print("  Skipped: no project key configured")
+                    continue
+
+                # Resolve lifecycle_sync config
+                lifecycle_sync_cfg = config.specs.lifecycle_sync
+                # --close-stale forces close_only (never reopens)
+                effective_lifecycle = "close_only" if close_stale else lifecycle_sync_cfg
+
+                updated_md, result = await forward_sync(
                     doc,
                     doc_adapter,
                     project_key,
@@ -253,44 +253,45 @@ def run_sync(
                     system_config=sys_config,
                     lifecycle_sync=effective_lifecycle,
                 )
+
+            # Report results
+            if result.created:
+                for c in result.created:
+                    print(f"  Created: {c.section_id} → {c.ticket_id} ({c.ticket_url})")
+            if result.updated:
+                for u in result.updated:
+                    print(f"  Existing: {u.section_id} → {u.ticket_id}")
+            if result.status_changed:
+                for sc in result.status_changed:
+                    print(f"  Updated: {sc.section_id} {sc.old_state} → {sc.new_state}")
+            if result.closed:
+                for cl in result.closed:
+                    print(f"  Closed: {cl.section_id} → {cl.ticket_id}")
+            if result.reopened:
+                for ro in result.reopened:
+                    print(f"  Reopened: {ro.section_id} → {ro.ticket_id}")
+            if result.skipped:
+                for sk in result.skipped:
+                    print(f"  Skipped: {sk.section_id} — {sk.reason}")
+            if result.errors:
+                for e in result.errors:
+                    print(f"  Error: {e.section_id}: {e.error}")
+            has_changes = (
+                result.created
+                or result.status_changed
+                or result.closed
+                or result.reopened
+                or result.errors
             )
+            if not has_changes:
+                print("  No changes.")
 
-        # Report results
-        if result.created:
-            for c in result.created:
-                print(f"  Created: {c.section_id} → {c.ticket_id} ({c.ticket_url})")
-        if result.updated:
-            for u in result.updated:
-                print(f"  Existing: {u.section_id} → {u.ticket_id}")
-        if result.status_changed:
-            for sc in result.status_changed:
-                print(f"  Updated: {sc.section_id} {sc.old_state} → {sc.new_state}")
-        if result.closed:
-            for cl in result.closed:
-                print(f"  Closed: {cl.section_id} → {cl.ticket_id}")
-        if result.reopened:
-            for ro in result.reopened:
-                print(f"  Reopened: {ro.section_id} → {ro.ticket_id}")
-        if result.skipped:
-            for sk in result.skipped:
-                print(f"  Skipped: {sk.section_id} — {sk.reason}")
-        if result.errors:
-            for e in result.errors:
-                print(f"  Error: {e.section_id}: {e.error}")
-        has_changes = (
-            result.created
-            or result.status_changed
-            or result.closed
-            or result.reopened
-            or result.errors
-        )
-        if not has_changes:
-            print("  No changes.")
+            # Write back unless dry run
+            if not dry_run and updated_md != doc.raw:
+                spec_path = root / doc.file_path
+                spec_path.write_text(updated_md)
+                print(f"  Written: {doc.file_path}")
+            elif dry_run and updated_md != doc.raw:
+                print("  (dry run — changes not written)")
 
-        # Write back unless dry run
-        if not dry_run and updated_md != doc.raw:
-            spec_path = root / doc.file_path
-            spec_path.write_text(updated_md)
-            print(f"  Written: {doc.file_path}")
-        elif dry_run and updated_md != doc.raw:
-            print("  (dry run — changes not written)")
+    asyncio.run(_sync_all())

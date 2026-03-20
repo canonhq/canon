@@ -24,7 +24,6 @@ PostHog supports automatic exception capture on both JS and Python SDKs, but it 
 ## 2. Backend Exception Capture
 
 <!-- specwright:system:2 status:done -->
-<!-- specwright:ticket:github:86 -->
 
 Enable PostHog exception capture in the Python SDK (`src/specwright/`) for server-side errors.
 
@@ -43,7 +42,6 @@ Enable PostHog exception capture in the Python SDK (`src/specwright/`) for serve
 ## 3. Frontend Exception Capture
 
 <!-- specwright:system:3 status:done -->
-<!-- specwright:ticket:github:86 -->
 
 Enable PostHog exception capture in the JS SDK for client-side errors in the Vue frontend.
 

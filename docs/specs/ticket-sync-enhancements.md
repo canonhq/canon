@@ -21,10 +21,10 @@ The ticket sync engine currently supports Jira, Linear, and GitHub Issues via an
 
 **Related:** [#59](https://github.com/canonhq/canon/issues/59), [#56](https://github.com/canonhq/canon/issues/56)
 
+<!-- canon:ticket:github:437 -->
 ## 2. Asana Ticket Adapter
 
 <!-- specwright:system:2 status:todo -->
-<!-- specwright:ticket:github:59 -->
 
 Implement the `TicketAdapter` protocol for Asana, extending ticket sync to teams using Asana for project management.
 
