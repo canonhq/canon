@@ -1,0 +1,42 @@
+# Canon configuration — https://canonhq.co/docs/config
+team: canon
+
+ticket_systems:
+  primary:
+    system: github
+    project: "canonhq/canon"
+    status_map:
+      forward:
+        draft: "Backlog"
+        todo: "To Do"
+        in_progress: "In Progress"
+        done: "Done"
+        blocked: "Blocked"
+        deprecated: "Won't Do"
+
+specs:
+  auto_tickets: true
+  require_review: false
+  lifecycle_sync: true
+  doc_paths:
+    - "docs/specs/*.md"
+
+agents:
+  doc_updates: true
+  pr_analysis: true
+  stale_detection: "30d"
+  realization_check: true
+
+ide:
+  auto_context:
+    enabled: true
+    on_session_start: true
+    on_prompt: true
+    max_specs: 5
+  auto_verify:
+    enabled: true
+    on_stop: true
+    on_commit: false
+    confidence: medium
+  ai_exposure:
+    default: full
