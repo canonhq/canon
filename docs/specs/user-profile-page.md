@@ -55,6 +55,9 @@ The interface presents both the user's effective role and the granular permissio
 
 - [x] Display inferred role as a badge (Viewer, Editor, or Admin) based on the user's permission set
 - [x] List all granted permissions with human-readable descriptions (e.g., `specs:read` → "Read access to specs")
+<!-- canon:realized-in:PR#452 file:src/canon/auth/permissions.py -->
+<!-- canon:realized-in:PR#452 file:src/canon/web/profile_routes.py -->
+<!-- canon:realized-in:PR#452 file:frontend/src/components/profile/ProfileCard.vue -->
 - [x] Visually distinguish between granted and ungrantable permissions by showing the full Permission enum
 - [x] Display authentication method (session, jwt, or api_key) indicating how the user authenticated
 - [x] Include explanatory text noting that permissions are derived from Auth0 RBAC and organization membership
