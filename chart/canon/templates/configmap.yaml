@@ -19,3 +19,9 @@ data:
   {{- if .Values.config.environment }}
   ENVIRONMENT: {{ .Values.config.environment | quote }}
   {{- end }}
+  SRE_ALERTS_ENABLED: {{ .Values.config.sreAlertsEnabled | quote }}
+  SRE_ERROR_SPIKE_THRESHOLD: {{ .Values.config.sreErrorSpikeThreshold | quote }}
+  SRE_ERROR_SPIKE_WINDOW: {{ .Values.config.sreErrorSpikeWindow | quote }}
+  SRE_SLOW_QUERY_THRESHOLD_MS: {{ .Values.config.sreSlowQueryThresholdMs | quote }}
+  SRE_AUTO_TRIAGE_ENABLED: {{ .Values.config.sreAutoTriageEnabled | quote }}
+  SRE_WEEKLY_DIGEST_ENABLED: {{ .Values.config.sreWeeklyDigestEnabled | quote }}

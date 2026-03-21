@@ -169,3 +169,14 @@ Secret name for PostHog credentials
 {{ include "canon.fullname" . }}-posthog
 {{- end -}}
 {{- end }}
+
+{{/*
+Secret name for Slack credentials
+*/}}
+{{- define "canon.slackSecretName" -}}
+{{- if .Values.secrets.slack.existingSecret -}}
+{{ .Values.secrets.slack.existingSecret }}
+{{- else -}}
+{{ include "canon.fullname" . }}-slack
+{{- end -}}
+{{- end }}

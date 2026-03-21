@@ -135,6 +135,19 @@ class Settings(BaseSettings):
     posthog_logs_enabled: bool = False
     posthog_logs_min_level: str = "WARNING"
 
+    # SRE Alerting
+    slack_alerts_webhook_url: str = ""
+    sre_alerts_enabled: bool = True
+    sre_error_spike_threshold: int = 10
+    sre_error_spike_window: int = 300
+    sre_slow_query_threshold_ms: int = 500
+    sre_auto_triage_enabled: bool = True
+    sre_weekly_digest_enabled: bool = False
+
+    @property
+    def slack_alerts_enabled(self) -> bool:
+        return bool(self.slack_alerts_webhook_url)
+
     # Server
     port: int = 3000
     log_level: str = "info"

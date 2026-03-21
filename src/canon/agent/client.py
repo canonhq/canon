@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 import anthropic
 from pydantic import BaseModel
+
+from canon import analytics
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +63,24 @@ class ClaudeClient:
         self, system_prompt: str, user_message: str, config: AgentConfig
     ) -> CompletionResult:
         if not self._client:
+            analytics.track(
+                "agent_call_completed",
+                properties={
+                    "model": config.model,
+                    "duration_ms": 0,
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "success": False,
+                    "error_message": "Agent unavailable (no API key)",
+                },
+            )
             raise AgentUnavailableError()
+
+        start = time.monotonic()
+        success = True
+        error_message = ""
+        input_tokens = 0
+        output_tokens = 0
 
         try:
             response = self._client.messages.create(
@@ -72,14 +92,31 @@ class ClaudeClient:
             )
 
             text = "".join(block.text for block in response.content if block.type == "text")
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
 
             return CompletionResult(
                 text=text,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
         except anthropic.APIError as e:
+            success = False
+            error_message = str(e)
             raise AgentAPIError(str(e), getattr(e, "status_code", None)) from e
+        finally:
+            duration_ms = round((time.monotonic() - start) * 1000, 1)
+            analytics.track(
+                "agent_call_completed",
+                properties={
+                    "model": config.model,
+                    "duration_ms": duration_ms,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "success": success,
+                    "error_message": error_message,
+                },
+            )
 
 
 async def get_claude_client_for_org(

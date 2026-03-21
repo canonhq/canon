@@ -10,6 +10,8 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
+from canon import analytics
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,13 +44,23 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         path = request.url.path
 
-        # Skip noisy health check and static asset logs
+        # Skip health checks and static assets from both logging and analytics
         if path in ("/healthz", "/readyz") or path.startswith("/static/"):
             return response
 
         logger.info(
             "http_request",
             extra={
+                "method": request.method,
+                "path": path,
+                "status": response.status_code,
+                "duration_ms": duration_ms,
+                "user_agent": request.headers.get("user-agent", ""),
+            },
+        )
+        analytics.track(
+            "request_completed",
+            properties={
                 "method": request.method,
                 "path": path,
                 "status": response.status_code,
@@ -113,6 +125,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self._hits[key] = hits
 
         if len(hits) >= self.max_requests:
+            # Log key type (user/ip) but not the value to avoid credential exposure
+            key_type = key.split(":")[0] if ":" in key else "unknown"
+            analytics.track(
+                "rate_limit_hit",
+                properties={
+                    "path": request.url.path,
+                    "client_type": key_type,
+                    "limit": self.max_requests,
+                    "window": self.window_seconds,
+                },
+            )
             return Response(
                 content=json.dumps(
                     {"error": "Rate limit exceeded", "retry_after": self.window_seconds}

@@ -17,6 +17,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import ClientDisconnect
 
 from . import analytics, otel_logging
+from .alerts.slack import SlackAlerter
 from .auth.api_key_routes import api_key_router
 from .auth.device_routes import device_router
 from .auth.github_routes import github_auth_router
@@ -27,6 +28,7 @@ from .billing.routes import router as billing_router
 from .billing.routes import webhook_router as billing_webhook_router
 from .db import (
     AgentStore,
+    ErrorStore,
     InstallationRegistry,
     SessionStore,
     UserStore,
@@ -70,8 +72,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.settings = settings
     app.state.cache = TTLCache(ttl_seconds=settings.cache_ttl_seconds)
 
-    # Analytics
-    analytics.init(settings.posthog_key, settings.posthog_host)
+    # Analytics — super properties provide environment context on every event
+    import importlib.metadata
+    import socket
+
+    try:
+        app_version = importlib.metadata.version("canonhq")
+    except importlib.metadata.PackageNotFoundError:
+        app_version = "dev"
+
+    analytics.init(
+        settings.posthog_key,
+        settings.posthog_host,
+        super_properties={
+            "service": "canon",
+            "environment": settings.environment,
+            "version": app_version,
+            "hostname": socket.gethostname(),
+        },
+    )
+
+    # SRE Slack alerter
+    app.state.slack_alerter = SlackAlerter(
+        webhook_url=settings.slack_alerts_webhook_url,
+    )
+    if app.state.slack_alerter.enabled:
+        logger.info("Slack alerts enabled (channel configured)")
 
     # OTel logs to PostHog (opt-in)
     if settings.posthog_logs_enabled:
@@ -152,6 +178,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             app.state.db_pool = pool
             app.state.registry = InstallationRegistry(pool)
             app.state.agent_store = AgentStore(pool)
+            app.state.error_store = ErrorStore(pool)
             app.state.user_store = UserStore(pool)
             app.state.session_store = SessionStore(pool)
             logger.info("Database pool initialised")
@@ -234,6 +261,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         yield
 
     # Shutdown
+    if hasattr(app.state, "slack_alerter"):
+        await app.state.slack_alerter.close()
     otel_logging.shutdown()
     analytics.shutdown()
     if app.state.db_pool is not None:
@@ -434,7 +463,11 @@ async def readyz(request: Request) -> Response:
         try:
             async with pool.acquire() as conn:
                 await conn.fetchval("SELECT 1")
-        except Exception:
+        except Exception as exc:
+            analytics.track(
+                "health_check_failed",
+                properties={"check_type": "readiness", "error_message": str(exc)},
+            )
             return Response(
                 content=json.dumps({"status": "error", "detail": "database unhealthy"}),
                 status_code=503,

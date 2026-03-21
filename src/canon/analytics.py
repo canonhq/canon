@@ -18,9 +18,24 @@ _client: Any = None  # posthog.Client instance when initialised
 SERVER_ACTOR = "canon-server"
 
 
-def init(api_key: str, host: str = "https://us.i.posthog.com") -> None:
-    """Initialise the PostHog client singleton. No-op if *api_key* is empty."""
-    global _client
+_super_properties: dict[str, Any] = {}
+
+
+def init(
+    api_key: str,
+    host: str = "https://us.i.posthog.com",
+    *,
+    super_properties: dict[str, Any] | None = None,
+) -> None:
+    """Initialise the PostHog client singleton. No-op if *api_key* is empty.
+
+    *super_properties* are merged into every ``track()`` call automatically,
+    providing environment context (environment, version, hostname) without
+    requiring each call site to pass them.
+    """
+    global _client, _super_properties
+    if super_properties:
+        _super_properties = {k: v for k, v in super_properties.items() if v}
     if not api_key:
         logger.debug("PostHog analytics disabled (no API key)")
         return
@@ -58,10 +73,11 @@ def track(
     if _client is None:
         return
     try:
+        merged = {**_super_properties, **(properties or {})}
         _client.capture(
             distinct_id=distinct_id,
             event=event,
-            properties=properties,
+            properties=merged or None,
             groups=groups,
         )
     except Exception:
@@ -89,10 +105,11 @@ def capture_exception(
     if _client is None:
         return
     try:
+        merged = {**_super_properties, **(properties or {})}
         _client.capture_exception(
             exception=exc,
             distinct_id=distinct_id,
-            properties=properties,
+            properties=merged or None,
             groups=groups,
         )
     except Exception:

@@ -32,6 +32,7 @@ KNOWN_TOP_KEYS = {
     "specs",
     "agents",
     "ide",
+    "sre",
     "ticket_systems",
     "routing",
     "auth_profiles",
@@ -42,6 +43,7 @@ KNOWN_IDE_KEYS = {"auto_context", "auto_verify", "ai_exposure"}
 KNOWN_IDE_AUTO_CONTEXT_KEYS = {"enabled", "on_session_start", "on_prompt", "max_specs"}
 KNOWN_IDE_AUTO_VERIFY_KEYS = {"enabled", "on_stop", "on_commit", "confidence"}
 KNOWN_IDE_AI_EXPOSURE_KEYS = {"default", "restricted_tags"}
+KNOWN_SRE_KEYS = {"alerts_channel", "auto_triage", "weekly_digest", "error_spike_threshold"}
 
 ConfidenceLevel = Literal["medium", "high"]
 VALID_CONFIDENCE_LEVELS: frozenset[str] = frozenset(get_args(ConfidenceLevel))
@@ -69,6 +71,13 @@ class AiExposureConfig(BaseModel):
     # Tags that auto-restrict matching specs to "metadata" exposure.
     # Cannot enforce "none" — that requires explicit per-spec frontmatter.
     restricted_tags: list[str] = []
+
+
+class SreConfig(BaseModel):
+    alerts_channel: str = "#canon-alerts"
+    auto_triage: bool = True
+    weekly_digest: bool = True
+    error_spike_threshold: int = 10
 
 
 class IdeConfig(BaseModel):
@@ -99,6 +108,7 @@ class CanonConfig(BaseModel):
     specs: SpecsConfig = SpecsConfig()
     agents: AgentsConfig = AgentsConfig()
     ide: IdeConfig = IdeConfig()
+    sre: SreConfig = SreConfig()
     ticket_mapping: TicketMappingConfig | None = None
 
 
@@ -418,6 +428,45 @@ def parse_canon_yaml(raw: str) -> ConfigResult:
                             )
                             del ae["restricted_tags"]
 
+    # Validate sre section
+    if "sre" in obj:
+        if not isinstance(obj["sre"], dict):
+            diagnostics.append(Diagnostic(severity="error", message='"sre" must be a mapping'))
+            del obj["sre"]
+        else:
+            sre = obj["sre"]
+            assert isinstance(sre, dict)
+            for key in list(sre.keys()):
+                if key not in KNOWN_SRE_KEYS:
+                    diagnostics.append(
+                        Diagnostic(severity="warning", message=f'Unknown sre key: "{key}"')
+                    )
+            for key in ("auto_triage", "weekly_digest"):
+                if key in sre and not isinstance(sre[key], bool):
+                    diagnostics.append(
+                        Diagnostic(severity="error", message=f"sre.{key} must be a boolean")
+                    )
+                    del sre[key]
+            if "error_spike_threshold" in sre and (
+                not isinstance(sre["error_spike_threshold"], int)
+                or isinstance(sre["error_spike_threshold"], bool)
+            ):
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        message="sre.error_spike_threshold must be an integer",
+                    )
+                )
+                del sre["error_spike_threshold"]
+            if "alerts_channel" in sre and not isinstance(sre["alerts_channel"], str):
+                diagnostics.append(
+                    Diagnostic(
+                        severity="error",
+                        message="sre.alerts_channel must be a string",
+                    )
+                )
+                del sre["alerts_channel"]
+
     # Validate ticket_systems / routing / auth_profiles
     ticket_mapping = _parse_ticket_mapping(obj, diagnostics)
 
@@ -654,6 +703,25 @@ def _merge_with_defaults(
 
         ide = IdeConfig(auto_context=auto_context, auto_verify=auto_verify, ai_exposure=ai_exposure)
 
+    sre_data = partial.get("sre")
+    sre = SreConfig()
+    if isinstance(sre_data, dict):
+        sre = SreConfig(
+            alerts_channel=sre_data["alerts_channel"]
+            if isinstance(sre_data.get("alerts_channel"), str)
+            else "#canon-alerts",
+            auto_triage=sre_data["auto_triage"]
+            if isinstance(sre_data.get("auto_triage"), bool)
+            else True,
+            weekly_digest=sre_data["weekly_digest"]
+            if isinstance(sre_data.get("weekly_digest"), bool)
+            else True,
+            error_spike_threshold=sre_data["error_spike_threshold"]
+            if isinstance(sre_data.get("error_spike_threshold"), int)
+            and not isinstance(sre_data.get("error_spike_threshold"), bool)
+            else 10,
+        )
+
     return CanonConfig(
         team=partial["team"] if isinstance(partial.get("team"), str) else None,
         ticket_system=partial["ticket_system"]
@@ -667,5 +735,6 @@ def _merge_with_defaults(
         specs=specs,
         agents=agents,
         ide=ide,
+        sre=sre,
         ticket_mapping=ticket_mapping,
     )

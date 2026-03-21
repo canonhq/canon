@@ -13,6 +13,11 @@
 
 replicaCount: 1
 
+# Preview reuses the same image tag (pr-N) across pushes, so Always is
+# required to pick up rebuilt images on each deploy.
+image:
+  pullPolicy: Always
+
 ingress:
   enabled: true
   className: nginx
@@ -37,6 +42,8 @@ reindexCronJob:
 staleCheckCronJob:
   enabled: false
 coverageSnapshotCronJob:
+  enabled: false
+weeklyDigestCronJob:
   enabled: false
 
 config:

@@ -1,6 +1,6 @@
 ---
 title: "SRE Alerting & Monitoring"
-status: draft
+status: in_progress
 owner: ng
 team: canon
 ticket_project: canonhq/canon
@@ -33,7 +33,7 @@ Canon has PostHog exception capture and OTel log export (WARNING+) in production
 
 ## 2. PostHog Alert Actions
 
-<!-- canon:system:2 status:todo -->
+<!-- canon:system:2 status:in_progress -->
 
 Configure PostHog's built-in alerting to detect error spikes, new error patterns, and performance anomalies. These alerts feed into Slack (Section 3) and optionally GitHub Issues (Section 6).
 
@@ -64,7 +64,7 @@ Alerts are configured via PostHog Actions + Subscriptions. Configuration should 
 
 ## 3. Slack Webhook Notifications
 
-<!-- canon:system:3 status:todo -->
+<!-- canon:system:3 status:done -->
 
 Deliver PostHog alerts to a `#canon-alerts` Slack channel via incoming webhook. This is the lightweight alerting path — the full Slack bot with `/canon` commands is a separate spec.
 
@@ -103,7 +103,7 @@ Two complementary delivery paths:
 
 ## 4. SRE Dashboard in PostHog
 
-<!-- canon:system:4 status:todo -->
+<!-- canon:system:4 status:in_progress -->
 
 Create a PostHog dashboard providing at-a-glance service reliability visibility.
 
@@ -138,7 +138,7 @@ Default view: last 24 hours. Presets for 1h, 6h, 24h, 7d, 30d.
 
 ## 5. Enhanced Instrumentation
 
-<!-- canon:system:5 status:todo -->
+<!-- canon:system:5 status:done -->
 
 Add PostHog events and properties to power the SRE dashboard and alerting. All new events go through the existing `analytics.track()` wrapper.
 
@@ -173,7 +173,7 @@ Add PostHog events and properties to power the SRE dashboard and alerting. All n
 
 ## 6. GitHub Issues from Error Patterns
 
-<!-- canon:system:6 status:todo -->
+<!-- canon:system:6 status:done -->
 
 Automatically create GitHub issues when PostHog detects recurring error patterns, bridging monitoring into the development workflow.
 
@@ -213,7 +213,7 @@ When a new error cluster is detected in PostHog (via error tracking groups):
 
 ## 7. Canon Bot SRE Mode
 
-<!-- canon:system:7 status:todo -->
+<!-- canon:system:7 status:in_progress -->
 
 Extend the Canon bot's capabilities to participate in SRE workflows — analyzing errors against specs and providing weekly digests.
 
@@ -253,7 +253,7 @@ A weekly summary posted to Slack (`#canon-alerts`) with:
 
 ## 8. Configuration
 
-<!-- canon:system:8 status:todo -->
+<!-- canon:system:8 status:done -->
 
 All SRE features should be configurable via environment variables and CANON.yaml.
 
@@ -288,7 +288,7 @@ sre:
 
 ## 9. Rollout Plan
 
-<!-- canon:system:9 status:todo -->
+<!-- canon:system:9 status:in_progress -->
 
 Phased rollout to build confidence incrementally:
 

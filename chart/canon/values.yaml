@@ -122,6 +122,13 @@ secrets:
     apiKey: ""
     existingSecret: ""
 
+  ## @section Slack secrets (optional — SRE alerting)
+  ## @param secrets.slack.webhookUrl Slack incoming webhook URL for alerts
+  ## @param secrets.slack.existingSecret Use existing secret
+  slack:
+    webhookUrl: ""
+    existingSecret: ""
+
 ## @section Application configuration
 ## @param config.port Server port
 ## @param config.logLevel Log level (debug, info, warning, error)
@@ -142,6 +149,13 @@ config:
   posthogLogsMinLevel: "WARNING"
   platformUrl: ""
   environment: "development"
+  ## SRE alerting config
+  sreAlertsEnabled: "true"
+  sreErrorSpikeThreshold: "10"
+  sreErrorSpikeWindow: "300"
+  sreSlowQueryThresholdMs: "500"
+  sreAutoTriageEnabled: "true"
+  sreWeeklyDigestEnabled: "false"
 
 ## @section Service parameters
 ## @param service.type Kubernetes service type
@@ -217,6 +231,15 @@ staleCheckCronJob:
 coverageSnapshotCronJob:
   enabled: false
   schedule: "0 5 * * *"
+  concurrencyPolicy: Forbid
+
+## @section Weekly SRE digest CronJob parameters
+## @param weeklyDigestCronJob.enabled Enable weekly SRE digest CronJob
+## @param weeklyDigestCronJob.schedule Cron schedule expression (default: Monday 9am UTC)
+## @param weeklyDigestCronJob.concurrencyPolicy CronJob concurrency policy
+weeklyDigestCronJob:
+  enabled: false
+  schedule: "0 9 * * 1"
   concurrencyPolicy: Forbid
 
 ## @section Re-index CronJob parameters
