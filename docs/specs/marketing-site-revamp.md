@@ -58,14 +58,19 @@ The FastAPI route at `GET /` serves the SPA shell with injected meta tags and se
 <!-- specwright:realized-in:PR#104 file:frontend/src/views/LandingView.vue -->
 <!-- specwright:realized-in:PR#104 file:frontend/src/router/index.ts -->
 - [x] `vite-ssg` (or equivalent) generates static HTML at build time with full page content
+<!-- canon:realized-in:PR#451 file:frontend/vite.config.ts -->
+<!-- canon:realized-in:PR#451 file:frontend/src/main.ts -->
+<!-- canon:realized-in:PR#451 file:frontend/package.json -->
 <!-- canon:realized-in file:frontend/vite.config.ts file:frontend/src/main.ts -->
 - [x] HTML includes `<title>`, `<meta name="description">`, `og:title`, `og:description`, `og:image`, `twitter:card` tags
 <!-- specwright:realized-in:PR#104 file:src/specwright/web/routes.py -->
 - [x] FastAPI serves the prerendered HTML at `GET /` (replaces the Jinja2 template route)
+<!-- canon:realized-in:PR#451 file:src/canon/web/routes.py -->
 - [x] Theme toggle works (light/dark/system) with `localStorage` persistence
 <!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/MarketingNav.vue -->
 - [x] Mobile nav works with hamburger menu
 - [x] Page loads with zero layout shift (fonts preloaded, critical CSS inlined by Vite)
+<!-- canon:realized-in:PR#451 file:frontend/index.html -->
 <!-- canon:realized-in file:frontend/index.html file:frontend/vite.config.ts -->
 
 ## 3. Rewrite Hero & Messaging
@@ -187,6 +192,7 @@ Update the tabbed screenshot section with current screenshots:
 - [x] Animation shows: diff appears, bot comment types in, ACs evaluate, actions appear
 - [x] Demo is replayable (replay button or scroll-triggered restart)
 - [x] Screenshot tabs updated with 4 views: Dashboard, Search, Editor, Tasks
+<!-- canon:realized-in:PR#451 file:frontend/src/components/marketing/ProductMockup.vue -->
 <!-- canon:realized-in file:frontend/src/components/marketing/ProductMockup.vue -->
 - [x] Screenshots are current (taken from the live application)
 
@@ -287,6 +293,7 @@ Track key events on the landing page:
 ### Acceptance Criteria
 
 - [x] PostHog initialized on landing page with `pageview` event
+<!-- canon:realized-in:PR#451 file:frontend/src/composables/usePostHog.ts -->
 - [x] CTA clicks tracked as PostHog events with labels
 <!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/CtaSection.vue -->
 - [x] Section visibility tracked via IntersectionObserver
