@@ -9,7 +9,9 @@ Keeping them here avoids a circular import between ``middleware.py`` and
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
+from base64 import urlsafe_b64decode
 from functools import partial
 
 import jwt as pyjwt
@@ -89,6 +91,13 @@ async def validate_access_token(token: str, settings: Settings, *, jwks_uri: str
         )
     decode_kwargs["issuer"] = issuer
 
+    # Guard: detect opaque tokens before pyjwt.decode() attempts JSON parsing.
+    # Auth0 returns opaque access tokens (encrypted binary payload) when the
+    # audience is missing or mismatched.  These tokens have a valid JWT header
+    # (so get_signing_key_from_jwt succeeds) but a non-JSON payload that causes
+    # an unhelpful UnicodeDecodeError deep inside PyJWT.
+    _reject_opaque_token(token)
+
     claims = pyjwt.decode(
         token,
         signing_key.key,
@@ -96,6 +105,37 @@ async def validate_access_token(token: str, settings: Settings, *, jwks_uri: str
     )
 
     return claims
+
+
+def _reject_opaque_token(token: str) -> None:
+    """Raise ``ValueError`` if *token* is an opaque (non-JWT) access token.
+
+    Auth0 issues opaque tokens when the ``audience`` parameter is missing or
+    doesn't match a registered API.  The token still *looks* like a JWT (three
+    dot-separated base64url segments with a valid header), but the payload is
+    encrypted binary — not UTF-8 JSON.  PyJWT chokes on this with an unhelpful
+    ``UnicodeDecodeError``.
+
+    This guard decodes the payload segment and attempts a JSON parse *before*
+    handing the token to PyJWT, producing a clear diagnostic message instead.
+    """
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise ValueError("Access token is not a JWT (expected 3 dot-separated segments)")
+
+    # base64url decode the payload (second segment), adding padding as needed.
+    raw = parts[1]
+    raw += "=" * (-len(raw) % 4)
+    try:
+        payload_bytes = urlsafe_b64decode(raw)
+        _json.loads(payload_bytes)
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise ValueError(
+            "Access token appears to be an opaque token (payload is not JSON). "
+            "This usually means the identity provider did not issue a JWT — "
+            "verify that OIDC_AUDIENCE (or AUTH0_AUDIENCE) matches the API identifier "
+            "registered with your provider."
+        ) from exc
 
 
 async def resolve_org_login(claims: dict, registry: object | None) -> str:

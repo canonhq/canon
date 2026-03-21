@@ -180,3 +180,14 @@ Secret name for Slack credentials
 {{ include "canon.fullname" . }}-slack
 {{- end -}}
 {{- end }}
+
+{{/*
+Secret name for GitHub Tickets credentials (ticket sync via GitHub Issues)
+*/}}
+{{- define "canon.githubTicketsSecretName" -}}
+{{- if .Values.secrets.githubTickets.existingSecret -}}
+{{ .Values.secrets.githubTickets.existingSecret }}
+{{- else -}}
+{{ include "canon.fullname" . }}-github-tickets
+{{- end -}}
+{{- end }}

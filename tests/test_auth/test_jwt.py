@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import base64
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from canon.auth.jwt import resolve_jwt_org, resolve_org_login, validate_access_token
+from canon.auth.jwt import (
+    _reject_opaque_token,
+    resolve_jwt_org,
+    resolve_org_login,
+    validate_access_token,
+)
 
 
 def _settings(**overrides):
@@ -20,6 +27,65 @@ def _settings(**overrides):
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
+
+
+def _fake_jwt(payload: dict | None = None) -> str:
+    """Build a syntactically-valid JWT (header.payload.signature) for tests.
+
+    The signature is bogus — this is only for passing the opaque-token guard.
+    """
+    header = _b64url(json.dumps({"alg": "RS256", "typ": "JWT"}).encode())
+    body = _b64url(json.dumps(payload or {"sub": "test"}).encode())
+    return f"{header}.{body}.fake-sig"
+
+
+def _b64url(data: bytes) -> str:
+    """Base64url-encode without padding."""
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+# ---------------------------------------------------------------------------
+# _reject_opaque_token
+# ---------------------------------------------------------------------------
+
+
+class TestRejectOpaqueToken:
+    """Tests for the opaque-token guard."""
+
+    def test_valid_jwt_payload_passes(self):
+        """A well-formed JWT with a JSON payload should not raise."""
+        header = _b64url(json.dumps({"alg": "RS256"}).encode())
+        payload = _b64url(json.dumps({"sub": "user1"}).encode())
+        token = f"{header}.{payload}.signature"
+        _reject_opaque_token(token)  # should not raise
+
+    def test_opaque_binary_payload_raises(self):
+        """An opaque token with non-UTF-8 binary payload should raise ValueError."""
+        header = _b64url(json.dumps({"alg": "RS256"}).encode())
+        payload = _b64url(b"\xd4\xa3\x01\xff\xfe")  # binary, not JSON
+        token = f"{header}.{payload}.signature"
+        with pytest.raises(ValueError, match="opaque token"):
+            _reject_opaque_token(token)
+
+    def test_non_json_utf8_payload_raises(self):
+        """A token with valid UTF-8 but non-JSON payload should raise ValueError."""
+        header = _b64url(json.dumps({"alg": "RS256"}).encode())
+        payload = _b64url(b"not-json-at-all")
+        token = f"{header}.{payload}.signature"
+        with pytest.raises(ValueError, match="opaque token"):
+            _reject_opaque_token(token)
+
+    def test_wrong_segment_count_raises(self):
+        """A token without exactly 3 segments should raise ValueError."""
+        with pytest.raises(ValueError, match="not a JWT"):
+            _reject_opaque_token("only.two")
+
+    def test_empty_json_object_passes(self):
+        """An empty JSON object is still a valid JWT payload."""
+        header = _b64url(json.dumps({"alg": "RS256"}).encode())
+        payload = _b64url(json.dumps({}).encode())
+        token = f"{header}.{payload}.signature"
+        _reject_opaque_token(token)  # should not raise
 
 
 # ---------------------------------------------------------------------------
@@ -90,12 +156,13 @@ class TestValidateAccessToken:
         mock_client.get_signing_key_from_jwt.return_value = mock_key
 
         expected_claims = {"sub": "user1", "iss": "https://idp.example.com"}
+        tok = _fake_jwt(expected_claims)
         with (
             patch("canon.auth.jwt._get_jwks_client", return_value=mock_client),
             patch("canon.auth.jwt.pyjwt.decode", return_value=expected_claims) as mock_decode,
         ):
             result = await validate_access_token(
-                "tok", settings, jwks_uri="https://idp.example.com/jwks"
+                tok, settings, jwks_uri="https://idp.example.com/jwks"
             )
 
         assert result == expected_claims
@@ -116,11 +183,12 @@ class TestValidateAccessToken:
         mock_client.get_signing_key_from_jwt.return_value = mock_key
 
         expected_claims = {"sub": "user1"}
+        tok = _fake_jwt(expected_claims)
         with (
             patch("canon.auth.jwt._get_jwks_client", return_value=mock_client) as mock_get_client,
             patch("canon.auth.jwt.pyjwt.decode", return_value=expected_claims),
         ):
-            result = await validate_access_token("tok", settings)
+            result = await validate_access_token(tok, settings)
 
         assert result == expected_claims
         mock_get_client.assert_called_with("https://example.auth0.com/.well-known/jwks.json")
@@ -137,11 +205,12 @@ class TestValidateAccessToken:
         mock_client.get_signing_key_from_jwt.return_value = mock_key
 
         expected_claims = {"sub": "user1"}
+        tok = _fake_jwt(expected_claims)
         with (
             patch("canon.auth.jwt._get_jwks_client", return_value=mock_client),
             patch("canon.auth.jwt.pyjwt.decode", return_value=expected_claims) as mock_decode,
         ):
-            await validate_access_token("tok", settings, jwks_uri="https://example.auth0.com/jwks")
+            await validate_access_token(tok, settings, jwks_uri="https://example.auth0.com/jwks")
 
         _, kwargs = mock_decode.call_args
         assert kwargs["issuer"] == "https://example.auth0.com/"

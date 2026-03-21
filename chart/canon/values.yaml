@@ -104,6 +104,17 @@ secrets:
     apiKey: ""
     existingSecret: ""
 
+  ## @section GitHub Tickets secrets (optional — ticket sync via GitHub Issues)
+  ## @param secrets.githubTickets.token GitHub PAT for issue CRUD
+  ## @param secrets.githubTickets.owner Default GitHub org/owner
+  ## @param secrets.githubTickets.repo Default GitHub repo
+  ## @param secrets.githubTickets.existingSecret Use existing secret
+  githubTickets:
+    token: ""
+    owner: ""
+    repo: ""
+    existingSecret: ""
+
   ## @section Jira secrets (optional)
   ## @param secrets.jira.host Jira instance hostname
   ## @param secrets.jira.email Jira service account email

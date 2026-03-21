@@ -54,6 +54,10 @@ spec:
             - secretRef:
                 name: {{ include "canon.gcpSecretName" . }}
           {{- end }}
+          {{- if or .Values.secrets.githubTickets.token .Values.secrets.githubTickets.existingSecret }}
+            - secretRef:
+                name: {{ include "canon.githubTicketsSecretName" . }}
+          {{- end }}
           {{- if or .Values.secrets.jira.host .Values.secrets.jira.existingSecret }}
             - secretRef:
                 name: {{ include "canon.jiraSecretName" . }}
