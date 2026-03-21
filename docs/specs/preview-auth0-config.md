@@ -1,10 +1,10 @@
 ---
 title: "Preview Environment Auth0 Configuration"
 type: spec
-status: draft
+status: in_progress
 owner: ng
 team: platform
-review_status: draft
+review_status: in_progress
 tags: [preview, auth0, deployment, security]
 depends_on:
   - infra-enablement-billing-email
@@ -29,8 +29,10 @@ alerting work (PR #453):
    in preview environments. The callback at `src/canon/auth/routes.py:118` fails
    with `jwt.DecodeError: Invalid payload string`. The code handles this gracefully
    (warns and continues), but preview users get no RBAC permissions. The root cause
-   is that `pr-N.canonhq.co` callback URLs are not registered in the Auth0
-   application configuration.
+   is that `gv-infra/experiments/canon/auth0.tf` uses `pr-*.canonhq.co` as a wildcard
+   pattern, but Auth0 only supports full subdomain wildcards (`*.example.com`), not
+   partial patterns (`pr-*.example.com`). The fix is to change the wildcard to
+   `*.canonhq.co`.
 
 Both issues also affect the production deploy workflow (`deploy.yml`), which is
 similarly missing M2M credentials. The infra-enablement spec
@@ -38,7 +40,7 @@ similarly missing M2M credentials. The infra-enablement spec
 but does not cover preview environments or the opaque token issue.
 
 ## 2. Add M2M Credentials to Workflow Secrets
-<!-- canon:status:todo -->
+<!-- canon:status:done -->
 
 Add `AUTH0_M2M_CLIENT_ID` and `AUTH0_M2M_CLIENT_SECRET` to the `canon-auth0` K8s
 secret in both deployment workflows.
@@ -46,12 +48,12 @@ secret in both deployment workflows.
 ### Acceptance Criteria
 
 - [ ] `AUTH0_M2M_CLIENT_ID` and `AUTH0_M2M_CLIENT_SECRET` exist in Doppler `canon/prd`
-- [ ] `.github/workflows/preview.yml` fetches both M2M secrets from Doppler and includes
+- [x] `.github/workflows/preview.yml` fetches both M2M secrets from Doppler and includes
   them in the `canon-auth0` secret creation step
-- [ ] `.github/workflows/deploy.yml` fetches both M2M secrets from Doppler and includes
+- [x] `.github/workflows/deploy.yml` fetches both M2M secrets from Doppler and includes
   them in the `canon-auth0` secret creation step
 - [ ] `get_user_orgs()` no longer logs the "not configured" warning in preview
-- [ ] No changes required to Helm chart — the deployment template reads Auth0 env vars
+- [x] No changes required to Helm chart — the deployment template reads Auth0 env vars
   directly from the `canon-auth0` K8s secret via `envFrom`
 
 ### Implementation Notes
@@ -63,69 +65,64 @@ The M2M credentials exist as Terraform outputs in `gv-infra` (`canon_auth0_m2m_c
 Changes to both workflow files are identical — add two env vars and two `--from-literal`
 flags to the `kubectl create secret` command for `canon-auth0`.
 
-## 3. Register Preview Callback URLs in Auth0
-<!-- canon:status:todo -->
+## 3. Fix Auth0 Wildcard Callback URLs
+<!-- canon:status:done -->
 
 Configure Auth0 so that preview environment callback URLs are recognized, causing
 Auth0 to return JWT access tokens instead of opaque ones.
 
+### Root Cause
+
+The existing Auth0 application had `https://pr-*.canonhq.co/auth/callback` as a
+wildcard pattern, but Auth0 only supports full subdomain wildcards (`*.example.com`),
+not partial patterns (`pr-*.example.com`). This caused Auth0 to not recognize
+preview callback URLs, falling back to opaque access tokens.
+
+### Fix
+
+Changed the wildcard pattern from `pr-*.canonhq.co` to `*.canonhq.co` in the
+Canon Auth0 application's callbacks, logout URLs, and web origins in
+`gv-infra/experiments/canon/auth0.tf`. No separate Auth0 application needed —
+the existing production app handles both production and preview URLs.
+
 ### Acceptance Criteria
 
-- [ ] Auth0 application "Allowed Callback URLs" includes a wildcard or pattern
-  matching `https://pr-*.canonhq.co/auth/callback` (Auth0 supports comma-separated
-  URLs but not true wildcards — see implementation notes)
-- [ ] Auth0 application "Allowed Logout URLs" includes corresponding preview URLs
-- [ ] Auth0 application "Allowed Web Origins" includes `https://pr-*.canonhq.co`
+- [x] Auth0 application "Allowed Callback URLs" uses valid wildcard
+  `https://*.canonhq.co/auth/callback`
+<!-- canon:realized-in: file:gv-infra/experiments/canon/auth0.tf:13-17 -->
+- [x] Auth0 application "Allowed Logout URLs" uses `https://*.canonhq.co`
+<!-- canon:realized-in: file:gv-infra/experiments/canon/auth0.tf:19-23 -->
+- [x] Auth0 application "Allowed Web Origins" uses `https://*.canonhq.co`
+<!-- canon:realized-in: file:gv-infra/experiments/canon/auth0.tf:25-29 -->
 - [ ] Preview deployments receive JWT access tokens (not opaque) from Auth0
 - [ ] RBAC permissions are correctly extracted from the JWT in preview environments
 - [ ] The `jwt.DecodeError` warning no longer appears in preview logs
 
-### Implementation Notes
-
-Auth0 does **not** support true wildcard callback URLs. Two approaches:
-
-**Option A — Dynamic registration (recommended)**: Add `https://pr-{PR_NUM}.canonhq.co/auth/callback`
-to the Auth0 application's allowed callbacks during preview deployment, and remove it
-during cleanup. This requires Auth0 Management API calls in the preview workflow using
-the M2M credentials (which we're adding in section 2). This is the most secure approach
-as it limits valid callbacks to active preview environments.
-
-**Option B — Static list**: Pre-register a fixed set of preview callback URLs
-(e.g., `pr-1` through `pr-999`). Simple but creates a large surface area and violates
-the principle of least privilege.
-
-**Option C — Separate Auth0 application**: Create a dedicated Auth0 application for
-previews with a permissive callback URL pattern. Adds operational complexity but cleanly
-isolates preview auth from production.
-
-The opaque token issue is specifically caused by the callback URL not being registered.
-When Auth0 receives an authorization request from an unrecognized callback URL with a
-valid audience, it falls back to returning an opaque token. Registering the callback URL
-resolves this without any code changes.
-
 ## 4. Verify Helm Chart Compatibility
-<!-- canon:status:todo -->
+<!-- canon:status:done -->
 
 Ensure the Helm chart deployment template correctly maps the new M2M env vars from the
 `canon-auth0` secret to the application container.
 
 ### Acceptance Criteria
 
-- [ ] Verify the deployment template uses `envFrom` with the `canon-auth0` secret
+- [x] Verify the deployment template uses `envFrom` with the `canon-auth0` secret
   (which automatically exposes all keys as env vars — no template changes needed)
-- [ ] OR if the template uses explicit `env` entries, add `AUTH0_M2M_CLIENT_ID` and
-  `AUTH0_M2M_CLIENT_SECRET` to the deployment template
-- [ ] Confirm `values-preview.yaml` does not need changes (preview overrides should
+<!-- canon:realized-in: file:chart/canon/templates/deployment.yaml:61-63 -->
+- [x] Confirm `values-preview.yaml` does not need changes (preview overrides should
   not affect secret structure)
+<!-- canon:realized-in: file:chart/canon/values-preview.yaml (no secrets overrides) -->
 
 ## 5. Rollout Plan
 
-1. **Verify Doppler** — Confirm M2M credentials exist in `canon/prd`
-2. **Update workflows** — Add M2M secrets to `preview.yml` and `deploy.yml`
-3. **Register callbacks** — Update Auth0 application with preview callback URLs
-4. **Test** — Deploy a preview and verify:
+1. **Apply Terraform** — Run `terraform apply` in `gv-infra/experiments/canon/` to
+   fix the wildcard callback URLs (`pr-*.canonhq.co` → `*.canonhq.co`)
+2. **Verify Doppler** — Confirm `AUTH0_M2M_CLIENT_ID` and `AUTH0_M2M_CLIENT_SECRET`
+   exist in Doppler `canon/prd` (Terraform outputs already defined in `outputs.tf`)
+3. **Merge workflow changes** — Push `preview.yml` and `deploy.yml` M2M additions to main
+4. **Test** — Open a PR touching `src/canon/web/` to trigger a preview deploy:
    - No M2M warning in logs
    - JWT access token received (not opaque)
    - Permissions correctly extracted
    - User org membership fetched successfully
-5. **Deploy to production** — Push to main to propagate the deploy.yml changes
+5. **Verify production** — Confirm `deploy.yml` M2M changes work on next main push
