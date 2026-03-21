@@ -14,6 +14,7 @@ SCRIPTS = [
     SCRIPTS_DIR / "gen-cli-ref.py",
     SCRIPTS_DIR / "gen-mcp-ref.py",
     SCRIPTS_DIR / "gen-api-ref.py",
+    SCRIPTS_DIR / "gen-changelog.py",
 ]
 
 

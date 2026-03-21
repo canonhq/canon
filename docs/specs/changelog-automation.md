@@ -1,10 +1,10 @@
 ---
 title: "Changelog Automation"
 type: spec
-status: draft
+status: done
 owner: ""
 team: docs
-review_status: draft
+review_status: done
 tags: [docs-site, changelog, automation, gen-refs]
 depends_on: []
 created: "2026-03-20"
@@ -31,51 +31,51 @@ The public `canonhq/canon` repo currently has no CHANGELOG.md and no GitHub Rele
 ## 2. Requirements
 
 ### 2.1 Generator Script
-<!-- status: todo -->
+<!-- status: done -->
 
 Add `gen-changelog.py` to `docs-site/.vitepress/scripts/` that reads `CHANGELOG.md` and outputs `docs-site/changelog.md`.
 
 #### Acceptance Criteria
 
-- [ ] Script reads `CHANGELOG.md` from repo root
-- [ ] Output is a valid VitePress markdown page with frontmatter
-- [ ] Script is callable standalone (`python gen-changelog.py`) and from `gen-refs`
-- [ ] Script has no dependencies beyond Python stdlib (CHANGELOG.md is already structured markdown)
+- [x] Script reads `CHANGELOG.md` from repo root
+- [x] Output is a valid VitePress markdown page with frontmatter
+- [x] Script is callable standalone (`python gen-changelog.py`) and from `gen-refs`
+- [x] Script has no dependencies beyond Python stdlib (CHANGELOG.md is already structured markdown)
 
 ### 2.2 Filtering and Grouping
-<!-- status: todo -->
+<!-- status: done -->
 
 Transform raw conventional commit entries into user-facing release notes.
 
 #### Acceptance Criteria
 
-- [ ] Entries are grouped by minor version (e.g. all v1.26.x patches under a "v1.26" heading)
-- [ ] Internal scopes are excluded: `ci`, `test`, `chore` type entries unless they affect user behavior
-- [ ] Duplicate entries for the same PR are collapsed into a single entry (e.g. multiple "address round-N feedback" commits become one line)
-- [ ] Remaining entries are categorized as: Features, Bug Fixes, Breaking Changes, Documentation
-- [ ] Commit hashes link to the public repo (`canonhq/canon`) not the private repo
-- [ ] Cloud-only scopes (entries referencing modules not in OSS export) are excluded
+- [x] Entries are grouped by minor version (e.g. all v1.26.x patches under a "v1.26" heading)
+- [x] Internal scopes are excluded: `ci`, `test`, `chore` type entries unless they affect user behavior
+- [x] Duplicate entries for the same PR are collapsed into a single entry (e.g. multiple "address round-N feedback" commits become one line)
+- [x] Remaining entries are categorized as: Features, Bug Fixes, Breaking Changes, Documentation
+- [x] Commit hashes link to the public repo (`canonhq/canon`) not the private repo
+- [x] Cloud-only scopes (entries referencing modules not in OSS export) are excluded
 
 ### 2.3 Docs Site Integration
-<!-- status: todo -->
+<!-- status: done -->
 
 Wire the generated changelog into the VitePress navigation and build pipeline.
 
 #### Acceptance Criteria
 
-- [ ] `changelog.md` appears in VitePress nav (e.g. under "More" dropdown or as top-level nav item)
-- [ ] `npm run gen-refs` also runs the changelog generator (or a new `gen-all` script runs both)
-- [ ] The page renders correctly in `npm run dev` and `npm run build`
+- [x] `changelog.md` appears in VitePress nav (e.g. under "More" dropdown or as top-level nav item)
+- [x] `npm run gen-refs` also runs the changelog generator (or a new `gen-all` script runs both)
+- [x] The page renders correctly in `npm run dev` and `npm run build`
 
 ### 2.4 Build Pipeline Integration
-<!-- status: todo -->
+<!-- status: done -->
 
 Ensure the changelog is regenerated on every docs build so it stays current.
 
 #### Acceptance Criteria
 
-- [ ] The `publish.yml` workflow's "Snapshot versioned docs" step produces a changelog page in the built output
-- [ ] The changelog page is included in the OSS export to `canonhq/canon` via `export-oss.sh` (it's part of `docs-site/`)
+- [x] The `publish.yml` workflow's "Snapshot versioned docs" step produces a changelog page in the built output
+- [x] The changelog page is included in the OSS export to `canonhq/canon` via `export-oss.sh` (it's part of `docs-site/`)
 
 ## 3. Design
 

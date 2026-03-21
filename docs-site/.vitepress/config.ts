@@ -55,6 +55,7 @@ export default withMermaid(
           items: [
             { text: "Architecture", link: "/architecture/" },
             { text: "Contributing", link: "/contributing/" },
+            { text: "Changelog", link: "/changelog" },
           ],
         },
         {
