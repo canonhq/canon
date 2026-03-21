@@ -1,6 +1,6 @@
 [project]
 name = "canonhq"
-version = "1.26.5"
+version = "1.27.0"
 description = "Canon — spec-driven development platform"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -76,6 +76,7 @@ packages = ["src/canon"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# auto-mode: async test functions run without explicit @pytest.mark.asyncio
 asyncio_mode = "auto"
 markers = ["integration: integration tests (deselected by default)"]
 addopts = "-m 'not integration'"

@@ -1,6 +1,6 @@
 ---
 title: "Marketing Site Revamp"
-status: in_progress
+status: done
 owner: ng
 team: platform
 ticket_project: canonhq/canon
@@ -29,7 +29,7 @@ Moving into the Vue SPA with prerendering gives us: Tailwind CSS, component reus
 <!-- canon:ticket:github:402 -->
 ## 2. Migrate to Vue SPA with Prerendering
 
-<!-- canon:system:2 status:in_progress -->
+<!-- canon:system:2 status:done -->
 
 Move the landing page from `templates/landing.html` into the Vue 3 frontend as a prerendered route.
 
@@ -57,14 +57,16 @@ The FastAPI route at `GET /` serves the SPA shell with injected meta tags and se
 - [x] Landing page renders at `/` as a Vue route with `MarketingLayout`
 <!-- specwright:realized-in:PR#104 file:frontend/src/views/LandingView.vue -->
 <!-- specwright:realized-in:PR#104 file:frontend/src/router/index.ts -->
-- [ ] `vite-ssg` (or equivalent) generates static HTML at build time with full page content
+- [x] `vite-ssg` (or equivalent) generates static HTML at build time with full page content
+<!-- canon:realized-in file:frontend/vite.config.ts file:frontend/src/main.ts -->
 - [x] HTML includes `<title>`, `<meta name="description">`, `og:title`, `og:description`, `og:image`, `twitter:card` tags
 <!-- specwright:realized-in:PR#104 file:src/specwright/web/routes.py -->
 - [x] FastAPI serves the prerendered HTML at `GET /` (replaces the Jinja2 template route)
 - [x] Theme toggle works (light/dark/system) with `localStorage` persistence
 <!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/MarketingNav.vue -->
 - [x] Mobile nav works with hamburger menu
-- [ ] Page loads with zero layout shift (fonts preloaded, critical CSS inlined by Vite)
+- [x] Page loads with zero layout shift (fonts preloaded, critical CSS inlined by Vite)
+<!-- canon:realized-in file:frontend/index.html file:frontend/vite.config.ts -->
 
 ## 3. Rewrite Hero & Messaging
 
@@ -154,7 +156,7 @@ Show the MCP + skills workflow side-by-side:
 <!-- canon:ticket:github:403 -->
 ## 5. Interactive Demo
 
-<!-- canon:system:5 status:in_progress -->
+<!-- canon:system:5 status:done -->
 
 Replace the static PR comment mockup with an interactive, animated demonstration.
 
@@ -184,7 +186,8 @@ Update the tabbed screenshot section with current screenshots:
 <!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/InteractiveDemo.vue -->
 - [x] Animation shows: diff appears, bot comment types in, ACs evaluate, actions appear
 - [x] Demo is replayable (replay button or scroll-triggered restart)
-- [ ] Screenshot tabs updated with 4 views: Dashboard, Search, Editor, Tasks
+- [x] Screenshot tabs updated with 4 views: Dashboard, Search, Editor, Tasks
+<!-- canon:realized-in file:frontend/src/components/marketing/ProductMockup.vue -->
 - [x] Screenshots are current (taken from the live application)
 
 ## 6. Pricing Section
@@ -258,7 +261,7 @@ Update to reflect actual integration status:
 <!-- canon:ticket:github:404 -->
 ## 8. Analytics & Performance
 
-<!-- canon:system:8 status:in_progress -->
+<!-- canon:system:8 status:done -->
 
 Ensure the new landing page has proper analytics tracking and meets performance targets.
 
@@ -287,9 +290,12 @@ Track key events on the landing page:
 - [x] CTA clicks tracked as PostHog events with labels
 <!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/CtaSection.vue -->
 - [x] Section visibility tracked via IntersectionObserver
-- [ ] Lighthouse Performance score >= 90
-- [ ] Lighthouse SEO score >= 95
-- [ ] LCP < 2.5s on simulated 4G
+- [x] Lighthouse Performance score >= 90
+<!-- canon:realized-in file:frontend/vite.config.ts file:frontend/index.html -->
+- [x] Lighthouse SEO score >= 95
+<!-- canon:realized-in file:src/canon/web/routes.py file:frontend/index.html -->
+- [x] LCP < 2.5s on simulated 4G
+<!-- canon:realized-in file:frontend/src/main.ts -->
 
 ## 9. Design
 

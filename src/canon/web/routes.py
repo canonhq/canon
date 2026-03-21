@@ -163,10 +163,13 @@ async def _get_client_for_org(request: Request, org: str):
 def _serve_public_spa(request: Request, *, title: str, description: str) -> HTMLResponse | None:
     """Serve the SPA shell for public (unauthenticated) marketing pages.
 
-    Injects OG meta tags and a minimal session with PostHog config only.
+    Injects OG meta tags, canonical URLs, and a ``window.__CANON__`` script
+    block with a session containing null user/auth fields plus PostHog and
+    environment config. For SSG-prerendered routes, serves the route-specific
+    HTML with full page content already present.
     Returns None if the SPA is not built (caller should provide a fallback).
     """
-    html = _get_spa_html()
+    html = _get_spa_html(route=str(request.url.path))
     if html is None:
         return None
 
@@ -194,6 +197,7 @@ def _serve_public_spa(request: Request, *, title: str, description: str) -> HTML
     og_tags = (
         f"<title>{esc_title}</title>\n"
         f'<meta name="description" content="{esc_desc}">\n'
+        f'<link rel="canonical" href="{base_url}{esc_path}">\n'
         '<meta property="og:type" content="website">\n'
         f'<meta property="og:title" content="{esc_title}">\n'
         f'<meta property="og:description" content="{esc_desc}">\n'
@@ -204,6 +208,8 @@ def _serve_public_spa(request: Request, *, title: str, description: str) -> HTML
         f'<meta name="twitter:description" content="{esc_desc}">\n'
         f'<meta name="twitter:image" content="{base_url}/static/og-image.png">\n'
     )
+    # Strip any existing <title> from SSG-prerendered HTML to avoid duplicates
+    html = re.sub(r"<title>[^<]*</title>\s*", "", html)
     injection = f"{og_tags}<script>window.__CANON__ = {safe_data};</script>"
     html = html.replace("</head>", f"{injection}\n</head>")
     return HTMLResponse(content=html)
@@ -253,7 +259,7 @@ async def waitlist_signup(request: Request):
     """Capture waitlist email signup (fires PostHog event, no DB needed)."""
     try:
         body = await request.json()
-    except Exception:
+    except (ValueError, TypeError):
         return JSONResponse(content={"error": "Invalid request body"}, status_code=400)
 
     email = body.get("email", "").strip()
@@ -898,23 +904,70 @@ _spa_path: Path | None = None
 _spa_index_html: str | None = None
 _spa_mtime: float = 0
 _spa_checked: bool = False
+_ssg_cache: dict[str, tuple[float, str]] = {}
+_SSG_CACHE_MAX = 20
 
 
-def _get_spa_html() -> str | None:
-    """Get SPA index HTML with mtime-based cache invalidation."""
+def _get_spa_html(route: str = "/") -> str | None:
+    """Get SPA HTML with mtime-based cache invalidation.
+
+    For prerendered routes (SSG), looks for route-specific HTML files first
+    (e.g. static/app/pricing.html or static/app/pricing/index.html for
+    /pricing), falling back to the main index.html. The flat file form
+    takes priority over the directory form.
+    """
     global _spa_checked, _spa_path, _spa_index_html, _spa_mtime
     if not _spa_checked:
         _spa_checked = True
         _spa_path = _find_spa_index()
     if _spa_path is None:
         return None
+
+    # Try route-specific prerendered HTML (e.g. /pricing -> pricing.html or pricing/index.html)
+    if route and route != "/":
+        route_segment = route.strip("/")
+        base_dir = _spa_path.parent.resolve()
+        for candidate in [
+            _spa_path.parent / f"{route_segment}.html",
+            _spa_path.parent / route_segment / "index.html",
+        ]:
+            resolved = candidate.resolve()
+            if not resolved.is_relative_to(base_dir):
+                logger.warning("SSG path traversal blocked: %s", candidate)
+                continue
+            if resolved.is_file():
+                try:
+                    mtime = resolved.stat().st_mtime
+                    cache_key = str(resolved)
+                    cached = _ssg_cache.get(cache_key)
+                    if cached and cached[0] == mtime:
+                        return cached[1]
+                    content = resolved.read_text()
+                    if len(_ssg_cache) >= _SSG_CACHE_MAX:
+                        _ssg_cache.pop(next(iter(_ssg_cache)))
+                    _ssg_cache[cache_key] = (mtime, content)
+                    return content
+                except OSError:
+                    logger.warning(
+                        "SSG file exists but could not be read: %s", resolved, exc_info=True
+                    )
+
+    # Fall back to main index.html (with mtime cache)
     try:
         mtime = _spa_path.stat().st_mtime
     except OSError:
+        logger.warning(
+            "SPA index.html stat failed, serving cached version: %s", _spa_path, exc_info=True
+        )
         return _spa_index_html
     if mtime != _spa_mtime:
+        try:
+            content = _spa_path.read_text()
+        except OSError:
+            logger.warning("SPA index.html read failed: %s", _spa_path, exc_info=True)
+            return _spa_index_html
         _spa_mtime = mtime
-        _spa_index_html = _spa_path.read_text()
+        _spa_index_html = content
     return _spa_index_html
 
 
