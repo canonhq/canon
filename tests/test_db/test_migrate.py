@@ -62,6 +62,19 @@ class TestToSqlaAsyncUrl:
         assert "ssl=require" in result
         assert "sslmode" not in result
 
+    def test_channel_binding_stripped(self) -> None:
+        url = "postgresql://u:p@host/db?channel_binding=require"
+        result = _to_sqla_async_url(url)
+        assert "channel_binding" not in result
+        assert result.startswith("postgresql+asyncpg://")
+
+    def test_channel_binding_stripped_with_sslmode(self) -> None:
+        url = "postgresql://u:p@host/db?sslmode=require&channel_binding=require"
+        result = _to_sqla_async_url(url)
+        assert "channel_binding" not in result
+        assert "ssl=require" in result
+        assert "sslmode" not in result
+
     def test_postgres_scheme_normalised(self) -> None:
         url = "postgres://u:p@host/db?sslmode=require"
         result = _to_sqla_async_url(url)

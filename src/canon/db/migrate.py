@@ -47,35 +47,44 @@ _SSLMODE_TO_SSL: dict[str, str | None] = {
 }
 
 
-def _convert_sslmode_params(url: str) -> str:
-    """Replace ``sslmode`` query param with asyncpg-compatible ``ssl``.
+def _sanitise_asyncpg_params(url: str) -> str:
+    """Convert or strip libpq-only query params that asyncpg doesn't accept.
 
     SQLAlchemy's asyncpg dialect passes query-string parameters directly to
-    ``asyncpg.connect()`` which does **not** accept ``sslmode``.  This
-    function converts ``sslmode`` to the equivalent ``ssl`` parameter that
-    asyncpg understands.
+    ``asyncpg.connect()`` as keyword arguments.  Several libpq parameters
+    (``sslmode``, ``channel_binding``, etc.) are not recognised by asyncpg
+    and cause a ``TypeError``.  This function:
+
+    * Converts ``sslmode`` → ``ssl`` (asyncpg equivalent)
+    * Strips ``channel_binding`` and other libpq-only params entirely
     """
     parts = urlsplit(url)
     params = parse_qs(parts.query, keep_blank_values=True)
+    changed = False
 
+    # --- sslmode → ssl conversion ---
     sslmode_values = params.pop("sslmode", None)
-    if sslmode_values is None:
-        return url  # nothing to convert
+    if sslmode_values is not None:
+        sslmode = sslmode_values[0]
+        if sslmode in _SSLMODE_TO_SSL:
+            ssl_value = _SSLMODE_TO_SSL[sslmode]
+            if ssl_value is not None and "ssl" not in params:
+                params["ssl"] = [ssl_value]
+            elif ssl_value is None:
+                params.pop("ssl", None)
+            changed = True
+        else:
+            logger.warning("Unrecognised sslmode %r — passing through unchanged", sslmode)
+            params["sslmode"] = sslmode_values  # put it back
 
-    sslmode = sslmode_values[0]
+    # --- Strip libpq-only params that asyncpg rejects ---
+    _LIBPQ_ONLY = {"channel_binding"}
+    for key in _LIBPQ_ONLY:
+        if params.pop(key, None) is not None:
+            changed = True
 
-    if sslmode not in _SSLMODE_TO_SSL:
-        logger.warning("Unrecognised sslmode %r — passing through unchanged", sslmode)
+    if not changed:
         return url
-
-    ssl_value = _SSLMODE_TO_SSL[sslmode]
-
-    # Only set ssl if there isn't already an explicit ssl param
-    if ssl_value is not None and "ssl" not in params:
-        params["ssl"] = [ssl_value]
-    elif ssl_value is None:
-        # disable → remove ssl entirely
-        params.pop("ssl", None)
 
     new_query = urlencode(params, doseq=True)
     return urlunsplit(parts._replace(query=new_query))
@@ -84,7 +93,7 @@ def _convert_sslmode_params(url: str) -> str:
 def _to_sqla_async_url(url: str) -> str:
     """Normalise a database URL for SQLAlchemy's asyncpg dialect."""
     url = _to_asyncpg_url(url)
-    url = _convert_sslmode_params(url)
+    url = _sanitise_asyncpg_params(url)
     return url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 
