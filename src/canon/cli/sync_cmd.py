@@ -205,7 +205,9 @@ def run_sync(
                 )
                 if target_name:
                     sys_config = mapping.ticket_systems[target_name]
-                    doc_adapter = from_config(target_name, sys_config, mapping.auth_profiles or None)
+                    doc_adapter = from_config(
+                        target_name, sys_config, mapping.auth_profiles or None
+                    )
                     project_key = sys_config.project or ""
 
             if not doc_adapter:
@@ -223,9 +225,7 @@ def run_sync(
                 result = await engine_backfill(doc, doc_adapter, dry_run=dry_run)
                 updated_md = doc.raw  # backfill doesn't modify spec markdown
             elif reverse:
-                updated_md, result = await reverse_sync(
-                    doc, doc_adapter, system_config=sys_config
-                )
+                updated_md, result = await reverse_sync(doc, doc_adapter, system_config=sys_config)
             else:
                 # Resolve project key from mapping config or legacy config
                 if not project_key:
