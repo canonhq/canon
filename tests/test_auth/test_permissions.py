@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from canon.auth.permissions import (
     ALL_PERMISSION_VALUES,
+    PERMISSION_DESCRIPTIONS,
     ROLE_PERMISSIONS,
     Permission,
     Role,
@@ -61,3 +62,9 @@ class TestRolePermissions:
     def test_permissions_for_unknown_role_returns_empty(self):
         # Test the underlying dict's .get fallback path
         assert ROLE_PERMISSIONS.get("nonexistent", frozenset()) == frozenset()
+
+
+class TestPermissionDescriptions:
+    def test_every_permission_has_a_description(self):
+        for perm in Permission:
+            assert perm.value in PERMISSION_DESCRIPTIONS, f"Missing description for {perm.value}"

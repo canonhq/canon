@@ -416,6 +416,48 @@ class TestCallback:
                 assert data["github_user"]["login"] == "devuser"
                 assert data["github_user"]["name"] == "Dev User"
 
+    async def test_callback_falls_back_to_id_token_org_id(self):
+        """When access token decode fails, org_id is extracted from the ID token (userinfo)."""
+        from starlette.testclient import TestClient
+
+        mock_registry = AsyncMock()
+        mock_installation = AsyncMock()
+        mock_installation.org_login = "my-org"
+        mock_registry.get_installation_by_oidc_org = AsyncMock(return_value=mock_installation)
+
+        with (
+            patch("canon.auth.routes.oauth") as mock_oauth,
+            patch("canon.auth.routes.validate_access_token", side_effect=Exception("decode error")),
+            patch("canon.main._get_client", return_value=_mock_client()),
+        ):
+            mock_oauth.auth0.authorize_access_token = AsyncMock(
+                return_value={
+                    "userinfo": {
+                        "sub": "auth0|123",
+                        "email": "test@example.com",
+                        "name": "Test",
+                        "picture": "",
+                        "org_id": "org_abc",
+                    },
+                    "access_token": "opaque-token",
+                }
+            )
+            with TestClient(app) as tc:
+                app.state.settings = Settings(
+                    web_org="test-org",
+                    auth0_domain="test.us.auth0.com",
+                    auth0_client_id="test-client-id",
+                    auth0_client_secret="test-client-secret",
+                    auth0_audience="https://canon.example.com/api",
+                )
+                app.state.registry = mock_registry
+                resp = tc.get("/auth/callback", follow_redirects=False)
+                assert resp.status_code == 307
+                assert "/app/my-org/" in resp.headers["location"]
+
+            mock_registry.get_installation_by_oidc_org.assert_awaited_once_with("org_abc")
+        app.state.registry = None
+
     async def test_callback_skips_github_user_when_no_claim(self, client: AsyncClient):
         """Callback without GitHub claim doesn't set github_user."""
         with patch("canon.auth.routes.oauth") as mock_oauth:

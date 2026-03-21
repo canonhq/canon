@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, Request
 
 from ..auth.deps import require_permission
 from ..auth.models import CurrentUser
-from ..auth.permissions import ALL_PERMISSION_VALUES, ROLE_PERMISSIONS, Permission, Role
+from ..auth.permissions import (
+    ALL_PERMISSION_VALUES,
+    PERMISSION_DESCRIPTIONS,
+    ROLE_PERMISSIONS,
+    Permission,
+    Role,
+)
 from .models import ProfileGitHubUser, ProfileResponse
 
 logger = logging.getLogger(__name__)
@@ -59,8 +65,10 @@ async def api_profile(
         name=user.name,
         picture=user.picture,
         org_login=user.org_login,
+        org_id=user.org_id,
         permissions=sorted(p.value for p in user.permissions),
         all_permissions=sorted(ALL_PERMISSION_VALUES),
+        permission_descriptions=PERMISSION_DESCRIPTIONS,
         auth_method=user.auth_method,
         github_user=github_user,
         last_login_at=last_login_at,

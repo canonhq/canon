@@ -234,8 +234,10 @@ class ProfileResponse(BaseModel):
     name: str
     picture: str
     org_login: str
+    org_id: str = ""
     permissions: list[str]
     all_permissions: list[str]
+    permission_descriptions: dict[str, str] = {}
     auth_method: str
     github_user: ProfileGitHubUser | None = None
     last_login_at: str | None = None

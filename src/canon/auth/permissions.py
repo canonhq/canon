@@ -45,3 +45,12 @@ def permissions_for_role(role: Role) -> frozenset[Permission]:
 
 #: All valid permission strings (for validation).
 ALL_PERMISSION_VALUES: frozenset[str] = frozenset(p.value for p in Permission)
+
+#: Human-readable descriptions for each permission.
+#: Every ``Permission`` member must have an entry (enforced by tests).
+PERMISSION_DESCRIPTIONS: dict[str, str] = {
+    Permission.SPECS_READ.value: "Read access to specs",
+    Permission.SPECS_WRITE.value: "Create and edit specs",
+    Permission.SPECS_ADMIN.value: "Manage spec settings and configuration",
+    Permission.ORG_MANAGE.value: "Manage organization settings",
+}

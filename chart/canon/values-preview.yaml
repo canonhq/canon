@@ -48,3 +48,4 @@ weeklyDigestCronJob:
 
 config:
   environment: "preview"
+  webOrg: "canonhq"

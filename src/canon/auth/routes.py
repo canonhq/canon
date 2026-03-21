@@ -127,8 +127,15 @@ async def callback(request: Request):
 
         permissions = access_token_claims.get("permissions", [])
 
-        # Org extraction — only present when Auth0 Organizations are used
+        # Org extraction — only present when Auth0 Organizations are used.
+        # Fall back to the ID token (userinfo) when the access token either
+        # lacks org_id or could not be decoded (e.g. opaque token).
+        # authlib already validated the ID token signature.
         org_id = access_token_claims.get("org_id", "")
+        if not org_id:
+            org_id = userinfo.get("org_id", "")
+            if org_id:
+                logger.info("org_id resolved from ID token fallback (org_id=%s)", org_id)
         if org_id:
             registry = getattr(request.app.state, "registry", None)
             if registry:

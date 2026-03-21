@@ -105,6 +105,18 @@ class TestProfileRoute:
         }
 
     @pytest.mark.asyncio
+    async def test_profile_includes_permission_descriptions(self, client):
+        """The permission_descriptions field maps each permission to a label."""
+        resp = await client.get("/app/test-org/api/profile")
+        assert resp.status_code == 200
+        data = resp.json()
+        descs = data["permission_descriptions"]
+        assert descs["specs:read"] == "Read access to specs"
+        assert descs["specs:write"] == "Create and edit specs"
+        assert descs["specs:admin"] == "Manage spec settings and configuration"
+        assert descs["org:manage"] == "Manage organization settings"
+
+    @pytest.mark.asyncio
     async def test_profile_with_user_store_includes_last_login(self, client):
         """When user_store has the user, last_login_at appears in the response."""
         mock_store = AsyncMock()
@@ -134,6 +146,18 @@ class TestProfileRoute:
         assert data["last_login_at"] is None
 
     @pytest.mark.asyncio
+    async def test_profile_graceful_on_user_store_failure(self, client):
+        """Profile route still returns 200 when user_store raises an exception."""
+        mock_store = AsyncMock()
+        mock_store.get_user_by_sub = AsyncMock(side_effect=RuntimeError("DB down"))
+        app.state.user_store = mock_store
+
+        resp = await client.get("/app/test-org/api/profile")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["last_login_at"] is None
+
+    @pytest.mark.asyncio
     async def test_org_login_not_populated_from_url(self, client):
         """The org_login field comes from the user, not the URL path."""
         # Anonymous user has empty org_login; URL org should NOT backfill it
@@ -141,6 +165,14 @@ class TestProfileRoute:
         assert resp.status_code == 200
         data = resp.json()
         assert data["org_login"] == ""
+
+    @pytest.mark.asyncio
+    async def test_anonymous_profile_includes_org_id(self, client):
+        """The org_id field is present (empty for anonymous user)."""
+        resp = await client.get("/app/test-org/api/profile")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["org_id"] == ""
 
 
 class TestProfileResponseModel:
@@ -155,8 +187,10 @@ class TestProfileResponseModel:
             name="Test User",
             picture="https://example.com/pic.jpg",
             org_login="test-org",
+            org_id="org_abc123",
             permissions=["specs:read", "specs:write"],
             all_permissions=["org:manage", "specs:admin", "specs:read", "specs:write"],
+            permission_descriptions={"specs:read": "Read access to specs"},
             auth_method="session",
             github_user=ProfileGitHubUser(login="testuser", name="Test User"),
             last_login_at="2026-02-20T12:00:00+00:00",
@@ -169,6 +203,8 @@ class TestProfileResponseModel:
         assert data["github_user"] == {"login": "testuser", "name": "Test User"}
         assert data["last_login_at"] == "2026-02-20T12:00:00+00:00"
         assert data["all_permissions"] == ["org:manage", "specs:admin", "specs:read", "specs:write"]
+        assert data["org_id"] == "org_abc123"
+        assert data["permission_descriptions"] == {"specs:read": "Read access to specs"}
 
     def test_profile_response_optional_fields(self):
         from canon.web.models import ProfileResponse
@@ -187,3 +223,5 @@ class TestProfileResponseModel:
         data = profile.model_dump()
         assert data["github_user"] is None
         assert data["last_login_at"] is None
+        assert data["org_id"] == ""
+        assert data["permission_descriptions"] == {}

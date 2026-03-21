@@ -71,7 +71,18 @@ def _get_cache(request: Request):
 
 
 def _get_org(request: Request) -> str:
-    return request.app.state.settings.web_org
+    if request.app.state.settings.web_org:
+        return request.app.state.settings.web_org
+    # Fall back to the authenticated user's org from the session.
+    # This handles multi-tenant deployments where web_org is not set
+    # (each user resolves to their own org instead of a global default).
+    user = _get_user(request)
+    if user:
+        org_login = user.get("org_login", "")
+        if org_login:
+            return org_login
+    logger.warning("No org resolved: web_org not configured and no session org_login")
+    return ""
 
 
 def _get_user(request: Request) -> dict | None:

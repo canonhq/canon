@@ -88,6 +88,35 @@ class TestDashboard:
         assert "No repositories found" in resp.text
         assert "Install the Canon GitHub App" in resp.text
 
+    async def test_redirect_uses_session_org_when_web_org_empty(self):
+        """When web_org is empty, /app/ redirects using the session user's org."""
+        from canon.settings import Settings
+
+        app.state.settings = Settings(web_org="")
+        client = AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            follow_redirects=False,
+        )
+        # Simulate an authenticated session with org_login
+        resp = await client.get(
+            "/app/",
+            cookies={"session": ""},  # no session cookie
+        )
+        # Without a session, org is empty so redirect goes to /app//
+        assert resp.status_code == 302
+
+        # Now test with a real session — we need to set one via the app
+        from starlette.testclient import TestClient
+
+        with TestClient(app) as sync_client:
+            # Set session data directly
+            sync_client.get("/app/")  # initialize session
+            with patch("canon.web.routes._get_user", return_value={"org_login": "my-org"}):
+                resp = sync_client.get("/app/", follow_redirects=False)
+                assert resp.status_code == 302
+                assert resp.headers["location"] == "/app/my-org/"
+
 
 class TestRepoDetail:
     async def test_not_found_returns_404(self, client: AsyncClient):
