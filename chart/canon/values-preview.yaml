@@ -46,6 +46,14 @@ coverageSnapshotCronJob:
 weeklyDigestCronJob:
   enabled: false
 
+# Override production secrets that don't exist in preview namespaces.
+# Without this, the deployment template emits a secretRef for
+# canon-github-tickets (set in values-production.yaml), which doesn't
+# exist in preview namespaces and causes a pod CrashLoopBackOff.
+secrets:
+  githubTickets:
+    existingSecret: ""
+
 config:
   environment: "preview"
   webOrg: "canonhq"

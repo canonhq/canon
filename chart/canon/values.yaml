@@ -160,6 +160,10 @@ config:
   posthogLogsMinLevel: "WARNING"
   platformUrl: ""
   environment: "development"
+  ## Auth0 Organizations mode — when true, permissions come from JWT claims
+  ## and org_id enables tenant isolation (cloud multi-tenant).
+  ## When false (default), permissions fall back to DB role lookup (single-tenant / OSS).
+  auth0OrgsEnabled: "false"
   ## SRE alerting config
   sreAlertsEnabled: "true"
   sreErrorSpikeThreshold: "10"

@@ -19,6 +19,7 @@ data:
   {{- if .Values.config.environment }}
   ENVIRONMENT: {{ .Values.config.environment | quote }}
   {{- end }}
+  AUTH0_ORGS_ENABLED: {{ .Values.config.auth0OrgsEnabled | quote }}
   SRE_ALERTS_ENABLED: {{ .Values.config.sreAlertsEnabled | quote }}
   SRE_ERROR_SPIKE_THRESHOLD: {{ .Values.config.sreErrorSpikeThreshold | quote }}
   SRE_ERROR_SPIKE_WINDOW: {{ .Values.config.sreErrorSpikeWindow | quote }}

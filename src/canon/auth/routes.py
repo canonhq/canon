@@ -118,6 +118,22 @@ async def callback(request: Request):
                 access_token_claims = await validate_access_token(
                     raw_access_token, settings, jwks_uri=jwks_uri
                 )
+            except ValueError as exc:
+                # When auth0_orgs_enabled is off (single-tenant / OSS mode), the
+                # access token may be opaque even with an audience configured —
+                # this is normal.  Permissions fall back to DB role lookup if available.
+                if settings.auth0_orgs_enabled:
+                    logger.warning(
+                        "Access token verification failed — permissions not extracted",
+                        exc_info=True,
+                    )
+                    analytics.capture_exception(exc, properties={"context": "auth_callback"})
+                else:
+                    logger.debug(
+                        "Access token is not a decodable JWT (opaque token) — "
+                        "permissions will fall back to DB role lookup if available",
+                        exc_info=True,
+                    )
             except Exception as exc:
                 logger.warning(
                     "Access token verification failed — permissions not extracted",

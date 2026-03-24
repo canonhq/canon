@@ -81,7 +81,12 @@ def _get_org(request: Request) -> str:
         org_login = user.get("org_login", "")
         if org_login:
             return org_login
-    logger.warning("No org resolved: web_org not configured and no session org_login")
+        logger.warning(
+            "No org resolved for authenticated user: web_org not configured "
+            "and session has no org_login"
+        )
+    else:
+        logger.debug("No org resolved: web_org not configured and no session org_login")
     return ""
 
 
@@ -138,7 +143,7 @@ async def _get_user_orgs(request: Request, user: CurrentUser | None = None) -> l
                     orgs = [org_login] + [o for o in orgs if o != org_login]
                 return orgs
         except Exception:
-            pass
+            logger.warning("Failed to list orgs from registry", exc_info=True)
 
     if org_login:
         return [org_login]
@@ -163,7 +168,11 @@ async def _get_client_for_org(request: Request, org: str):
                 if inst_id != base_client.installation_id:
                     return base_client.for_installation(inst_id)
         except Exception:
-            pass
+            logger.warning(
+                "Failed to resolve installation for org %s, using default",
+                org,
+                exc_info=True,
+            )
 
     return base_client
 
