@@ -194,6 +194,7 @@ If not:
 - [x] First user to log in receives `admin` role; subsequent users default to `editor`
 <!-- canon:realized-in:PR#386 file:src/canon/db/user_store.py:101-116 file:src/canon/auth/routes.py:162-175 -->
 - [x] Single-tenant mode: no org path enforcement in middleware, no org resolution in JWT validation
+<!-- canon:realized-in:PR#461 file:src/canon/auth/routes.py -->
 <!-- canon:realized-in:PR#386 file:src/canon/auth/middleware.py:96-127 file:src/canon/auth/jwt.py:101-140 -->
 - [ ] Provider tested against at least Zitadel, Keycloak, and one commercial provider (Okta or Google Workspace)
 
@@ -243,6 +244,7 @@ def auth_enabled(self) -> bool:
 <!-- canon:realized-in:PR#386 file:src/canon/settings.py:79-81 -->
 - [x] Existing `auth0_*` settings continue to work without changes
 <!-- canon:realized-in:PR#386 file:src/canon/settings.py:55-62 -->
+<!-- canon:realized-in:PR#461 file:chart/canon/values.yaml -->
 - [x] Provider auto-detection: Auth0 settings → Auth0Provider; OIDC settings → GenericOIDCProvider
 <!-- canon:realized-in:PR#386 file:src/canon/auth/providers/__init__.py:20-27 -->
 - [x] Explicit `auth_provider` setting overrides auto-detection
