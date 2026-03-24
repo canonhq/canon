@@ -4,7 +4,7 @@ status: draft
 owner: ng
 team: platform
 priority: high
-tags: [infrastructure, terraform, digitalocean, deployment]
+tags: [infrastructure, terraform, digitalocean, aws, auth0, stripe, posthog, deployment]
 ---
 
 # Infrastructure Independence
@@ -19,11 +19,14 @@ Canon's infrastructure is currently managed in the `gv-infra` repo under `experi
 |---|---|---|
 | DOKS cluster | `gv-infra/core/` | None — shared tenant |
 | Container registry (DOCR) | `gv-infra/core/` | Push access only |
-| DNS (`canonhq.co`) | `gv-infra/experiments/canon/` | None |
+| DNS (`canonhq.co`) | `gv-infra/experiments/canon/dns.tf` | None — Route 53 zone |
 | cert-manager + nginx-ingress | `gv-infra/core/` | Annotation references |
-| Auth0 tenant/apps | `gv-infra/experiments/canon/auth0.tf` | None |
+| Auth0 tenant/apps | `gv-infra/experiments/canon/auth0.tf` | None — 3 clients, RBAC, orgs |
 | GCP Vertex AI SA | `gv-infra/experiments/canon/` | None |
-| Stripe products | `gv-infra/experiments/canon/stripe.tf` | None |
+| Stripe products/billing | `gv-infra/experiments/canon/stripe.tf` | None — 2 products, portal, webhook |
+| PostHog project/flags | `gv-infra/experiments/canon/posthog.tf` | None |
+| GitHub App config | GitHub.com settings UI | Manual — not codified |
+| Auth0 org provisioning | Manual SQL after Terraform | Manual — blocks SaaS onboarding |
 | Doppler secrets | GV Doppler account | Config access |
 
 ### Goals
@@ -56,7 +59,7 @@ Set up Terraform project structure and state management in this repo.
 - [ ] `infra/README.md` documenting how to init, plan, apply
 - [ ] CI workflow for `terraform plan` on PRs touching `infra/`
 - [ ] CI workflow for `terraform apply` on merge to main (with approval gate)
-- [ ] Provider versions pinned (digitalocean, auth0, google, stripe)
+- [ ] Provider versions pinned (digitalocean, aws, auth0, google, stripe, posthog)
 - [ ] Variables file with environment-specific tfvars (production, staging)
 
 ---
@@ -99,16 +102,17 @@ Set up Canon's own container registry on DigitalOcean.
 
 <!-- status: todo -->
 
-Move DNS record management for `canonhq.co` into this repo's Terraform.
+Move DNS record management for `canonhq.co` into this repo's Terraform. The domain is registered with and hosted on AWS Route 53 (not DigitalOcean DNS).
 
 ### Acceptance Criteria
 
-- [ ] Terraform module for DigitalOcean DNS zone (`canonhq.co`)
-- [ ] A record pointing to new cluster's ingress load balancer IP
-- [ ] Wildcard record `*.canonhq.co` for preview environments
+- [ ] Terraform AWS provider configured for Route 53 access
+- [ ] Import existing Route 53 hosted zone (`canonhq.co`) into Terraform state
+- [ ] A record for apex domain pointing to cluster's ingress load balancer IP
+- [ ] Wildcard A record `*.canonhq.co` for PR preview environments
 - [ ] MX/TXT records preserved from current configuration
-- [ ] TTL set appropriately for migration (low during cutover, normal after)
-- [ ] Import existing DNS state into Terraform without downtime
+- [ ] TTL set to 300s (current value), lower during cutover if needed
+- [ ] No references to DigitalOcean DNS — all DNS stays on Route 53
 
 ---
 
@@ -133,18 +137,46 @@ Install shared services on the dedicated cluster that were previously provided b
 
 <!-- status: todo -->
 
-Move Auth0 configuration into this repo's Terraform.
+Move the full Auth0 configuration (~16KB of HCL in `gv-infra/experiments/canon/auth0.tf`) into this repo's Terraform. This is one of the largest modules — it covers 3 application clients, RBAC with 3 roles and 4 permissions, a post-login Action, organization multi-tenancy, and a test user.
 
 ### Acceptance Criteria
 
-- [ ] Terraform Auth0 provider configured
-- [ ] Web application (SPA) with correct callback URLs
-- [ ] M2M application for Management API access
-- [ ] Native application for CLI device auth flow
-- [ ] Organization settings configured
-- [ ] Callback URLs include `canonhq.co`, `*.canonhq.co`, `localhost:*`
-- [ ] Import existing Auth0 resources without disruption
-- [ ] Auth0 credentials stored in Doppler (already the case)
+**Clients:**
+- [ ] Web application (`regular_web`) with callbacks for `canonhq.co`, `*.canonhq.co`
+- [ ] Dev application (`regular_web`) with callbacks for `localhost:3000` only
+- [ ] M2M application (`non_interactive`) for Management API + Canon backend org queries
+- [ ] CLI application (`native`) with Device Authorization Grant (`urn:ietf:params:oauth:grant-type:device_code`) and rotating refresh tokens
+- [ ] All clients use RS256 JWT signing
+
+**API & RBAC:**
+- [ ] Resource server (`https://canonhq.co/api`) with `access_token_authz` dialect
+- [ ] 4 permissions: `specs:read`, `specs:write`, `specs:admin`, `org:manage`
+- [ ] 3 roles: Viewer (`specs:read`), Editor (`specs:read` + `specs:write`), Admin (all 4)
+- [ ] Role-permission assignments match current config
+
+**Post-Login Action:**
+- [ ] `canon-default-role` Action (Node 18, post-login v3 trigger)
+- [ ] Auto-assigns Editor role on first GitHub login via M2M Management API
+- [ ] Fetches GitHub IdP access token and embeds in `https://canonhq.co/github` ID token claim
+- [ ] Action secrets wired: `AUTH0_DOMAIN`, `M2M_CLIENT_ID`, `M2M_CLIENT_SECRET`, `EDITOR_ROLE_ID`
+
+**M2M Grants:**
+- [ ] M2M client granted: `create:role_members`, `read:users`, `read:user_idp_tokens`, `read:organizations`
+
+**Organizations:**
+- [ ] Auth0 Organizations enabled for multi-tenant access (org_id in token claims)
+- [ ] `canonhq` organization created with GitHub + Username-Password connections
+- [ ] GitHub connection: `assign_membership_on_login = true` (safe due to restrict_signups gate)
+- [ ] Organization usage set to `allow` (login works with or without `?organization=`)
+
+**Connections:**
+- [ ] GitHub social connection enabled for all relevant clients
+- [ ] Username-Password-Authentication database connection enabled
+
+**Test Infrastructure:**
+- [ ] Test user (`hello+canon@njgerner.com`) with Admin role and org membership
+- [ ] Import all existing Auth0 resources without disruption
+- [ ] Credentials stored in Doppler (already the case)
 
 ---
 
@@ -196,9 +228,113 @@ Execute the actual cutover from shared to dedicated infrastructure.
 - [ ] SSL certificates issued successfully on new cluster
 - [ ] All cron jobs running on new cluster
 - [ ] Preview environments functional on new cluster
+- [ ] Stripe webhook endpoint updated and receiving events
+- [ ] PostHog project and feature flags operational
+- [ ] Auth0 org auto-provisioning tested with a new GitHub App install
+- [ ] GitHub App settings verified against §13 checklist
 - [ ] Smoke tests pass post-migration
 - [ ] Old cluster resources cleaned up (namespace, secrets, images)
 - [ ] gv-infra Canon-specific Terraform marked as deprecated/removed
+
+---
+
+## 10. Stripe Terraform
+
+<!-- status: todo -->
+
+Move Stripe billing infrastructure into this repo's Terraform. Currently in `gv-infra/experiments/canon/stripe.tf` — covers 2 products with 4 price points, a webhook endpoint, and customer portal configuration.
+
+### Acceptance Criteria
+
+- [ ] Terraform Stripe provider configured
+- [ ] 2 products: Canon Starter ($9/seat/month) and Canon Pro ($19/seat/month)
+- [ ] 4 prices: monthly + annual for each product (~20% annual discount)
+- [ ] Webhook endpoint at `https://canonhq.co/api/webhooks/stripe` with events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
+- [ ] Customer portal configuration with subscription management (upgrade/downgrade, seat changes, cancellation at period end)
+- [ ] Import existing Stripe resources (products, prices, webhook, portal) into Terraform state
+- [ ] Price IDs output and stored in Doppler (`STRIPE_STARTER_MONTHLY_PRICE_ID`, etc.)
+- [ ] Portal supports billing cycle switching (monthly↔annual) and tier changes (Starter↔Pro)
+
+---
+
+## 11. PostHog Terraform
+
+<!-- status: todo -->
+
+Move PostHog project and feature flags into this repo's Terraform. Currently in `gv-infra/experiments/canon/posthog.tf`.
+
+### Acceptance Criteria
+
+- [ ] Terraform PostHog provider configured
+- [ ] PostHog project (`canon`, timezone: `America/New_York`)
+- [ ] Feature flag: `enable-public-signup` (gates GitHub install + paid plan CTAs, default OFF in production)
+- [ ] Import existing PostHog project and feature flags into Terraform state
+- [ ] PostHog API key and project ID stored in Doppler
+
+---
+
+## 12. Auth0 Organization Auto-Provisioning
+
+<!-- status: todo -->
+
+The biggest gap blocking true SaaS onboarding. Currently, when a customer installs the Canon GitHub App, an Auth0 Organization must be manually created via Terraform and linked to the installation via manual SQL (`UPDATE gh_installations SET oidc_org_id = ...`). This section automates that entire flow.
+
+### Acceptance Criteria
+
+**On GitHub App install (`installation.created`):**
+- [ ] `on_installation` handler calls Auth0 Management API to create an Organization (name derived from `org_login`)
+- [ ] Enable GitHub social connection on the new org with `assign_membership_on_login = true`
+- [ ] Enable Username-Password-Authentication connection on the new org
+- [ ] Store returned `org_id` on the installation record via `registry.set_oidc_org_id()`
+- [ ] No manual SQL or Terraform apply required for new customers
+
+**Auth0 M2M scope expansion:**
+- [ ] Add `create:organizations` scope to M2M client grant
+- [ ] Add `create:organization_connections` scope to M2M client grant
+- [ ] Add `read:connections` scope to M2M client grant (needed to look up connection IDs)
+- [ ] Update both Terraform config (§6) and live Auth0 tenant
+
+**On GitHub App uninstall (`installation.deleted`):**
+- [ ] Disable the Auth0 Organization (remove connections, preventing login)
+- [ ] Log the action but don't delete the org (preserves audit trail)
+
+**Error handling:**
+- [ ] Auth0 API failures don't block the installation webhook response
+- [ ] Failed provisioning is logged and can be retried manually
+- [ ] Idempotent: re-installing the app for the same org reuses or recreates the Auth0 org
+
+---
+
+## 13. GitHub App Configuration
+
+<!-- status: todo -->
+
+The Canon GitHub App is configured manually in the GitHub UI. This section documents the required configuration and verifies it matches production needs. Not Terraform-managed, but must be audited and locked down.
+
+### Acceptance Criteria
+
+**App settings:**
+- [ ] Setup URL set to `https://canonhq.co/app/setup/complete`
+- [ ] Visibility set to "Any account" (required for SaaS)
+- [ ] Homepage URL set to `https://canonhq.co`
+
+**Required webhook events (and no others):**
+- [ ] Issue comment
+- [ ] Issues
+- [ ] Pull request
+- [ ] Pull request review
+- [ ] Push
+
+**Required permissions:**
+- [ ] Contents: Read & Write
+- [ ] Issues: Read & Write
+- [ ] Pull requests: Read & Write
+- [ ] Metadata: Read-only
+
+**Cleanup:**
+- [ ] Remove any unnecessary event subscriptions not in the list above
+- [ ] Remove any unnecessary permissions not in the list above
+- [ ] Document the canonical App configuration in `infra/README.md`
 
 ---
 
@@ -210,16 +346,18 @@ Execute the actual cutover from shared to dedicated infrastructure.
 infra/
   main.tf              # Provider config, backend, module calls
   variables.tf         # Input variables
-  outputs.tf           # Cluster endpoint, registry URL, LB IP
+  outputs.tf           # Cluster endpoint, registry URL, LB IP, price IDs
   terraform.tfvars     # Production values (non-secret)
   versions.tf          # Provider version constraints
   modules/
     doks/              # DOKS cluster + node pools
     docr/              # Container registry
-    dns/               # DNS zone + records
+    dns/               # Route 53 zone + A/wildcard records
     bootstrap/         # cert-manager, nginx-ingress (Helm releases)
-    auth0/             # Auth0 apps + settings
+    auth0/             # Auth0 clients, RBAC, orgs, post-login Action
     gcp/               # GCP project, SA, IAM
+    stripe/            # Products, prices, webhook, portal
+    posthog/           # Project, feature flags
 ```
 
 ### State Management
@@ -263,12 +401,21 @@ The Helm chart already supports both Auth0 and Zitadel:
 - Sections 1-3: Terraform setup, DOKS cluster, container registry
 - Validate: cluster accessible, images push/pull
 
-### Phase 2: Supporting Services (Week 2)
-- Sections 4-5: DNS module (don't apply yet), cluster bootstrap
-- Sections 6-7: Auth0 and GCP Terraform (import existing)
-- Validate: cert-manager issues certs, ingress routes traffic
+### Phase 2: Service Imports (Week 2)
+- Section 4: DNS module — import Route 53 zone (don't change records yet)
+- Section 5: Cluster bootstrap — cert-manager, nginx-ingress
+- Section 6: Auth0 Terraform — import all clients, RBAC, orgs, Action
+- Section 7: GCP Vertex AI — import service account
+- Section 10: Stripe Terraform — import products, prices, webhook, portal
+- Section 11: PostHog Terraform — import project, feature flags
+- Validate: `terraform plan` shows no diff after imports
 
-### Phase 3: Cutover (Week 3)
+### Phase 3: SaaS Automation (Week 3)
+- Section 12: Auth0 org auto-provisioning — code changes to `on_installation.py`, M2M scope expansion
+- Section 13: GitHub App configuration audit and lockdown
+- Validate: new GitHub App install auto-creates Auth0 org, login works end-to-end
+
+### Phase 4: Cutover (Week 4)
 - Section 8: Update CI/CD workflows
-- Section 9: Execute migration
+- Section 9: Execute migration — full cutover checklist
 - Validate: full deployment pipeline works, zero-downtime DNS switch

@@ -22,6 +22,8 @@ def upgrade() -> None:
         DO $$ BEGIN
           IF EXISTS (SELECT 1 FROM information_schema.columns
                      WHERE table_name='users' AND column_name='auth0_sub')
+             AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_name='users' AND column_name='oidc_sub')
           THEN ALTER TABLE users RENAME COLUMN auth0_sub TO oidc_sub;
           END IF;
         END $$
@@ -30,10 +32,15 @@ def upgrade() -> None:
         DO $$ BEGIN
           IF EXISTS (SELECT 1 FROM information_schema.columns
                      WHERE table_name='gh_installations' AND column_name='auth0_org_id')
+             AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+                     WHERE table_name='gh_installations' AND column_name='oidc_org_id')
           THEN ALTER TABLE gh_installations RENAME COLUMN auth0_org_id TO oidc_org_id;
           END IF;
         END $$
     """)
+    # If both old and new columns exist (partial prior migration), drop the old one.
+    op.execute("ALTER TABLE users DROP COLUMN IF EXISTS auth0_sub")
+    op.execute("ALTER TABLE gh_installations DROP COLUMN IF EXISTS auth0_org_id")
     op.execute("DROP INDEX IF EXISTS idx_gh_installations_auth0_org_id")
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_gh_installations_oidc_org_id "
