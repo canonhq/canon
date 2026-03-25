@@ -113,7 +113,7 @@ src/canon/auth/
 
 ## 3. Generic OIDC Provider
 
-<!-- canon:system:3 status:done -->
+<!-- canon:system:3 status:in_progress -->
 
 Implement a discovery-based OIDC provider that works with any compliant identity provider (Okta, Keycloak, Zitadel, Google Workspace, Entra ID, etc.) using the `.well-known/openid-configuration` endpoint.
 
@@ -740,7 +740,7 @@ Each auth test should run against both provider configurations:
 <!-- canon:ticket:github:408 -->
 ## 14. Rollout Plan
 
-<!-- canon:system:14 status:todo -->
+<!-- canon:system:14 status:done -->
 
 ### Phase 1: Provider Abstraction (no behavior change)
 

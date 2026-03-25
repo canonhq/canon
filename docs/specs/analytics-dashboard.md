@@ -1,6 +1,6 @@
 ---
 title: "Analytics Dashboard"
-status: draft
+status: in_progress
 owner: ng
 team: canon
 ticket_project: canonhq/canon
@@ -35,7 +35,7 @@ Canon tracks extensive operational data via PostHog (webhooks, syncs, PR analyse
 
 ## 2. PostHog Event Taxonomy
 
-<!-- canon:system:2 status:todo -->
+<!-- canon:system:2 status:in_progress -->
 
 Enrich Canon's PostHog event stream with lifecycle events that power the analytics dashboard. Existing events are leveraged as-is; new events fill gaps in ticket mapping, spec lifecycle, config usage, and SRE tracking.
 
@@ -113,27 +113,42 @@ All `analytics.track()` calls must include `groups={"organization": org}` to ena
 
 ### Acceptance Criteria
 
-- [ ] `ticket_created` event emitted on every individual ticket creation in forward sync
-- [ ] `ticket_deduped` event emitted when dedup finds existing ticket (with method: fingerprint or title)
-- [ ] `ticket_closed` event emitted when lifecycle sync closes a ticket
-- [ ] `ticket_reopened` event emitted when lifecycle sync reopens a ticket
-- [ ] `ticket_status_synced` event emitted on every reverse sync status change
+- [x] `ticket_created` event emitted on every individual ticket creation in forward sync
+<!-- canon:realized-in:audit file:src/canon/sync/engine.py:304 -->
+- [x] `ticket_deduped` event emitted when dedup finds existing ticket (with method: fingerprint or title)
+<!-- canon:realized-in:audit file:src/canon/sync/engine.py:261 -->
+- [x] `ticket_closed` event emitted when lifecycle sync closes a ticket
+<!-- canon:realized-in:audit file:src/canon/sync/engine.py:366 -->
+- [x] `ticket_reopened` event emitted when lifecycle sync reopens a ticket
+<!-- canon:realized-in:audit file:src/canon/sync/engine.py:399 -->
+- [x] `ticket_status_synced` event emitted on every reverse sync status change
+<!-- canon:realized-in:audit file:src/canon/sync/engine.py:594 -->
 - [ ] `ticket_routing_matched` event emitted when routing rules resolve a section to a target system
-- [ ] `spec_detected` event emitted when a new spec file is first seen on push
-- [ ] `spec_status_changed` event emitted when spec frontmatter status changes between pushes
-- [ ] `ac_realized` event emitted individually for each AC realized during PR analysis
-- [ ] `stale_spec_detected` event emitted by stale detection when spec exceeds threshold
-- [ ] `config_loaded` event emitted when CANON.yaml is parsed, including all feature flag booleans
+- [x] `spec_detected` event emitted when a new spec file is first seen on push
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_push.py:330 -->
+- [x] `spec_status_changed` event emitted when spec frontmatter status changes between pushes
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_push.py:354 -->
+- [x] `ac_realized` event emitted individually for each AC realized during PR analysis
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_pull_request.py:364 -->
+- [x] `stale_spec_detected` event emitted by stale detection when spec exceeds threshold
+<!-- canon:realized-in:audit file:src/canon/cron/stale_check.py:120 -->
+- [x] `config_loaded` event emitted when CANON.yaml is parsed, including all feature flag booleans
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_push.py:293 -->
 - [ ] `config_feature_used` event emitted when a config-driven feature activates
-- [ ] `sre_alert_fired` event emitted when SRE alerting triggers
-- [ ] `weekly_digest_sent` event emitted when weekly digest is delivered
-- [ ] Existing `analytics.track()` calls with org context include `groups={"organization": org}` (mcp, webhooks, agent — ~15 call sites; editor already migrated)
-- [ ] Call sites without org context (auth denials, health checks, rate limits, slow queries) are left as-is
-- [ ] All new events include `groups={"organization": org}` parameter
+- [x] `sre_alert_fired` event emitted when SRE alerting triggers
+<!-- canon:realized-in:audit file:src/canon/alerts/slack.py:49 -->
+- [x] `weekly_digest_sent` event emitted when weekly digest is delivered
+<!-- canon:realized-in:audit file:src/canon/cron/weekly_digest.py:52 -->
+- [x] Existing `analytics.track()` calls with org context include `groups={"organization": org}` (mcp, webhooks, agent — ~15 call sites; editor already migrated)
+<!-- canon:realized-in:audit file:src/canon/mcp/server.py:197 file:src/canon/sync/engine.py:269 file:src/canon/agent/client.py:76 -->
+- [x] Call sites without org context (auth denials, health checks, rate limits, slow queries) are left as-is
+<!-- canon:realized-in:audit file:src/canon/auth/deps.py file:src/canon/main.py -->
+- [x] All new events include `groups={"organization": org}` parameter
+<!-- canon:realized-in:audit file:src/canon/sync/engine.py:313 file:src/canon/github/handlers/on_push.py:340 -->
 
 ## 3. Health Score Algorithm
 
-<!-- canon:system:3 status:todo -->
+<!-- canon:system:3 status:in_progress -->
 
 A time-based composite score (0–100) that measures Canon's value in an organization. The score rewards momentum and freshness over static coverage, answering "is Canon making things better over time?"
 
@@ -220,21 +235,30 @@ When an org has fewer than 7 days of event data, the health score shows "Insuffi
 
 ### Acceptance Criteria
 
-- [ ] Momentum pillar computed from 4-week rolling activity counts across 5 event types
-- [ ] Momentum score of 50 represents flat activity (same as prior week)
-- [ ] Freshness pillar computed from per-spec staleness gap weighted by AC count
-- [ ] Freshness excludes specs with no associated PR events (no code counterpart)
-- [ ] Freshness penalizes specs where code changed but spec didn't update (staleness gap > 7 days)
+- [x] Momentum pillar computed from 4-week rolling activity counts across 5 event types
+<!-- canon:realized-in:audit file:src/canon/health_score.py:28 file:src/canon/web/analytics_routes.py:115-123 -->
+- [x] Momentum score of 50 represents flat activity (same as prior week)
+<!-- canon:realized-in:audit file:src/canon/health_score.py:16-38 -->
+- [x] Freshness pillar computed from per-spec staleness gap weighted by AC count
+<!-- canon:realized-in:audit file:src/canon/health_score.py:41-52 -->
+- [x] Freshness excludes specs with no associated PR events (no code counterpart)
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:138-146 -->
+- [x] Freshness penalizes specs where code changed but spec didn't update (staleness gap > 7 days)
+<!-- canon:realized-in:audit file:src/canon/health_score.py:50 -->
 - [ ] Time-to-Ship pillar computed from median lifecycle stage durations
-- [ ] Time-to-Ship is self-referential (current period vs org's own prior period)
-- [ ] Composite health score uses weights: Momentum 35%, Freshness 30%, Time-to-Ship 35%
+- [x] Time-to-Ship is self-referential (current period vs org's own prior period)
+<!-- canon:realized-in:audit file:src/canon/health_score.py:55-61 file:src/canon/web/analytics_routes.py:173-191 -->
+- [x] Composite health score uses weights: Momentum 35%, Freshness 30%, Time-to-Ship 35%
+<!-- canon:realized-in:audit file:src/canon/health_score.py:65 -->
 - [ ] Orgs with < 7 days of data show "Insufficient data" instead of a score
-- [ ] Individual pillars without data show "—" with explanatory tooltip
-- [ ] Health score computation handles division by zero gracefully (empty periods)
+- [x] Individual pillars without data show "—" with explanatory tooltip
+<!-- canon:realized-in:audit file:frontend/src/components/analytics/PillarCard.vue:22 -->
+- [x] Health score computation handles division by zero gracefully (empty periods)
+<!-- canon:realized-in:audit file:src/canon/health_score.py:11,29-34,57 -->
 
 ## 4. Analytics API
 
-<!-- canon:system:4 status:todo -->
+<!-- canon:system:4 status:in_progress -->
 
 New backend endpoints that query PostHog via HogQL and shape data for the frontend dashboard. Uses a new `analytics_query.py` module separate from the existing write-only `analytics.py`.
 
@@ -316,27 +340,41 @@ Cache keys: `analytics:{org}:{endpoint}:{team}:{days}`. Use in-process TTL cache
 
 ### Acceptance Criteria
 
-- [ ] New `PostHogQueryClient` class in `src/canon/analytics_query.py` queries PostHog HogQL API
+- [x] New `PostHogQueryClient` class in `src/canon/analytics_query.py` queries PostHog HogQL API
+<!-- canon:realized-in:audit file:src/canon/analytics_query.py:14 -->
 - [ ] New setting `POSTHOG_PERSONAL_API_KEY` for read access to PostHog query API
-- [ ] `GET /analytics/health` returns composite score, pillar breakdown, and 30-day trend
-- [ ] `GET /analytics/momentum` returns weekly activity, top repos, and top contributors
-- [ ] `GET /analytics/freshness` returns per-spec freshness scores and summary
-- [ ] `GET /analytics/time-to-ship` returns lifecycle stage durations and improvement trend
-- [ ] `GET /analytics/feature-usage` returns CANON.yaml feature adoption percentages
-- [ ] Health, momentum, freshness, time-to-ship endpoints require `specs:read` permission
-- [ ] Feature-usage endpoint requires `specs:admin` permission
-- [ ] All endpoints except feature-usage accept optional `team` query parameter for voluntary filtering
+- [x] `GET /analytics/health` returns composite score, pillar breakdown, and 30-day trend
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:506 -->
+- [x] `GET /analytics/momentum` returns weekly activity, top repos, and top contributors
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:521 -->
+- [x] `GET /analytics/freshness` returns per-spec freshness scores and summary
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:536 -->
+- [x] `GET /analytics/time-to-ship` returns lifecycle stage durations and improvement trend
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:551 -->
+- [x] `GET /analytics/feature-usage` returns CANON.yaml feature adoption percentages
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:566 -->
+- [x] Health, momentum, freshness, time-to-ship endpoints require `specs:read` permission
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:512,527,542,557 -->
+- [x] Feature-usage endpoint requires `specs:admin` permission
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:570 -->
+- [x] All endpoints except feature-usage accept optional `team` query parameter for voluntary filtering
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:510,525,540,555 -->
 - [ ] Team dropdown populated from distinct `team` values across org's specs
 - [ ] PostHog query timeout set to 10 seconds; stale cache returned on timeout
-- [ ] Health endpoint cached for 1 hour
-- [ ] Momentum, freshness, time-to-ship endpoints cached for 15 minutes
-- [ ] Feature-usage endpoint cached for 1 hour
-- [ ] Endpoints return graceful "insufficient data" response when PostHog has no events
-- [ ] Endpoints handle PostHog API errors without crashing (return partial data or error message)
+- [x] Health endpoint cached for 1 hour
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:517 -->
+- [x] Momentum, freshness, time-to-ship endpoints cached for 15 minutes
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:532,547,562 -->
+- [x] Feature-usage endpoint cached for 1 hour
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:575 -->
+- [x] Endpoints return graceful "insufficient data" response when PostHog has no events
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:88-89 -->
+- [x] Endpoints handle PostHog API errors without crashing (return partial data or error message)
+<!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:93-96 -->
 
 ## 5. Frontend Dashboard
 
-<!-- canon:system:5 status:todo -->
+<!-- canon:system:5 status:in_progress -->
 
 New Vue 3 view and components implementing the Executive Summary layout: hero health score, pillar cards, and stacked trend charts.
 
@@ -398,22 +436,35 @@ Same route and components for both roles. The `AnalyticsFilterBar` team picker:
 
 ### Acceptance Criteria
 
-- [ ] New route `/app/:org/analytics` renders `AnalyticsView.vue`
-- [ ] "Analytics" link added to `AppNav.vue` main navigation
+- [x] New route `/app/:org/analytics` renders `AnalyticsView.vue`
+<!-- canon:realized-in:audit file:frontend/src/router/index.ts:64-65 -->
+- [x] "Analytics" link added to `AppNav.vue` main navigation
+<!-- canon:realized-in:audit file:frontend/src/components/layout/AppNav.vue:33-36 -->
 - [ ] `HealthScoreHero` displays score (0–100), progress bar, label, and 30-day sparkline
-- [ ] `PillarRow` shows three `PillarCard` components with score, directional arrow, and summary
-- [ ] `AnalyticsFilterBar` supports team picker and time range selector (7d/30d/90d)
-- [ ] Non-admin users see the same team picker but cannot access Feature Usage section
+- [x] `PillarRow` shows three `PillarCard` components with score, directional arrow, and summary
+<!-- canon:realized-in:audit file:frontend/src/components/analytics/PillarRow.vue file:frontend/src/components/analytics/PillarCard.vue -->
+- [x] `AnalyticsFilterBar` supports team picker and time range selector (7d/30d/90d)
+<!-- canon:realized-in:audit file:frontend/src/components/analytics/AnalyticsFilterBar.vue -->
+- [x] Non-admin users see the same team picker but cannot access Feature Usage section
+<!-- canon:realized-in:audit file:frontend/src/views/AnalyticsView.vue:22,44 -->
 - [ ] `MomentumChart` renders weekly activity as stacked area chart
-- [ ] `FreshnessChart` renders per-spec freshness as horizontal bar chart
-- [ ] `CycleTimeChart` renders lifecycle stages as waterfall chart
-- [ ] `FeatureUsageBar` renders CANON.yaml feature adoption as horizontal bars
-- [ ] Charts lazy-load data when scrolled into view (IntersectionObserver)
-- [ ] Health score and pillars load on page mount (not lazy)
+- [x] `FreshnessChart` renders per-spec freshness as horizontal bar chart
+<!-- canon:realized-in:audit file:frontend/src/components/analytics/FreshnessChart.vue -->
+- [x] `CycleTimeChart` renders lifecycle stages as waterfall chart
+<!-- canon:realized-in:audit file:frontend/src/components/analytics/CycleTimeChart.vue -->
+- [x] `FeatureUsageBar` renders CANON.yaml feature adoption as horizontal bars
+<!-- canon:realized-in:audit file:frontend/src/components/analytics/FeatureUsageBar.vue -->
+- [x] Charts lazy-load data when scrolled into view (IntersectionObserver)
+<!-- canon:realized-in:audit file:frontend/src/components/analytics/MomentumChart.vue:28 file:frontend/src/components/analytics/FreshnessChart.vue:26 file:frontend/src/components/analytics/CycleTimeChart.vue:27 file:frontend/src/components/analytics/FeatureUsageBar.vue:27 -->
+- [x] Health score and pillars load on page mount (not lazy)
+<!-- canon:realized-in:audit file:frontend/src/views/AnalyticsView.vue:24-27 -->
 - [ ] Loading state shows skeleton placeholders
-- [ ] Insufficient data state shows explanatory empty state
-- [ ] Chart.js / vue-chartjs used for all chart components (already in `frontend/package.json`)
-- [ ] All components follow existing Vue 3 Composition API patterns
+- [x] Insufficient data state shows explanatory empty state
+<!-- canon:realized-in:audit file:frontend/src/views/AnalyticsView.vue:51-52 -->
+- [x] Chart.js / vue-chartjs used for all chart components (already in `frontend/package.json`)
+<!-- canon:realized-in:audit file:frontend/src/components/analytics/MomentumChart.vue:15 file:frontend/src/components/analytics/FreshnessChart.vue:13 -->
+- [x] All components follow existing Vue 3 Composition API patterns
+<!-- canon:realized-in:audit file:frontend/src/views/AnalyticsView.vue:1 -->
 
 ## Open Questions
 

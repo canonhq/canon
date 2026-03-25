@@ -65,7 +65,8 @@ Key files with hardcoded `docs/specs/` paths:
 <!-- specwright:realized-in:PR#292 file:src/specwright/cron/sync_status.py -->
 <!-- specwright:realized-in:PR#292 file:src/specwright/github/handlers/on_pull_request.py -->
 - [ ] `canon init` creates template in the first configured spec directory
-- [ ] MCP `create_spec` writes to the configured spec directory
+- [x] MCP `create_spec` writes to the configured spec directory
+<!-- canon:realized-in:audit file:src/canon/mcp/server.py:654 -->
 - [x] MCP `list_specs` reads from configured spec directories
 <!-- specwright:realized-in:PR#292 file:src/specwright/mcp/server.py -->
 - [x] `filter_spec_files()` matches against configured patterns
@@ -429,7 +430,7 @@ Documentation for open-source contributors.
 <!-- canon:ticket:github:349 -->
 ## 10. Versioned Documentation
 
-<!-- canon:system:10 status:in_progress -->
+<!-- canon:system:10 status:done -->
 
 Support versioned documentation so users on older releases can reference the correct docs.
 
@@ -456,12 +457,13 @@ Use VitePress multi-version support (via directory-based versioning or a plugin 
 - [x] `latest` always reflects the current `main` branch
 - [x] Older versions display a banner linking to latest
 - [x] Canonical URLs point to latest version
-- [ ] Auto-generated reference pages are version-specific
+- [x] Auto-generated reference pages are version-specific
+<!-- canon:realized-in:audit file:docs-site/versioned/v1.32/reference/cli.html file:docs-site/versioned/v1.32/reference/mcp.html file:docs-site/versioned/v1.32/reference/api.html -->
 
 <!-- canon:ticket:github:186 -->
 ## 11. Deployment & Hosting
 
-<!-- specwright:system:11 status:in_progress -->
+<!-- canon:system:11 status:done -->
 
 Set up automated deployment for the docs site.
 

@@ -15,7 +15,7 @@ Fix three high-severity vulnerabilities identified in the Canon platform: an una
 
 ## 1. Background
 
-<!-- specwright:system:1 status:done -->
+<!-- canon:system:1 status:done -->
 
 A security review identified three vulnerabilities that must be resolved before production deployment. These are distinct from the broader [auth hardening](auth-hardening.md) work — they are immediate fixes for existing code paths, not new feature development.
 
@@ -62,7 +62,7 @@ When Auth0 is not configured, all users receive anonymous access with full admin
 <!-- canon:ticket:github:411 -->
 ## 4. Remove Hardcoded Session Secret Fallback
 
-<!-- specwright:system:4 status:todo -->
+<!-- canon:system:4 status:todo -->
 
 **Severity: HIGH**
 

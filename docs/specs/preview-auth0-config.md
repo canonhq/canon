@@ -16,6 +16,8 @@ updated: "2026-03-20"
 
 ## 1. Background
 
+<!-- canon:system:1 status:done -->
+
 Preview environments (`canon-preview-N` namespaces) deploy per-PR instances at
 `pr-N.canonhq.co`. Two Auth0 configuration gaps were discovered during SRE
 alerting work (PR #453):
@@ -40,7 +42,8 @@ similarly missing M2M credentials. The infra-enablement spec
 but does not cover preview environments or the opaque token issue.
 
 ## 2. Add M2M Credentials to Workflow Secrets
-<!-- canon:status:done -->
+
+<!-- canon:system:2 status:done -->
 
 Add `AUTH0_M2M_CLIENT_ID` and `AUTH0_M2M_CLIENT_SECRET` to the `canon-auth0` K8s
 secret in both deployment workflows.
@@ -66,7 +69,8 @@ Changes to both workflow files are identical — add two env vars and two `--fro
 flags to the `kubectl create secret` command for `canon-auth0`.
 
 ## 3. Fix Auth0 Wildcard Callback URLs
-<!-- canon:status:done -->
+
+<!-- canon:system:3 status:done -->
 
 Configure Auth0 so that preview environment callback URLs are recognized, causing
 Auth0 to return JWT access tokens instead of opaque ones.
@@ -99,7 +103,8 @@ the existing production app handles both production and preview URLs.
 - [ ] The `jwt.DecodeError` warning no longer appears in preview logs
 
 ## 4. Verify Helm Chart Compatibility
-<!-- canon:status:done -->
+
+<!-- canon:system:4 status:done -->
 
 Ensure the Helm chart deployment template correctly maps the new M2M env vars from the
 `canon-auth0` secret to the application container.
@@ -114,6 +119,8 @@ Ensure the Helm chart deployment template correctly maps the new M2M env vars fr
 <!-- canon:realized-in: file:chart/canon/values-preview.yaml (no secrets overrides) -->
 
 ## 5. Rollout Plan
+
+<!-- canon:system:5 status:done -->
 
 1. **Apply Terraform** — Run `terraform apply` in `gv-infra/experiments/canon/` to
    fix the wildcard callback URLs (`pr-*.canonhq.co` → `*.canonhq.co`)
