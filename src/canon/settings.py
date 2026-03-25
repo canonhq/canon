@@ -135,6 +135,10 @@ class Settings(BaseSettings):
     posthog_logs_enabled: bool = False
     posthog_logs_min_level: str = "WARNING"
 
+    # PostHog Query API (read access for analytics dashboard)
+    posthog_personal_api_key: str = ""
+    posthog_project_id: str = ""
+
     # SRE Alerting
     slack_alerts_webhook_url: str = ""
     sre_alerts_enabled: bool = True

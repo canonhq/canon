@@ -1,4 +1,4 @@
-"""In-memory TTL cache for GitHub data."""
+"""In-memory TTL cache with per-key expiration."""
 
 from __future__ import annotations
 
@@ -34,6 +34,10 @@ class TTLCache:
             value=value,
             expires_at=time.monotonic() + self.ttl_seconds,
         )
+
+    def set_with_ttl(self, key: str, value: Any, ttl: int) -> None:
+        """Set a value with a specific TTL, without mutating shared ttl_seconds."""
+        self._store[key] = _Entry(value=value, expires_at=time.monotonic() + ttl)
 
     def invalidate(self, key: str) -> None:
         self._store.pop(key, None)

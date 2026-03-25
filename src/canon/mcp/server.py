@@ -190,7 +190,12 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         limit: int = 10,
         ctx: Context = None,  # type: ignore[assignment]
     ) -> list[dict] | dict:
-        analytics.track("mcp_tool_called", properties={"tool": "search", "repo": repo or ""})
+        _org = repo.split("/")[0] if repo and "/" in repo else ""
+        analytics.track(
+            "mcp_tool_called",
+            properties={"tool": "search", "repo": repo or ""},
+            groups={"organization": _org} if _org else None,
+        )
         d = _get_deps(ctx)
         if d.search_index is None:
             return {"error": "Search index not available"}
@@ -261,7 +266,9 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict:
         analytics.track(
-            "mcp_tool_called", properties={"tool": "get_spec", "repo": f"{owner}/{repo}"}
+            "mcp_tool_called",
+            properties={"tool": "get_spec", "repo": f"{owner}/{repo}"},
+            groups={"organization": owner},
         )
         d = _get_deps(ctx)
         if d.github_client is None:
@@ -340,7 +347,9 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict:
         analytics.track(
-            "mcp_tool_called", properties={"tool": "get_section", "repo": f"{owner}/{repo}"}
+            "mcp_tool_called",
+            properties={"tool": "get_section", "repo": f"{owner}/{repo}"},
+            groups={"organization": owner},
         )
         d = _get_deps(ctx)
         if d.github_client is None:
@@ -384,7 +393,9 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict:
         analytics.track(
-            "mcp_tool_called", properties={"tool": "get_doc", "repo": f"{owner}/{repo}"}
+            "mcp_tool_called",
+            properties={"tool": "get_doc", "repo": f"{owner}/{repo}"},
+            groups={"organization": owner},
         )
         d = _get_deps(ctx)
         if d.github_client is None:
@@ -441,7 +452,9 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict:
         analytics.track(
-            "mcp_tool_called", properties={"tool": "list_specs", "repo": f"{owner}/{repo}"}
+            "mcp_tool_called",
+            properties={"tool": "list_specs", "repo": f"{owner}/{repo}"},
+            groups={"organization": owner},
         )
         d = _get_deps(ctx)
         if d.github_client is None:
@@ -505,7 +518,12 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         repo: str | None = None,
         ctx: Context = None,  # type: ignore[assignment]
     ) -> list[dict] | dict:
-        analytics.track("mcp_tool_called", properties={"tool": "list_docs", "repo": repo or ""})
+        _org = repo.split("/")[0] if repo and "/" in repo else ""
+        analytics.track(
+            "mcp_tool_called",
+            properties={"tool": "list_docs", "repo": repo or ""},
+            groups={"organization": _org} if _org else None,
+        )
         d = _get_deps(ctx)
         if d.search_index is None:
             return {"error": "Search index not available"}
@@ -538,7 +556,12 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         days: int = 30,
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict:
-        analytics.track("mcp_tool_called", properties={"tool": "get_coverage", "repo": repo or ""})
+        _org = repo.split("/")[0] if repo and "/" in repo else ""
+        analytics.track(
+            "mcp_tool_called",
+            properties={"tool": "get_coverage", "repo": repo or ""},
+            groups={"organization": _org} if _org else None,
+        )
         d = _get_deps(ctx)
 
         if d.github_client is None and d.agent_store is None:
@@ -583,7 +606,9 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict:
         analytics.track(
-            "mcp_tool_called", properties={"tool": "create_spec", "repo": f"{owner}/{repo}"}
+            "mcp_tool_called",
+            properties={"tool": "create_spec", "repo": f"{owner}/{repo}"},
+            groups={"organization": owner},
         )
         d = _get_deps(ctx)
         if d.github_client is None:
@@ -665,6 +690,7 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         analytics.track(
             "mcp_tool_called",
             properties={"tool": "update_section_status", "repo": f"{owner}/{repo}"},
+            groups={"organization": owner},
         )
         d = _get_deps(ctx)
         if d.github_client is None:
@@ -743,7 +769,9 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict:
         analytics.track(
-            "mcp_tool_called", properties={"tool": "add_realization", "repo": f"{owner}/{repo}"}
+            "mcp_tool_called",
+            properties={"tool": "add_realization", "repo": f"{owner}/{repo}"},
+            groups={"organization": owner},
         )
         d = _get_deps(ctx)
         if d.github_client is None:
@@ -812,7 +840,9 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict:
         analytics.track(
-            "mcp_tool_called", properties={"tool": "sync_spec_status", "repo": f"{owner}/{repo}"}
+            "mcp_tool_called",
+            properties={"tool": "sync_spec_status", "repo": f"{owner}/{repo}"},
+            groups={"organization": owner},
         )
         d = _get_deps(ctx)
         if d.github_client is None:

@@ -39,6 +39,7 @@ from .db import (
 from .github.client import GitHubClient, InstallationNotFound
 from .github.verify import verify_signature
 from .settings import Settings
+from .web.analytics_routes import analytics_router
 from .web.cache import TTLCache
 from .web.editor_routes import editor_router
 from .web.middleware import CacheControlMiddleware, RateLimitMiddleware, RequestLoggingMiddleware
@@ -90,6 +91,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             "version": app_version,
             "hostname": socket.gethostname(),
         },
+    )
+
+    # PostHog query client (analytics dashboard read queries)
+    from .analytics_query import PostHogQueryClient
+
+    app.state.posthog_query_client = PostHogQueryClient(
+        api_key=settings.posthog_personal_api_key,
+        project_id=settings.posthog_project_id,
+        host=settings.posthog_host,
+    )
+    _qc = app.state.posthog_query_client
+    logger.info(
+        "PostHog query client configured=%s (project_id=%s)",
+        _qc.configured,
+        settings.posthog_project_id or "(empty)",
     )
 
     # SRE Slack alerter
@@ -261,6 +277,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         yield
 
     # Shutdown
+    phq = getattr(app.state, "posthog_query_client", None)
+    if phq is not None:
+        await phq.aclose()
     if hasattr(app.state, "slack_alerter"):
         await app.state.slack_alerter.close()
     otel_logging.shutdown()
@@ -442,6 +461,7 @@ app.include_router(billing_webhook_router)
 # Mount web UI routes
 app.include_router(web_router)
 app.include_router(app_router)
+app.include_router(analytics_router)
 app.include_router(editor_router)
 app.include_router(profile_router)
 app.include_router(ticket_router)

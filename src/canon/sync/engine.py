@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
+from canon import analytics
 from canon.parser.models import SpecDocument, SpecSection
 from canon.parser.writer import (
     StatusUpdate,
@@ -78,6 +79,8 @@ async def forward_sync(
     system_config: TicketSystemConfig | None = None,
     spec_url: str = "",
     lifecycle_sync: bool | Literal["close_only"] = True,
+    repo: str = "",
+    org: str = "",
 ) -> tuple[str, SyncResult]:
     """Forward sync: create tickets for sections without one.
 
@@ -254,6 +257,17 @@ async def forward_sync(
                             ticket_id=dedup_match.ticket_id,
                         )
                     )
+                    analytics.track(
+                        "ticket_deduped",
+                        properties={
+                            "repo": repo,
+                            "spec_path": doc.file_path,
+                            "section_id": section.id,
+                            "ticket_id": dedup_match.ticket_id,
+                            "dedup_method": dedup_method,
+                        },
+                        groups={"organization": org} if org else None,
+                    )
                     processed_sections.append(section)
                     continue
 
@@ -285,6 +299,18 @@ async def forward_sync(
                         ticket_id=ticket.ticket_id,
                         ticket_url=ticket.ticket_url,
                     )
+                )
+                analytics.track(
+                    "ticket_created",
+                    properties={
+                        "repo": repo,
+                        "spec_path": doc.file_path,
+                        "section_id": section.id,
+                        "ticket_system": _detect_system(adapter, system_config),
+                        "ticket_id": ticket.ticket_id,
+                        "issue_type": issue_type,
+                    },
+                    groups={"organization": org} if org else None,
                 )
             except Exception as err:
                 result.errors.append(SyncError(section_id=section.id, error=str(err)))
@@ -336,6 +362,17 @@ async def forward_sync(
                                     ticket_id=section.ticket_link.ticket_id,
                                 )
                             )
+                            analytics.track(
+                                "ticket_closed",
+                                properties={
+                                    "repo": repo,
+                                    "spec_path": doc.file_path,
+                                    "section_id": section.id,
+                                    "ticket_id": section.ticket_link.ticket_id,
+                                    "reason": section.status.state,
+                                },
+                                groups={"organization": org} if org else None,
+                            )
                     except Exception as err:
                         result.errors.append(SyncError(section_id=section.id, error=str(err)))
 
@@ -357,6 +394,16 @@ async def forward_sync(
                                 section_id=section.id,
                                 ticket_id=section.ticket_link.ticket_id,
                             )
+                        )
+                        analytics.track(
+                            "ticket_reopened",
+                            properties={
+                                "repo": repo,
+                                "spec_path": doc.file_path,
+                                "section_id": section.id,
+                                "ticket_id": section.ticket_link.ticket_id,
+                            },
+                            groups={"organization": org} if org else None,
                         )
                 except Exception as err:
                     result.errors.append(SyncError(section_id=section.id, error=str(err)))
@@ -497,6 +544,8 @@ async def reverse_sync(
     adapter: TicketAdapter,
     *,
     system_config: TicketSystemConfig | None = None,
+    repo: str = "",
+    org: str = "",
 ) -> tuple[str, SyncResult]:
     """Reverse sync: poll ticket statuses and update spec status comments.
 
@@ -540,6 +589,19 @@ async def reverse_sync(
                         old_state=section.status.state,
                         new_state=new_state,
                     )
+                )
+                analytics.track(
+                    "ticket_status_synced",
+                    properties={
+                        "repo": repo,
+                        "spec_path": doc.file_path,
+                        "section_id": section.id,
+                        "ticket_id": section.ticket_link.ticket_id,
+                        "old_state": section.status.state,
+                        "new_state": new_state,
+                        "ticket_system": system,
+                    },
+                    groups={"organization": org} if org else None,
                 )
         except Exception as err:
             result.errors.append(SyncError(section_id=section.id, error=str(err)))

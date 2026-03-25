@@ -128,9 +128,13 @@ secrets:
 
   ## @section PostHog secrets (optional — analytics + error tracking)
   ## @param secrets.posthog.apiKey PostHog project API key
+  ## @param secrets.posthog.personalApiKey PostHog personal API key (query:read scope) for analytics dashboard
+  ## @param secrets.posthog.projectId PostHog project ID for analytics dashboard queries
   ## @param secrets.posthog.existingSecret Use existing secret
   posthog:
     apiKey: ""
+    personalApiKey: ""
+    projectId: ""
     existingSecret: ""
 
   ## @section Slack secrets (optional — SRE alerting)

@@ -48,6 +48,13 @@ async def run_weekly_digest() -> dict:
     finally:
         await alerter.close()
 
+    analytics.track(
+        "weekly_digest_sent",
+        properties={
+            "alerts_count": digest.total_errors_this_week,
+        },
+    )
+
     logger.info("Weekly SRE digest sent to Slack")
     return {"sent": True}
 

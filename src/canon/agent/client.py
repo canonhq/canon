@@ -60,7 +60,7 @@ class ClaudeClient:
         return ClaudeClient(api_key=api_key)
 
     def complete(
-        self, system_prompt: str, user_message: str, config: AgentConfig
+        self, system_prompt: str, user_message: str, config: AgentConfig, org: str = ""
     ) -> CompletionResult:
         if not self._client:
             analytics.track(
@@ -73,6 +73,7 @@ class ClaudeClient:
                     "success": False,
                     "error_message": "Agent unavailable (no API key)",
                 },
+                groups={"organization": org} if org else None,
             )
             raise AgentUnavailableError()
 
@@ -116,6 +117,7 @@ class ClaudeClient:
                     "success": success,
                     "error_message": error_message,
                 },
+                groups={"organization": org} if org else None,
             )
 
 

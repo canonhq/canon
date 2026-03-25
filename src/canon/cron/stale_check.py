@@ -12,7 +12,7 @@ import contextlib
 import logging
 import sys
 
-from .. import otel_logging
+from .. import analytics, otel_logging
 from ..db import create_pool
 from ..db.schema import ensure_schema
 from ..github.client import GitHubClient
@@ -106,6 +106,25 @@ async def run_stale_check() -> list[dict]:
                     full_repo,
                     threshold_days=threshold_days,
                 )
+
+                for stale_doc in stale_docs:
+                    days_since_update = None
+                    if stale_doc.stale_since:
+                        import datetime
+
+                        days_since_update = (
+                            datetime.datetime.now(tz=datetime.UTC) - stale_doc.stale_since
+                        ).days
+                    stale_org = stale_doc.repo.split("/")[0] if "/" in stale_doc.repo else ""
+                    analytics.track(
+                        "stale_spec_detected",
+                        properties={
+                            "repo": stale_doc.repo,
+                            "spec_path": stale_doc.path,
+                            "days_since_update": days_since_update,
+                        },
+                        groups={"organization": stale_org} if stale_org else None,
+                    )
 
                 issue_number = await upsert_stale_issue(
                     client,
