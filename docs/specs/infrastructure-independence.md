@@ -48,49 +48,49 @@ Canon's infrastructure is currently managed in the `gv-infra` repo under `experi
 
 ## 1. Terraform Foundation
 
-<!-- status: todo -->
+<!-- status: done -->
 
 Set up Terraform project structure and state management in this repo.
 
 ### Acceptance Criteria
 
-- [ ] `infra/` directory with Terraform modules for each concern
-- [ ] Terraform state stored in DigitalOcean Spaces (S3-compatible) or Terraform Cloud
-- [ ] `infra/README.md` documenting how to init, plan, apply
-- [ ] CI workflow for `terraform plan` on PRs touching `infra/`
-- [ ] CI workflow for `terraform apply` on merge to main (with approval gate)
-- [ ] Provider versions pinned (digitalocean, aws, auth0, google, stripe, posthog)
-- [ ] Variables file with environment-specific tfvars (production, staging)
+- [x] `infra/` directory with Terraform modules for each concern
+- [x] Terraform state stored in DigitalOcean Spaces (S3-compatible) or Terraform Cloud
+- [x] `infra/README.md` documenting how to init, plan, apply
+- [x] CI workflow for `terraform plan` on PRs touching `infra/`
+- [x] CI workflow for `terraform apply` on merge to main (with approval gate)
+- [x] Provider versions pinned (digitalocean, aws, auth0, google, stripe, posthog)
+- [x] Variables file with environment-specific tfvars (production, staging)
 
 ---
 
 ## 2. Dedicated DOKS Cluster
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 Provision Canon's own Kubernetes cluster on DigitalOcean.
 
 ### Acceptance Criteria
 
-- [ ] Terraform module for DOKS cluster (region: nyc1, node pool config)
-- [ ] Node pool sized appropriately (2-3 nodes, s-2vcpu-4gb or similar)
-- [ ] Auto-upgrade enabled for minor K8s versions
-- [ ] Cluster tagged for cost tracking (`project:canon`)
-- [ ] kubeconfig output available for CI/CD workflows
+- [x] Terraform module for DOKS cluster (region: nyc1, node pool config)
+- [x] Node pool sized appropriately (2-3 nodes, s-2vcpu-4gb or similar)
+- [x] Auto-upgrade enabled for minor K8s versions
+- [x] Cluster tagged for cost tracking (`project:canon`)
+- [x] kubeconfig output available for CI/CD workflows
 - [ ] Doppler updated with new `DOKS_CLUSTER_NAME` value
 
 ---
 
 ## 3. Container Registry
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 Set up Canon's own container registry on DigitalOcean.
 
 ### Acceptance Criteria
 
-- [ ] Terraform resource for DOCR registry (or dedicated subscription)
-- [ ] Registry credentials available to the DOKS cluster (K8s pull secret)
+- [x] Terraform resource for DOCR registry (or dedicated subscription)
+- [x] Registry credentials available to the DOKS cluster (K8s pull secret)
 - [ ] CI/CD workflows updated to push to new registry
 - [ ] Doppler updated with new `DOCR_REGISTRY_NAME` value
 - [ ] Old images in `gv-shared` registry cleaned up after migration
@@ -100,7 +100,7 @@ Set up Canon's own container registry on DigitalOcean.
 
 ## 4. DNS Management
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 Move DNS record management for `canonhq.co` into this repo's Terraform. The domain is registered with and hosted on AWS Route 53 (not DigitalOcean DNS).
 
@@ -118,7 +118,7 @@ Move DNS record management for `canonhq.co` into this repo's Terraform. The doma
 
 ## 5. Cluster Bootstrap Services
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 Install shared services on the dedicated cluster that were previously provided by gv-infra.
 
@@ -135,7 +135,7 @@ Install shared services on the dedicated cluster that were previously provided b
 
 ## 6. Auth0 Terraform
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 Move the full Auth0 configuration (~16KB of HCL in `gv-infra/experiments/canon/auth0.tf`) into this repo's Terraform. This is one of the largest modules — it covers 3 application clients, RBAC with 3 roles and 4 permissions, a post-login Action, organization multi-tenancy, and a test user.
 
@@ -182,7 +182,7 @@ Move the full Auth0 configuration (~16KB of HCL in `gv-infra/experiments/canon/a
 
 ## 7. GCP Vertex AI Terraform
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 Move GCP service account and Vertex AI configuration into this repo's Terraform.
 
@@ -198,7 +198,7 @@ Move GCP service account and Vertex AI configuration into this repo's Terraform.
 
 ## 8. CI/CD Workflow Updates
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 Update all GitHub Actions workflows to use Canon-owned infrastructure.
 
@@ -216,7 +216,7 @@ Update all GitHub Actions workflows to use Canon-owned infrastructure.
 
 ## 9. Migration Execution
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 Execute the actual cutover from shared to dedicated infrastructure.
 
@@ -240,7 +240,7 @@ Execute the actual cutover from shared to dedicated infrastructure.
 
 ## 10. Stripe Terraform
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 Move Stripe billing infrastructure into this repo's Terraform. Currently in `gv-infra/experiments/canon/stripe.tf` — covers 2 products with 4 price points, a webhook endpoint, and customer portal configuration.
 
@@ -259,7 +259,7 @@ Move Stripe billing infrastructure into this repo's Terraform. Currently in `gv-
 
 ## 11. PostHog Terraform
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 Move PostHog project and feature flags into this repo's Terraform. Currently in `gv-infra/experiments/canon/posthog.tf`.
 
@@ -275,7 +275,7 @@ Move PostHog project and feature flags into this repo's Terraform. Currently in 
 
 ## 12. Auth0 Organization Auto-Provisioning
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 The biggest gap blocking true SaaS onboarding. Currently, when a customer installs the Canon GitHub App, an Auth0 Organization must be manually created via Terraform and linked to the installation via manual SQL (`UPDATE gh_installations SET oidc_org_id = ...`). This section automates that entire flow.
 
@@ -307,7 +307,7 @@ The biggest gap blocking true SaaS onboarding. Currently, when a customer instal
 
 ## 13. GitHub App Configuration
 
-<!-- status: todo -->
+<!-- status: in_progress -->
 
 The Canon GitHub App is configured manually in the GitHub UI. This section documents the required configuration and verifies it matches production needs. Not Terraform-managed, but must be audited and locked down.
 
