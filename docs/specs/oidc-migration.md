@@ -298,6 +298,7 @@ No data transformation needed. The `sub` claim is an opaque string (`auth0|abc12
 - [x] Baseline migration updated for new installs
 <!-- canon:realized-in:PR#386 file:src/canon/db/migrations/versions/0001_baseline.py:68-91,172-183 -->
 - [x] Existing data migrates cleanly (no transformation, just column rename)
+<!-- canon:realized-in:PR#466 file:src/canon/db/migrations/versions/0002_oidc_rename.py -->
 
 ## 6. Auth Module Refactor
 

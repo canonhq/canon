@@ -492,7 +492,8 @@ integration-test:
 - [ ] OIDC rename migration test: data migrated correctly (`auth0_sub` → `oidc_sub`)
 - [ ] Role column migration test: `users.role` column added with default `'editor'`
 - [ ] Downgrade test: `0002_oidc_rename` reversible (if downgrade implemented)
-- [ ] Baseline idempotency: running baseline on existing schema doesn't fail
+- [x] Baseline idempotency: running baseline on existing schema doesn't fail
+<!-- canon:realized-in:PR#466 file:src/canon/db/migrations/versions/0002_oidc_rename.py -->
 - [ ] Migration tests run in CI with Postgres service container
 - [ ] Migration tests marked with `@pytest.mark.integration`
 
