@@ -48,7 +48,7 @@ Canon has 1,800+ unit tests with strong coverage of individual modules, but sign
 <!-- canon:ticket:github:392 -->
 ## 2. Configuration Matrix Testing
 
-<!-- canon:system:2 status:todo -->
+<!-- canon:system:2 status:in_progress -->
 
 Test that the Settings model and provider factory correctly handle all valid (and invalid) configuration combinations. These are fast, in-process tests with no external dependencies.
 
@@ -98,7 +98,7 @@ def config_profile(request) -> Settings:
 <!-- canon:ticket:github:393 -->
 ## 3. Auth Integration Tests
 
-<!-- canon:system:3 status:todo -->
+<!-- canon:system:3 status:in_progress -->
 
 Test the full authentication request cycle through the real FastAPI app, covering middleware, route handlers, session management, and permission resolution — for each auth provider mode.
 
@@ -178,7 +178,7 @@ Test middleware ordering and behavior:
 <!-- canon:ticket:github:394 -->
 ## 4. Helm Template Rendering Tests
 
-<!-- canon:system:4 status:todo -->
+<!-- canon:system:4 status:in_progress -->
 
 Validate that Helm chart templates render correct Kubernetes manifests for each deployment profile. Uses `helm template` to render locally — no cluster required.
 
@@ -237,7 +237,7 @@ Add a `helm-template-test` job to CI that runs these tests. Faster than `helm li
 <!-- canon:ticket:github:395 -->
 ## 5. Docker Smoke Tests
 
-<!-- canon:system:5 status:todo -->
+<!-- canon:system:5 status:in_progress -->
 
 Build the Docker image and verify it starts, responds to health checks, and handles basic API requests. Catches import errors, missing dependencies, and startup failures before deployment.
 
@@ -310,7 +310,7 @@ Add after the existing `docker build` step in CI:
 <!-- canon:ticket:github:396 -->
 ## 6. OSS Export Validation
 
-<!-- canon:system:6 status:todo -->
+<!-- canon:system:6 status:in_progress -->
 
 Validate that the OSS export script produces a working, self-contained repository that builds, passes tests, and runs.
 
@@ -409,7 +409,7 @@ oss-validation:
 <!-- canon:ticket:github:397 -->
 ## 7. Database Migration Testing
 
-<!-- canon:system:7 status:todo -->
+<!-- canon:system:7 status:in_progress -->
 
 Test Alembic migrations against a real PostgreSQL instance to verify they apply cleanly, handle edge cases, and are reversible.
 
@@ -500,7 +500,7 @@ integration-test:
 <!-- canon:ticket:github:398 -->
 ## 8. CI Pipeline Updates
 
-<!-- canon:system:8 status:todo -->
+<!-- canon:system:8 status:in_progress -->
 
 Update the GitHub Actions CI pipeline to orchestrate all new test types alongside existing ones, keeping total CI time under 10 minutes.
 
@@ -564,7 +564,7 @@ Add Postgres service container and migration tests to the existing `integration-
 <!-- canon:ticket:github:399 -->
 ## 9. Test Utilities and Fixtures
 
-<!-- canon:system:9 status:todo -->
+<!-- canon:system:9 status:in_progress -->
 
 Create shared test infrastructure that makes writing configuration-aware tests easy and consistent.
 
