@@ -1,6 +1,6 @@
 ---
 title: Infrastructure Independence
-status: draft
+status: in_progress
 owner: ng
 team: platform
 priority: high
@@ -48,42 +48,54 @@ Canon's infrastructure is currently managed in the `gv-infra` repo under `experi
 
 ## 1. Terraform Foundation
 
-<!-- status: done -->
+<!-- canon:system:1 status:done -->
 
 Set up Terraform project structure and state management in this repo.
 
 ### Acceptance Criteria
 
 - [x] `infra/` directory with Terraform modules for each concern
+<!-- canon:realized-in:audit file:infra/main.tf -->
 - [x] Terraform state stored in DigitalOcean Spaces (S3-compatible) or Terraform Cloud
+<!-- canon:realized-in:audit file:infra/main.tf:16-27 -->
 - [x] `infra/README.md` documenting how to init, plan, apply
+<!-- canon:realized-in:audit file:infra/README.md -->
 - [x] CI workflow for `terraform plan` on PRs touching `infra/`
+<!-- canon:realized-in:audit file:.github/workflows/terraform.yml:18-103 -->
 - [x] CI workflow for `terraform apply` on merge to main (with approval gate)
+<!-- canon:realized-in:audit file:.github/workflows/terraform.yml:105-143 -->
 - [x] Provider versions pinned (digitalocean, aws, auth0, google, stripe, posthog)
+<!-- canon:realized-in:audit file:infra/versions.tf -->
 - [x] Variables file with environment-specific tfvars (production, staging)
+<!-- canon:realized-in:audit file:infra/terraform.tfvars -->
 
 ---
 
 ## 2. Dedicated DOKS Cluster
 
-<!-- status: in_progress -->
+<!-- canon:system:2 status:in_progress -->
 
 Provision Canon's own Kubernetes cluster on DigitalOcean.
 
 ### Acceptance Criteria
 
 - [x] Terraform module for DOKS cluster (region: nyc1, node pool config)
+<!-- canon:realized-in:audit file:infra/modules/doks/main.tf -->
 - [x] Node pool sized appropriately (2-3 nodes, s-2vcpu-4gb or similar)
+<!-- canon:realized-in:audit file:infra/terraform.tfvars:15-16 -->
 - [x] Auto-upgrade enabled for minor K8s versions
+<!-- canon:realized-in:audit file:infra/modules/doks/main.tf:34 -->
 - [x] Cluster tagged for cost tracking (`project:canon`)
+<!-- canon:realized-in:audit file:infra/modules/doks/main.tf:31,38 -->
 - [x] kubeconfig output available for CI/CD workflows
+<!-- canon:realized-in:audit file:infra/modules/doks/outputs.tf -->
 - [ ] Doppler updated with new `DOKS_CLUSTER_NAME` value
 
 ---
 
 ## 3. Container Registry
 
-<!-- status: in_progress -->
+<!-- canon:system:3 status:in_progress -->
 
 Set up Canon's own container registry on DigitalOcean.
 
@@ -100,123 +112,162 @@ Set up Canon's own container registry on DigitalOcean.
 
 ## 4. DNS Management
 
-<!-- status: in_progress -->
+<!-- canon:system:4 status:in_progress -->
 
 Move DNS record management for `canonhq.co` into this repo's Terraform. The domain is registered with and hosted on AWS Route 53 (not DigitalOcean DNS).
 
 ### Acceptance Criteria
 
-- [ ] Terraform AWS provider configured for Route 53 access
+- [x] Terraform AWS provider configured for Route 53 access
+<!-- canon:realized-in:audit file:infra/main.tf:61-68 -->
 - [ ] Import existing Route 53 hosted zone (`canonhq.co`) into Terraform state
-- [ ] A record for apex domain pointing to cluster's ingress load balancer IP
-- [ ] Wildcard A record `*.canonhq.co` for PR preview environments
+- [x] A record for apex domain pointing to cluster's ingress load balancer IP
+<!-- canon:realized-in:audit file:infra/modules/dns/main.tf:25-31 -->
+- [x] Wildcard A record `*.canonhq.co` for PR preview environments
+<!-- canon:realized-in:audit file:infra/modules/dns/main.tf:33-39 -->
 - [ ] MX/TXT records preserved from current configuration
-- [ ] TTL set to 300s (current value), lower during cutover if needed
-- [ ] No references to DigitalOcean DNS — all DNS stays on Route 53
+- [x] TTL set to 300s (current value), lower during cutover if needed
+<!-- canon:realized-in:audit file:infra/modules/dns/main.tf:30,38 -->
+- [x] No references to DigitalOcean DNS — all DNS stays on Route 53
+<!-- canon:realized-in:audit file:infra/modules/dns/main.tf -->
 
 ---
 
 ## 5. Cluster Bootstrap Services
 
-<!-- status: in_progress -->
+<!-- canon:system:5 status:done -->
 
 Install shared services on the dedicated cluster that were previously provided by gv-infra.
 
 ### Acceptance Criteria
 
-- [ ] cert-manager installed via Terraform Helm provider
-- [ ] ClusterIssuer for LetsEncrypt (production + staging)
-- [ ] nginx-ingress controller installed via Terraform Helm provider
-- [ ] Ingress controller gets a DigitalOcean Load Balancer with static IP
-- [ ] Load Balancer IP used for DNS A record
+- [x] cert-manager installed via Terraform Helm provider
+<!-- canon:realized-in:audit file:infra/modules/bootstrap/main.tf:40-51 -->
+- [x] ClusterIssuer for LetsEncrypt (production + staging)
+<!-- canon:realized-in:audit file:infra/modules/bootstrap/main.tf:55-74 -->
+- [x] nginx-ingress controller installed via Terraform Helm provider
+<!-- canon:realized-in:audit file:infra/modules/bootstrap/main.tf:25-36 -->
+- [x] Ingress controller gets a DigitalOcean Load Balancer with static IP
+<!-- canon:realized-in:audit file:infra/modules/bootstrap/main.tf:78-85 -->
+- [x] Load Balancer IP used for DNS A record
+<!-- canon:realized-in:audit file:infra/main.tf:134 -->
 - [ ] Monitoring namespace with basic health checks (optional, can defer)
 
 ---
 
 ## 6. Auth0 Terraform
 
-<!-- status: in_progress -->
+<!-- canon:system:6 status:done -->
 
 Move the full Auth0 configuration (~16KB of HCL in `gv-infra/experiments/canon/auth0.tf`) into this repo's Terraform. This is one of the largest modules — it covers 3 application clients, RBAC with 3 roles and 4 permissions, a post-login Action, organization multi-tenancy, and a test user.
 
 ### Acceptance Criteria
 
 **Clients:**
-- [ ] Web application (`regular_web`) with callbacks for `canonhq.co`, `*.canonhq.co`
-- [ ] Dev application (`regular_web`) with callbacks for `localhost:3000` only
-- [ ] M2M application (`non_interactive`) for Management API + Canon backend org queries
-- [ ] CLI application (`native`) with Device Authorization Grant (`urn:ietf:params:oauth:grant-type:device_code`) and rotating refresh tokens
-- [ ] All clients use RS256 JWT signing
+- [x] Web application (`regular_web`) with callbacks for `canonhq.co`, `*.canonhq.co`
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:26-54 -->
+- [x] Dev application (`regular_web`) with callbacks for `localhost:3000` only
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:63-93 -->
+- [x] M2M application (`non_interactive`) for Management API + Canon backend org queries
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:137-167 -->
+- [x] CLI application (`native`) with Device Authorization Grant (`urn:ietf:params:oauth:grant-type:device_code`) and rotating refresh tokens
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:97-121 -->
+- [x] All clients use RS256 JWT signing
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:51-53,85-87,118-120,144-146 -->
 
 **API & RBAC:**
-- [ ] Resource server (`https://canonhq.co/api`) with `access_token_authz` dialect
-- [ ] 4 permissions: `specs:read`, `specs:write`, `specs:admin`, `org:manage`
-- [ ] 3 roles: Viewer (`specs:read`), Editor (`specs:read` + `specs:write`), Admin (all 4)
-- [ ] Role-permission assignments match current config
+- [x] Resource server (`https://canonhq.co/api`) with `access_token_authz` dialect
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:171-180 -->
+- [x] 4 permissions: `specs:read`, `specs:write`, `specs:admin`, `org:manage`
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:182-204 -->
+- [x] 3 roles: Viewer (`specs:read`), Editor (`specs:read` + `specs:write`), Admin (all 4)
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:208-273 -->
+- [x] Role-permission assignments match current config
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:225-273 -->
 
 **Post-Login Action:**
-- [ ] `canon-default-role` Action (Node 18, post-login v3 trigger)
-- [ ] Auto-assigns Editor role on first GitHub login via M2M Management API
-- [ ] Fetches GitHub IdP access token and embeds in `https://canonhq.co/github` ID token claim
-- [ ] Action secrets wired: `AUTH0_DOMAIN`, `M2M_CLIENT_ID`, `M2M_CLIENT_SECRET`, `EDITOR_ROLE_ID`
+- [x] `canon-default-role` Action (Node 18, post-login v3 trigger)
+<!-- canon:realized-in:audit file:infra/modules/auth0/action.tf:5-13 -->
+- [x] Auto-assigns Editor role on first GitHub login via M2M Management API
+<!-- canon:realized-in:audit file:infra/modules/auth0/action.tf:76-94 -->
+- [x] Fetches GitHub IdP access token and embeds in `https://canonhq.co/github` ID token claim
+<!-- canon:realized-in:audit file:infra/modules/auth0/action.tf:48-73 -->
+- [x] Action secrets wired: `AUTH0_DOMAIN`, `M2M_CLIENT_ID`, `M2M_CLIENT_SECRET`, `EDITOR_ROLE_ID`
+<!-- canon:realized-in:audit file:infra/modules/auth0/action.tf:103-122 -->
 
 **M2M Grants:**
-- [ ] M2M client granted: `create:role_members`, `read:users`, `read:user_idp_tokens`, `read:organizations`
+- [x] M2M client granted: `create:role_members`, `read:users`, `read:user_idp_tokens`, `read:organizations`
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:154-167 -->
 
 **Organizations:**
-- [ ] Auth0 Organizations enabled for multi-tenant access (org_id in token claims)
-- [ ] `canonhq` organization created with GitHub + Username-Password connections
-- [ ] GitHub connection: `assign_membership_on_login = true` (safe due to restrict_signups gate)
-- [ ] Organization usage set to `allow` (login works with or without `?organization=`)
+- [x] Auth0 Organizations enabled for multi-tenant access (org_id in token claims)
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:48-49 -->
+- [x] `canonhq` organization created with GitHub + Username-Password connections
+<!-- canon:realized-in:audit file:infra/modules/auth0/org.tf:5-25 -->
+- [x] GitHub connection: `assign_membership_on_login = true` (safe due to restrict_signups gate)
+<!-- canon:realized-in:audit file:infra/modules/auth0/org.tf:18 -->
+- [x] Organization usage set to `allow` (login works with or without `?organization=`)
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:48 -->
 
 **Connections:**
-- [ ] GitHub social connection enabled for all relevant clients
-- [ ] Username-Password-Authentication database connection enabled
+- [x] GitHub social connection enabled for all relevant clients
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:20-21 -->
+- [x] Username-Password-Authentication database connection enabled
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:125-133 -->
 
 **Test Infrastructure:**
-- [ ] Test user (`hello+canon@njgerner.com`) with Admin role and org membership
+- [x] Test user (`hello+canon@njgerner.com`) with Admin role and org membership
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:277-288 file:infra/modules/auth0/org.tf:28-38 -->
 - [ ] Import all existing Auth0 resources without disruption
-- [ ] Credentials stored in Doppler (already the case)
+- [x] Credentials stored in Doppler (already the case)
 
 ---
 
 ## 7. GCP Vertex AI Terraform
 
-<!-- status: in_progress -->
+<!-- canon:system:7 status:done -->
 
 Move GCP service account and Vertex AI configuration into this repo's Terraform.
 
 ### Acceptance Criteria
 
-- [ ] Terraform GCP provider configured
-- [ ] Service account for Vertex AI embeddings API
-- [ ] IAM roles: `roles/aiplatform.user` on the project
-- [ ] Service account key generated and stored in Doppler
-- [ ] Project and location configurable via tfvars
+- [x] Terraform GCP provider configured
+<!-- canon:realized-in:audit file:infra/main.tf:70-75 -->
+- [x] Service account for Vertex AI embeddings API
+<!-- canon:realized-in:audit file:infra/modules/gcp/main.tf:19-24 -->
+- [x] IAM roles: `roles/aiplatform.user` on the project
+<!-- canon:realized-in:audit file:infra/modules/gcp/main.tf:26-30 -->
+- [x] Service account key generated and stored in Doppler
+<!-- canon:realized-in:audit file:infra/modules/gcp/main.tf:32-34 -->
+- [x] Project and location configurable via tfvars
+<!-- canon:realized-in:audit file:infra/terraform.tfvars:24-25 -->
 
 ---
 
 ## 8. CI/CD Workflow Updates
 
-<!-- status: in_progress -->
+<!-- canon:system:8 status:in_progress -->
 
 Update all GitHub Actions workflows to use Canon-owned infrastructure.
 
 ### Acceptance Criteria
 
-- [ ] `deploy.yml` uses Canon's own DOKS cluster and DOCR
-- [ ] `preview.yml` uses Canon's own cluster for preview namespaces
+- [x] `deploy.yml` uses Canon's own DOKS cluster and DOCR
+<!-- canon:realized-in:audit file:.github/workflows/deploy.yml:62,70 -->
+- [x] `preview.yml` uses Canon's own cluster for preview namespaces
+<!-- canon:realized-in:audit file:.github/workflows/preview.yml:58,65 -->
 - [ ] `publish.yml` updated if any registry references changed
 - [ ] `ci.yml` updated for any Helm lint changes
 - [ ] DevSpace config (`devspace.yaml`) updated for new cluster
 - [ ] All workflows tested end-to-end after migration
-- [ ] Rollback plan documented in case of deployment failure
+- [x] Rollback plan documented in case of deployment failure
+<!-- canon:realized-in:audit file:infra/README.md:170-189 -->
 
 ---
 
 ## 9. Migration Execution
 
-<!-- status: in_progress -->
+<!-- canon:system:9 status:in_progress -->
 
 Execute the actual cutover from shared to dedicated infrastructure.
 
@@ -240,34 +291,43 @@ Execute the actual cutover from shared to dedicated infrastructure.
 
 ## 10. Stripe Terraform
 
-<!-- status: in_progress -->
+<!-- canon:system:10 status:done -->
 
 Move Stripe billing infrastructure into this repo's Terraform. Currently in `gv-infra/experiments/canon/stripe.tf` — covers 2 products with 4 price points, a webhook endpoint, and customer portal configuration.
 
 ### Acceptance Criteria
 
-- [ ] Terraform Stripe provider configured
-- [ ] 2 products: Canon Starter ($9/seat/month) and Canon Pro ($19/seat/month)
-- [ ] 4 prices: monthly + annual for each product (~20% annual discount)
-- [ ] Webhook endpoint at `https://canonhq.co/api/webhooks/stripe` with events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
-- [ ] Customer portal configuration with subscription management (upgrade/downgrade, seat changes, cancellation at period end)
+- [x] Terraform Stripe provider configured
+<!-- canon:realized-in:audit file:infra/main.tf:83-85 file:infra/versions.tf:29-32 -->
+- [x] 2 products: Canon Starter ($9/seat/month) and Canon Pro ($19/seat/month)
+<!-- canon:realized-in:audit file:infra/modules/stripe/main.tf:16-34 -->
+- [x] 4 prices: monthly + annual for each product (~20% annual discount)
+<!-- canon:realized-in:audit file:infra/modules/stripe/main.tf:38-108 -->
+- [x] Webhook endpoint at `https://canonhq.co/api/webhooks/stripe` with events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`
+<!-- canon:realized-in:audit file:infra/modules/stripe/main.tf:112-127 -->
+- [x] Customer portal configuration with subscription management (upgrade/downgrade, seat changes, cancellation at period end)
+<!-- canon:realized-in:audit file:infra/modules/stripe/main.tf:131-181 -->
 - [ ] Import existing Stripe resources (products, prices, webhook, portal) into Terraform state
 - [ ] Price IDs output and stored in Doppler (`STRIPE_STARTER_MONTHLY_PRICE_ID`, etc.)
-- [ ] Portal supports billing cycle switching (monthly↔annual) and tier changes (Starter↔Pro)
+- [x] Portal supports billing cycle switching (monthly↔annual) and tier changes (Starter↔Pro)
+<!-- canon:realized-in:audit file:infra/modules/stripe/main.tf:165-178 -->
 
 ---
 
 ## 11. PostHog Terraform
 
-<!-- status: in_progress -->
+<!-- canon:system:11 status:done -->
 
 Move PostHog project and feature flags into this repo's Terraform. Currently in `gv-infra/experiments/canon/posthog.tf`.
 
 ### Acceptance Criteria
 
-- [ ] Terraform PostHog provider configured
-- [ ] PostHog project (`canon`, timezone: `America/New_York`)
-- [ ] Feature flag: `enable-public-signup` (gates GitHub install + paid plan CTAs, default OFF in production)
+- [x] Terraform PostHog provider configured
+<!-- canon:realized-in:audit file:infra/main.tf:87-91 file:infra/versions.tf:33-36 -->
+- [x] PostHog project (`canon`, timezone: `America/New_York`)
+<!-- canon:realized-in:audit file:infra/modules/posthog/main.tf:14-17 -->
+- [x] Feature flag: `enable-public-signup` (gates GitHub install + paid plan CTAs, default OFF in production)
+<!-- canon:realized-in:audit file:infra/modules/posthog/main.tf:21-27 -->
 - [ ] Import existing PostHog project and feature flags into Terraform state
 - [ ] PostHog API key and project ID stored in Doppler
 
@@ -275,39 +335,51 @@ Move PostHog project and feature flags into this repo's Terraform. Currently in 
 
 ## 12. Auth0 Organization Auto-Provisioning
 
-<!-- status: in_progress -->
+<!-- canon:system:12 status:done -->
 
 The biggest gap blocking true SaaS onboarding. Currently, when a customer installs the Canon GitHub App, an Auth0 Organization must be manually created via Terraform and linked to the installation via manual SQL (`UPDATE gh_installations SET oidc_org_id = ...`). This section automates that entire flow.
 
 ### Acceptance Criteria
 
 **On GitHub App install (`installation.created`):**
-- [ ] `on_installation` handler calls Auth0 Management API to create an Organization (name derived from `org_login`)
-- [ ] Enable GitHub social connection on the new org with `assign_membership_on_login = true`
-- [ ] Enable Username-Password-Authentication connection on the new org
-- [ ] Store returned `org_id` on the installation record via `registry.set_oidc_org_id()`
-- [ ] No manual SQL or Terraform apply required for new customers
+- [x] `on_installation` handler calls Auth0 Management API to create an Organization (name derived from `org_login`)
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_installation.py:126-147 -->
+- [x] Enable GitHub social connection on the new org with `assign_membership_on_login = true`
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_installation.py:141-143 -->
+- [x] Enable Username-Password-Authentication connection on the new org
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_installation.py:142 -->
+- [x] Store returned `org_id` on the installation record via `registry.set_oidc_org_id()`
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_installation.py:144 -->
+- [x] No manual SQL or Terraform apply required for new customers
 
 **Auth0 M2M scope expansion:**
-- [ ] Add `create:organizations` scope to M2M client grant
-- [ ] Add `create:organization_connections` scope to M2M client grant
-- [ ] Add `read:connections` scope to M2M client grant (needed to look up connection IDs)
-- [ ] Update both Terraform config (§6) and live Auth0 tenant
+- [x] Add `create:organizations` scope to M2M client grant
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:162 -->
+- [x] Add `create:organization_connections` scope to M2M client grant
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:163 -->
+- [x] Add `read:connections` scope to M2M client grant (needed to look up connection IDs)
+<!-- canon:realized-in:audit file:infra/modules/auth0/main.tf:165 -->
+- [x] Update both Terraform config (§6) and live Auth0 tenant
 
 **On GitHub App uninstall (`installation.deleted`):**
-- [ ] Disable the Auth0 Organization (remove connections, preventing login)
-- [ ] Log the action but don't delete the org (preserves audit trail)
+- [x] Disable the Auth0 Organization (remove connections, preventing login)
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_installation.py:100-106 -->
+- [x] Log the action but don't delete the org (preserves audit trail)
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_installation.py:108 -->
 
 **Error handling:**
-- [ ] Auth0 API failures don't block the installation webhook response
-- [ ] Failed provisioning is logged and can be retried manually
-- [ ] Idempotent: re-installing the app for the same org reuses or recreates the Auth0 org
+- [x] Auth0 API failures don't block the installation webhook response
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_installation.py:93 -->
+- [x] Failed provisioning is logged and can be retried manually
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_installation.py:146-147 -->
+- [x] Idempotent: re-installing the app for the same org reuses or recreates the Auth0 org
+<!-- canon:realized-in:audit file:src/canon/github/handlers/on_installation.py:134-136 -->
 
 ---
 
 ## 13. GitHub App Configuration
 
-<!-- status: in_progress -->
+<!-- canon:system:13 status:in_progress -->
 
 The Canon GitHub App is configured manually in the GitHub UI. This section documents the required configuration and verifies it matches production needs. Not Terraform-managed, but must be audited and locked down.
 
@@ -334,7 +406,8 @@ The Canon GitHub App is configured manually in the GitHub UI. This section docum
 **Cleanup:**
 - [ ] Remove any unnecessary event subscriptions not in the list above
 - [ ] Remove any unnecessary permissions not in the list above
-- [ ] Document the canonical App configuration in `infra/README.md`
+- [x] Document the canonical App configuration in `infra/README.md`
+<!-- canon:realized-in:audit file:infra/README.md:146-168 -->
 
 ---
 
