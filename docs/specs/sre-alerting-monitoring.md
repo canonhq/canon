@@ -1,6 +1,6 @@
 ---
 title: "SRE Alerting & Monitoring"
-status: in_progress
+status: done
 owner: ng
 team: canon
 ticket_project: canonhq/canon
@@ -33,7 +33,7 @@ Canon has PostHog exception capture and OTel log export (WARNING+) in production
 
 ## 2. PostHog Alert Actions
 
-<!-- canon:system:2 status:in_progress -->
+<!-- canon:system:2 status:done -->
 
 Configure PostHog's built-in alerting to detect error spikes, new error patterns, and performance anomalies. These alerts feed into Slack (Section 3) and optionally GitHub Issues (Section 6).
 
@@ -103,7 +103,7 @@ Two complementary delivery paths:
 
 ## 4. SRE Dashboard in PostHog
 
-<!-- canon:system:4 status:in_progress -->
+<!-- canon:system:4 status:done -->
 
 Create a PostHog dashboard providing at-a-glance service reliability visibility.
 
@@ -213,7 +213,7 @@ When a new error cluster is detected in PostHog (via error tracking groups):
 
 ## 7. Canon Bot SRE Mode
 
-<!-- canon:system:7 status:in_progress -->
+<!-- canon:system:7 status:done -->
 
 Extend the Canon bot's capabilities to participate in SRE workflows — analyzing errors against specs and providing weekly digests.
 
@@ -288,7 +288,7 @@ sre:
 
 ## 9. Rollout Plan
 
-<!-- canon:system:9 status:in_progress -->
+<!-- canon:system:9 status:done -->
 
 Phased rollout to build confidence incrementally:
 
