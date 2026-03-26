@@ -1,6 +1,6 @@
 ---
 title: "Ticket Sync Reliability"
-status: draft
+status: in_progress
 owner: ng
 team: canon
 ticket_project: canonhq/canon-private
@@ -17,7 +17,7 @@ proxy configuration.
 
 ## 1. Background
 
-<!-- canon:system:1 status:todo -->
+<!-- canon:system:1 status:done -->
 
 A full spec audit and issue cleanup on 2026-03-18 exposed several reliability
 gaps in the ticket sync pipeline:
@@ -59,7 +59,7 @@ completed work leaves orphaned open issues that clutter the backlog.
 <!-- canon:ticket:github:438 -->
 ## 2. Lifecycle Sync: Auto-Close Done Sections
 
-<!-- canon:system:2 status:todo -->
+<!-- canon:system:2 status:in_progress -->
 
 When a spec section transitions to `done` (or `deprecated`), forward sync
 should close or transition the linked ticket rather than ignoring it.
@@ -97,7 +97,7 @@ CANON.yaml `specs.lifecycle_sync` setting.
 <!-- canon:ticket:github:439 -->
 ## 3. Robust Dedup via Section Fingerprints
 
-<!-- canon:system:3 status:todo -->
+<!-- canon:system:3 status:in_progress -->
 
 Add a secondary dedup signal beyond ticket link comments so that sync is
 idempotent even when markdown isn't committed between runs.
@@ -110,7 +110,7 @@ provides an exact match.
 <!-- canon:ticket:github:440 -->
 ### 3.1 Fingerprint Format
 
-<!-- canon:system:3.1 status:todo -->
+<!-- canon:system:3.1 status:done -->
 
 Generate a deterministic fingerprint from the spec file path and section
 number, embedded as a hidden marker in the issue body.
@@ -127,7 +127,7 @@ number, embedded as a hidden marker in the issue body.
 <!-- canon:ticket:github:441 -->
 ### 3.2 Fingerprint-Based Dedup
 
-<!-- canon:system:3.2 status:todo -->
+<!-- canon:system:3.2 status:in_progress -->
 
 Use the fingerprint as the primary dedup signal, falling back to title search.
 
@@ -143,7 +143,7 @@ Use the fingerprint as the primary dedup signal, falling back to title search.
 <!-- canon:ticket:github:442 -->
 ### 3.3 Backfill Existing Issues
 
-<!-- canon:system:3.3 status:todo -->
+<!-- canon:system:3.3 status:in_progress -->
 
 Add fingerprints to existing issue bodies so that dedup works for issues
 created before fingerprints were introduced.
@@ -160,7 +160,7 @@ created before fingerprints were introduced.
 <!-- canon:ticket:github:443 -->
 ## 4. Remove Legacy Specwright Labels
 
-<!-- canon:system:4 status:todo -->
+<!-- canon:system:4 status:done -->
 
 Stop creating `specwright:*` labels on new issues and clean up references
 in the adapter code.
@@ -180,7 +180,7 @@ depend on the old prefix.
 <!-- canon:ticket:github:444 -->
 ## 5. Default to Local Adapter
 
-<!-- canon:system:5 status:todo -->
+<!-- canon:system:5 status:in_progress -->
 
 Make `--local` the default behavior when GitHub credentials are available,
 and require `--remote` to explicitly use the server proxy.
@@ -203,7 +203,7 @@ manages credentials.
 <!-- canon:ticket:github:445 -->
 ## 6. Per-Spec Sync Control
 
-<!-- canon:system:6 status:todo -->
+<!-- canon:system:6 status:in_progress -->
 
 Allow individual specs to opt in or out of sync via frontmatter, overriding
 the global `require_review` and `auto_tickets` settings.

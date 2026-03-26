@@ -15,7 +15,7 @@ Extend the ticket sync engine with an Asana adapter and real-time reverse sync v
 
 ## 1. Background
 
-<!-- specwright:system:1 status:done -->
+<!-- canon:system:1 status:done -->
 
 The ticket sync engine currently supports Jira, Linear, and GitHub Issues via an adapter pattern. Two gaps exist: Asana is not supported (teams using Asana can't use Canon's ticket sync), and reverse sync (ticket → spec status updates) only runs via a daily cron job, meaning spec statuses can be up to 24 hours behind ticket reality.
 
@@ -24,7 +24,7 @@ The ticket sync engine currently supports Jira, Linear, and GitHub Issues via an
 <!-- canon:ticket:github:437 -->
 ## 2. Asana Ticket Adapter
 
-<!-- specwright:system:2 status:todo -->
+<!-- canon:system:2 status:todo -->
 
 Implement the `TicketAdapter` protocol for Asana, extending ticket sync to teams using Asana for project management.
 
@@ -58,7 +58,7 @@ Implement the `TicketAdapter` protocol for Asana, extending ticket sync to teams
 
 ## 3. Real-Time Reverse Sync via Webhooks
 
-<!-- specwright:system:3 status:done -->
+<!-- canon:system:3 status:done -->
 <!-- section done: old ticket #56 closed -->
 
 Replace the cron-based reverse sync with webhook-driven updates for near-real-time spec status tracking.
