@@ -1,6 +1,6 @@
 ---
 title: "IDE Agent Integration"
-status: draft
+status: in_progress
 owner: ng
 team: canon
 ticket_project: canonhq/canon-private
@@ -82,15 +82,24 @@ The section is named `ide:` (not `claude:` or `cursor:`) because any coding agen
 
 ### Acceptance Criteria
 
-- [ ] `IdeConfig` Pydantic model added to `src/canon/config/parse.py` with nested `AutoContextConfig`, `AutoVerifyConfig`, `AiExposureConfig`
-- [ ] All fields have defaults: `auto_context.enabled=true`, `auto_verify.enabled=true`, `ai_exposure.default="full"`
-- [ ] Missing `ide:` section returns defaults (no error)
-- [ ] Unknown keys in `ide:` generate warnings (consistent with existing parser behavior)
-- [ ] `confidence` validates to `"medium"` or `"high"` only
-- [ ] `ai_exposure.default` validates to `"full"`, `"metadata"`, or `"none"` only
-- [ ] `restricted_tags` must be a list of strings
-- [ ] Parser tests cover valid config, defaults, unknown keys, and invalid values
-- [ ] Existing CANON.yaml files without `ide:` section continue to parse without changes
+- [x] `IdeConfig` Pydantic model added to `src/canon/config/parse.py` with nested `AutoContextConfig`, `AutoVerifyConfig`, `AiExposureConfig`
+<!-- canon:realized-in:audit file:src/canon/config/parse.py:54-86 -->
+- [x] All fields have defaults: `auto_context.enabled=true`, `auto_verify.enabled=true`, `ai_exposure.default="full"`
+<!-- canon:realized-in:audit file:src/canon/config/parse.py:54-86 -->
+- [x] Missing `ide:` section returns defaults (no error)
+<!-- canon:realized-in:audit file:tests/test_config/test_parse.py:276 -->
+- [x] Unknown keys in `ide:` generate warnings (consistent with existing parser behavior)
+<!-- canon:realized-in:audit file:src/canon/config/parse.py:654 -->
+- [x] `confidence` validates to `"medium"` or `"high"` only
+<!-- canon:realized-in:audit file:src/canon/config/parse.py:63 -->
+- [x] `ai_exposure.default` validates to `"full"`, `"metadata"`, or `"none"` only
+<!-- canon:realized-in:audit file:src/canon/config/parse.py:69-70 -->
+- [x] `restricted_tags` must be a list of strings
+<!-- canon:realized-in:audit file:src/canon/config/parse.py:73 -->
+- [x] Parser tests cover valid config, defaults, unknown keys, and invalid values
+<!-- canon:realized-in:audit file:tests/test_config/test_parse.py:247-287 -->
+- [x] Existing CANON.yaml files without `ide:` section continue to parse without changes
+<!-- canon:realized-in:audit file:tests/test_config/test_parse.py:276 -->
 
 ## 3. AI Exposure Controls
 
@@ -140,15 +149,24 @@ The agent prompt builder (`src/canon/agent/prompts.py`) must also respect `ai_ex
 
 ### Acceptance Criteria
 
-- [ ] `ai_exposure` field added to `SpecDocument` frontmatter model (`src/canon/parser/models.py`)
-- [ ] Parser recognizes `ai_exposure` with values `full`, `metadata`, `none`; defaults to `full` if absent
-- [ ] MCP `list_specs` omits `none` specs and redacts `metadata` spec content
-- [ ] MCP `get_spec` returns error for `none`, redacts content for `metadata`
-- [ ] MCP `search` excludes `none`, omits snippets for `metadata`
-- [ ] `restricted_tags` in CANON.yaml overrides default to `metadata` for matching specs
-- [ ] Resolution order: frontmatter > restricted_tags > CANON.yaml default > full
-- [ ] Agent prompt builder respects `ai_exposure` when including specs in PR analysis
-- [ ] Tests cover all three levels and resolution precedence
+- [x] `ai_exposure` field added to `SpecDocument` frontmatter model (`src/canon/parser/models.py`)
+<!-- canon:realized-in:audit file:src/canon/parser/models.py:110 -->
+- [x] Parser recognizes `ai_exposure` with values `full`, `metadata`, `none`; defaults to `full` if absent
+<!-- canon:realized-in:audit file:tests/test_parser/test_parse.py:69-106 -->
+- [x] MCP `list_specs` omits `none` specs and redacts `metadata` spec content
+<!-- canon:realized-in:audit file:src/canon/mcp/server.py:470-492 -->
+- [x] MCP `get_spec` returns error for `none`, redacts content for `metadata`
+<!-- canon:realized-in:audit file:src/canon/mcp/server.py:288-294 -->
+- [x] MCP `search` excludes `none`, omits snippets for `metadata`
+<!-- canon:realized-in:audit file:src/canon/mcp/server.py:219-231 -->
+- [x] `restricted_tags` in CANON.yaml overrides default to `metadata` for matching specs
+<!-- canon:realized-in:audit file:src/canon/parser/models.py:146-165 -->
+- [x] Resolution order: frontmatter > restricted_tags > CANON.yaml default > full
+<!-- canon:realized-in:audit file:src/canon/parser/models.py:146-165 -->
+- [x] Agent prompt builder respects `ai_exposure` when including specs in PR analysis
+<!-- canon:realized-in:audit file:src/canon/agent/prompts.py:148-241 -->
+- [x] Tests cover all three levels and resolution precedence
+<!-- canon:realized-in:audit file:tests/test_parser/test_parse.py:69-106 file:tests/test_agent/test_prompts.py -->
 
 ## 4. MCP Server Enhancements
 
@@ -176,12 +194,18 @@ Add optional `status_filter: list[str] | None = None` parameter to `get_spec`. W
 
 ### Acceptance Criteria
 
-- [ ] `get_spec` accepts `summary_only` parameter; when true, returns frontmatter + section metadata only (no content, no AC text)
-- [ ] `list_specs` accepts `page` and `per_page` parameters with defaults (1, 50)
-- [ ] `list_specs` returns total count alongside paginated results
-- [ ] `get_spec` accepts `status_filter` parameter; when set, only matching sections included
-- [ ] Existing callers unaffected (all new parameters are optional with backward-compatible defaults)
-- [ ] MCP tool schemas updated with new parameter descriptions
+- [x] `get_spec` accepts `summary_only` parameter; when true, returns frontmatter + section metadata only (no content, no AC text)
+<!-- canon:realized-in:audit file:src/canon/mcp/server.py:264,313 -->
+- [x] `list_specs` accepts `page` and `per_page` parameters with defaults (1, 50)
+<!-- canon:realized-in:audit file:src/canon/mcp/server.py:450-451 -->
+- [x] `list_specs` returns total count alongside paginated results
+<!-- canon:realized-in:audit file:src/canon/mcp/server.py:496-506 -->
+- [x] `get_spec` accepts `status_filter` parameter; when set, only matching sections included
+<!-- canon:realized-in:audit file:src/canon/mcp/server.py:265,315-325 -->
+- [x] Existing callers unaffected (all new parameters are optional with backward-compatible defaults)
+<!-- canon:realized-in:audit file:src/canon/mcp/server.py:264-265 -->
+- [x] MCP tool schemas updated with new parameter descriptions
+<!-- canon:realized-in:audit file:src/canon/mcp/server.py:252-258 -->
 
 ## 5. Claude Code Plugin Hooks
 
@@ -272,14 +296,22 @@ Hooks are defined in `plugin/hooks/hooks.json`:
 
 ### Acceptance Criteria
 
-- [ ] `hooks/hooks.json` created with SessionStart, UserPromptSubmit, and Stop hooks
-- [ ] `hooks/session-start.sh` detects CANON.yaml and injects awareness message
-- [ ] `hooks/stop.sh` checks git diff against spec patterns and suggests verification
-- [ ] SessionStart completes in < 2 seconds
-- [ ] All hooks respect `ide:` config from CANON.yaml (disabled = no-op)
-- [ ] Hooks degrade gracefully if CANON.yaml is missing or malformed (silent exit, no errors)
-- [ ] PreToolUse hook for commit is advisory-only by default; blocks only when `on_commit: true`
-- [ ] Hook scripts are executable and use `${CLAUDE_PLUGIN_ROOT}` for portable paths
+- [x] `hooks/hooks.json` created with SessionStart, UserPromptSubmit, and Stop hooks
+<!-- canon:realized-in:audit file:plugin/hooks/hooks.json:1-53 -->
+- [x] `hooks/session-start.sh` detects CANON.yaml and injects awareness message
+<!-- canon:realized-in:audit file:plugin/hooks/session-start.sh:1-42 -->
+- [x] `hooks/stop.sh` checks git diff against spec patterns and suggests verification
+<!-- canon:realized-in:audit file:plugin/hooks/stop.sh:1-66 -->
+- [x] SessionStart completes in < 2 seconds
+<!-- canon:realized-in:audit file:plugin/hooks/session-start.sh:32 -->
+- [x] All hooks respect `ide:` config from CANON.yaml (disabled = no-op)
+<!-- canon:realized-in:audit file:plugin/hooks/session-start.sh:16-18 file:plugin/hooks/stop.sh:15-17 -->
+- [x] Hooks degrade gracefully if CANON.yaml is missing or malformed (silent exit, no errors)
+<!-- canon:realized-in:audit file:plugin/hooks/session-start.sh:10-12 file:plugin/hooks/stop.sh:9-11 -->
+- [x] PreToolUse hook for commit is advisory-only by default; blocks only when `on_commit: true`
+<!-- canon:realized-in:audit file:plugin/hooks/pre-commit.sh:61-66 -->
+- [x] Hook scripts are executable and use `${CLAUDE_PLUGIN_ROOT}` for portable paths
+<!-- canon:realized-in:audit file:plugin/hooks/hooks.json:10,34,46 -->
 
 ## 6. Multi-Agent Setup
 
@@ -322,14 +354,22 @@ If the target file already exists and contains non-Canon content, warn and requi
 
 ### Acceptance Criteria
 
-- [ ] `canon setup --agent <platform>` command implemented in CLI
-- [ ] Generates correct config files for claude, cursor, copilot, codex, gemini
-- [ ] Generated files are < 30 lines each
-- [ ] Generated files include `<!-- canon:agent-config -->` marker for safe re-generation
-- [ ] Existing files with Canon marker are safely updated (only Canon block replaced)
-- [ ] Existing files without Canon marker trigger warning and require `--force`
-- [ ] `--agent all` generates all supported platforms
-- [ ] Generated content references CANON.yaml and MCP tools, not spec content
+- [x] `canon setup --agent <platform>` command implemented in CLI
+<!-- canon:realized-in:audit file:src/canon/cli/setup_cmd.py:30-32 file:src/canon/cli/agent_setup.py:78-139 -->
+- [x] Generates correct config files for claude, cursor, copilot, codex, gemini
+<!-- canon:realized-in:audit file:src/canon/cli/agent_setup.py:11-20 -->
+- [x] Generated files are < 30 lines each
+<!-- canon:realized-in:audit file:tests/test_cli/test_agent_setup.py:52 -->
+- [x] Generated files include `<!-- canon:agent-config -->` marker for safe re-generation
+<!-- canon:realized-in:audit file:tests/test_cli/test_agent_setup.py:64 file:src/canon/cli/agent_setup.py:8-9 -->
+- [x] Existing files with Canon marker are safely updated (only Canon block replaced)
+<!-- canon:realized-in:audit file:src/canon/cli/agent_setup.py:99-106 -->
+- [x] Existing files without Canon marker trigger warning and require `--force`
+<!-- canon:realized-in:audit file:src/canon/cli/agent_setup.py:108-113 -->
+- [x] `--agent all` generates all supported platforms
+<!-- canon:realized-in:audit file:src/canon/cli/agent_setup.py:126-139 -->
+- [x] Generated content references CANON.yaml and MCP tools, not spec content
+<!-- canon:realized-in:audit file:tests/test_cli/test_agent_setup.py:129 -->
 
 ## 7. Plugin-to-GitHub-App Evidence Pipeline
 
