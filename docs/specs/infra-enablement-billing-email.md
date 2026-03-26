@@ -17,6 +17,8 @@ updated: "2026-03-20"
 
 ## 1. Background
 
+<!-- canon:system:1 status:done -->
+
 Several features have been implemented in canon-private but lack the infrastructure
 wiring to function in production:
 
@@ -43,7 +45,7 @@ features operational in production.
 ## 2. Doppler Secrets
 
 ### 2.1 Stripe Secrets
-<!-- canon:status:todo -->
+<!-- canon:system:2.1 status:todo -->
 
 Add the following to Doppler `canon/prd`:
 
@@ -66,7 +68,7 @@ Add the following to Doppler `canon/prd`:
 - [ ] `BYOK_ENCRYPTION_KEY` is a fresh 256-bit base64-encoded key
 
 ### 2.2 SMTP Secrets
-<!-- canon:status:todo -->
+<!-- canon:system:2.2 status:todo -->
 
 Add the following to Doppler `canon/prd`:
 
@@ -85,7 +87,7 @@ Add the following to Doppler `canon/prd`:
 - [ ] `SMTP_FROM` domain matches `canonhq.co` or a verified sender domain
 
 ### 2.3 Auth0 M2M Secrets
-<!-- canon:status:todo -->
+<!-- canon:system:2.3 status:in_progress -->
 
 Add the following to Doppler `canon/prd`:
 
@@ -100,7 +102,7 @@ Add the following to Doppler `canon/prd`:
 - [ ] Values match Terraform outputs from `gv-infra/experiments/canon/`
 
 ## 3. gv-infra: Terraform Apply
-<!-- canon:status:todo -->
+<!-- canon:system:3 status:todo -->
 
 Ensure Stripe resources are applied and outputs are available.
 
@@ -113,7 +115,7 @@ Ensure Stripe resources are applied and outputs are available.
 ## 4. canon-private: Helm Chart Updates
 
 ### 4.1 Stripe Secret Template
-<!-- canon:status:todo -->
+<!-- canon:system:4.1 status:todo -->
 
 Add `secrets.stripe` to `values.yaml` and a corresponding K8s Secret template.
 
@@ -148,7 +150,7 @@ values to `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
 - [ ] `helm template` renders correctly with no Stripe values (secret omitted)
 
 ### 4.2 SMTP Secret Template
-<!-- canon:status:todo -->
+<!-- canon:system:4.2 status:todo -->
 
 Add `secrets.smtp` to `values.yaml` and a corresponding K8s Secret template.
 
@@ -177,7 +179,7 @@ secrets:
 - [ ] `helm template` renders correctly in all 3 modes (values, existingSecret, omitted)
 
 ### 4.3 Auth0 M2M in Existing Secret
-<!-- canon:status:todo -->
+<!-- canon:system:4.3 status:in_progress -->
 
 The `canon-auth0` K8s secret already exists but is missing M2M credentials.
 No new Helm template needed — just update the deploy workflow to include them.
@@ -189,7 +191,7 @@ No new Helm template needed — just update the deploy workflow to include them.
 - [ ] Existing `secret.yaml` template includes M2M fields when set
 
 ### 4.4 Production Values
-<!-- canon:status:todo -->
+<!-- canon:system:4.4 status:todo -->
 
 Update `values-production.yaml` to reference new `existingSecret` names.
 
@@ -209,7 +211,7 @@ secrets:
 ## 5. canon-private: Deploy Workflow Updates
 
 ### 5.1 Stripe Secret in deploy.yml
-<!-- canon:status:todo -->
+<!-- canon:system:5.1 status:todo -->
 
 Add Stripe env vars to the "Ensure app secrets" step and create a `canon-stripe`
 K8s secret.
@@ -221,7 +223,7 @@ K8s secret.
 - [ ] Secret created with `--dry-run=client -o yaml | kubectl apply -f -` pattern
 
 ### 5.2 SMTP Secret in deploy.yml
-<!-- canon:status:todo -->
+<!-- canon:system:5.2 status:todo -->
 
 Add SMTP env vars and create a `canon-smtp` K8s secret.
 
@@ -232,7 +234,7 @@ Add SMTP env vars and create a `canon-smtp` K8s secret.
 - [ ] Same creation pattern as other secrets
 
 ### 5.3 Auth0 M2M in deploy.yml
-<!-- canon:status:todo -->
+<!-- canon:system:5.3 status:done -->
 
 Add M2M credentials to the existing `canon-auth0` K8s secret creation.
 
@@ -243,7 +245,7 @@ Add M2M credentials to the existing `canon-auth0` K8s secret creation.
 - [ ] Existing Auth0 secret fields unchanged
 
 ### 5.4 Preview Workflow Updates
-<!-- canon:status:todo -->
+<!-- canon:system:5.4 status:done -->
 
 Preview deployments should work without billing/SMTP (graceful degradation).
 Verify that the preview workflow does NOT need Stripe/SMTP secrets since the
@@ -257,7 +259,7 @@ app gates on `stripe_enabled` and `smtp_enabled` properties.
 - [ ] No errors logged at startup when billing/SMTP is unconfigured
 
 ## 6. Helm Template Tests
-<!-- canon:status:todo -->
+<!-- canon:system:6 status:todo -->
 
 Add test cases to `tests/test_helm/test_template_rendering.py` for the new
 secret templates and deployment envFrom conditions.
@@ -276,6 +278,8 @@ secret templates and deployment envFrom conditions.
 - [ ] All existing Helm tests continue to pass
 
 ## 7. Rollout Plan
+
+<!-- canon:system:7 status:draft -->
 
 ### Phase 1: Terraform & Doppler (gv-infra + Doppler UI)
 1. Run `terraform apply` in `gv-infra/experiments/canon/` (if Stripe resources not yet applied)
