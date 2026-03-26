@@ -17,6 +17,8 @@ with clear diagnostics when something is misconfigured.
 
 ## 1. Background
 
+<!-- canon:system:1 status:done -->
+
 Canon has two installation paths — the CLI (`canon setup`) and the
 Claude Code plugin marketplace — but neither produces a fully validated
 configuration on its own. Users can complete setup without logging in, end up
@@ -32,7 +34,7 @@ the state of their installation.
 <!-- canon:ticket:github:412 -->
 ## 2. Fix `canon setup` Flow
 
-<!-- specwright:system:2 status:todo -->
+<!-- canon:system:2 status:todo -->
 
 Improve the interactive setup command to produce a fully working configuration
 and give users clear next steps.
@@ -40,7 +42,7 @@ and give users clear next steps.
 <!-- canon:ticket:github:413 -->
 ### 2.1 Fix Unreachable "Next Steps" Hint
 
-<!-- specwright:system:2.1 status:todo -->
+<!-- canon:system:2.1 status:todo -->
 
 The setup flow writes `docs/specs/_template.md` before checking
 `template_path.exists()`, so the "Next steps" block never prints on a clean
@@ -56,7 +58,7 @@ install.
 <!-- canon:ticket:github:414 -->
 ### 2.2 Add Login Awareness to Setup
 
-<!-- specwright:system:2.2 status:todo -->
+<!-- canon:system:2.2 status:todo -->
 
 After writing config files, check for existing credentials and prompt or hint
 about `canon login` when credentials are missing.
@@ -71,7 +73,7 @@ about `canon login` when credentials are missing.
 <!-- canon:ticket:github:415 -->
 ### 2.3 Add `--force` Flag for Skill Reinstall
 
-<!-- specwright:system:2.3 status:todo -->
+<!-- canon:system:2.3 status:todo -->
 
 Allow users to update skills without manually deleting them.
 
@@ -86,7 +88,7 @@ Allow users to update skills without manually deleting them.
 <!-- canon:ticket:github:416 -->
 ### 2.4 Post-Setup MCP Server Validation
 
-<!-- specwright:system:2.4 status:todo -->
+<!-- canon:system:2.4 status:todo -->
 
 After writing `.mcp.json`, verify that the MCP server can actually start.
 
@@ -101,7 +103,7 @@ After writing `.mcp.json`, verify that the MCP server can actually start.
 <!-- canon:ticket:github:417 -->
 ## 3. Add `canon doctor` Command
 
-<!-- specwright:system:3 status:todo -->
+<!-- canon:system:3 status:todo -->
 
 A single diagnostic command that checks the health of a Canon installation
 and reports actionable fixes.
@@ -109,7 +111,7 @@ and reports actionable fixes.
 <!-- canon:ticket:github:418 -->
 ### 3.1 Configuration Checks
 
-<!-- specwright:system:3.1 status:todo -->
+<!-- canon:system:3.1 status:todo -->
 
 #### Acceptance Criteria
 
@@ -122,7 +124,7 @@ and reports actionable fixes.
 <!-- canon:ticket:github:419 -->
 ### 3.2 Authentication Checks
 
-<!-- specwright:system:3.2 status:todo -->
+<!-- canon:system:3.2 status:todo -->
 
 #### Acceptance Criteria
 
@@ -135,7 +137,7 @@ and reports actionable fixes.
 <!-- canon:ticket:github:420 -->
 ### 3.3 MCP Server Health
 
-<!-- specwright:system:3.3 status:todo -->
+<!-- canon:system:3.3 status:todo -->
 
 #### Acceptance Criteria
 
@@ -148,7 +150,7 @@ and reports actionable fixes.
 <!-- canon:ticket:github:421 -->
 ### 3.4 Output Format
 
-<!-- specwright:system:3.4 status:todo -->
+<!-- canon:system:3.4 status:todo -->
 
 #### Acceptance Criteria
 
@@ -178,7 +180,7 @@ Fix naming inconsistencies and clarify the two installation paths.
 <!-- canon:ticket:github:424 -->
 ### 4.2 Clarify Installation Paths in Plugin README
 
-<!-- canon:system:4.2 status:in_progress -->
+<!-- canon:system:4.2 status:todo -->
 
 #### Acceptance Criteria
 
@@ -189,17 +191,20 @@ Fix naming inconsistencies and clarify the two installation paths.
 <!-- canon:ticket:github:425 -->
 ### 4.3 Add Environment Variable Reference
 
-<!-- canon:system:4.3 status:in_progress -->
+<!-- canon:system:4.3 status:done -->
 
 #### Acceptance Criteria
 
-- [ ] Create `.env.example` in project root with all MCP server environment variables, grouped and commented
-- [ ] Include: DATABASE_URL, GOOGLE_CLOUD_PROJECT, GCP_SERVICE_ACCOUNT_KEY, GH_APP_ID, GH_PRIVATE_KEY, GH_INSTALLATION_ID, SPECWRIGHT_URL, MCP_API_KEY
-- [ ] Each variable has a one-line comment explaining what it enables
+- [x] Create `.env.example` in project root with all MCP server environment variables, grouped and commented
+<!-- canon:realized-in:audit file:.env.example:1-60 -->
+- [x] Include: DATABASE_URL, GOOGLE_CLOUD_PROJECT, GCP_SERVICE_ACCOUNT_KEY, GH_APP_ID, GH_PRIVATE_KEY, GH_INSTALLATION_ID, SPECWRIGHT_URL, MCP_API_KEY
+<!-- canon:realized-in:audit file:.env.example:1-60 -->
+- [x] Each variable has a one-line comment explaining what it enables
+<!-- canon:realized-in:audit file:.env.example:1-60 -->
 
 ## 5. Technical Design
 
-<!-- specwright:system:5 status:draft -->
+<!-- canon:system:5 status:draft -->
 
 ### 5.1 Setup Flow Changes
 
@@ -230,7 +235,7 @@ pointing to the same handler as `setup`.
 
 ## 6. Rollout Plan
 
-<!-- specwright:system:6 status:draft -->
+<!-- canon:system:6 status:draft -->
 
 ### Phase 1: Bug fixes and quick wins
 1. Fix "Next steps" bug (2.1)
