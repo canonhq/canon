@@ -1,6 +1,6 @@
 ---
 title: "Integration Testing"
-status: draft
+status: done
 owner: ng
 team: canon
 ticket_project: canonhq/canon
