@@ -1,6 +1,6 @@
 ---
 title: "Developer Documentation Site"
-status: in_progress
+status: done
 owner: ng
 team: platform
 ticket_project: canonhq/canon

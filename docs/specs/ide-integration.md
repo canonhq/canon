@@ -16,7 +16,7 @@ Make Canon spec awareness automatic in AI coding agents — hooks inject context
 
 ## 1. Background
 
-<!-- canon:system:1 status:draft -->
+<!-- canon:system:1 status:done -->
 
 Canon's Claude Code plugin currently provides 9 skills that users must explicitly invoke (`/canon:context`, `/canon:verify`, etc.). This means spec-driven development only happens when the developer remembers to use it. No other AI coding agent (Cursor, Copilot, Codex, Gemini CLI) gets any spec awareness at all.
 

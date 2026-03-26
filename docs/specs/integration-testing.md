@@ -56,19 +56,23 @@ Test webhook handlers through the full FastAPI request/response cycle using `htt
 <!-- canon:ticket:github:401 -->
 ## 3. GitHub API Client Integration Tests
 
-<!-- canon:system:3 status:in_progress -->
+<!-- canon:system:3 status:done -->
 
 Test the GitHub API client (`github/client.py`) against a sandboxed environment to verify JWT generation, API call formatting, and response parsing.
 
 ### Acceptance Criteria
 
-- [ ] GitHub API client tested with realistic response fixtures
-- [ ] JWT generation and header formatting verified end-to-end
-- [ ] Error handling tested for common GitHub API failures (rate limiting, 404, 500)
-- [ ] Pagination handling tested with multi-page response fixtures
+- [x] GitHub API client tested with realistic response fixtures
+<!-- canon:realized-in: file:tests/integration/test_github_client.py:TestRealisticResponseFixtures -->
+- [x] JWT generation and header formatting verified end-to-end
+<!-- canon:realized-in: file:tests/integration/test_github_client.py:TestJWTGenerationAndAuthHeaders -->
+- [x] Error handling tested for common GitHub API failures (rate limiting, 404, 500)
+<!-- canon:realized-in: file:tests/integration/test_github_client.py:TestErrorHandling -->
+- [x] Pagination handling tested with multi-page response fixtures
+<!-- canon:realized-in: file:tests/integration/test_github_client.py:TestPagination -->
 
-## 4. Open Questions
+## 4. Resolved Questions
 
-- Should we use a dedicated test GitHub App installation for integration tests, or mock at the HTTP transport level?
-- Should integration tests have their own pytest marker (`@pytest.mark.integration`) for selective execution?
-- What's the right balance between integration test coverage and test suite speed?
+- **HTTP transport mocking vs dedicated test app:** Using `respx` to mock at the HTTP transport level, giving realistic fixture-based testing without requiring a live GitHub App.
+- **Pytest marker:** Integration tests use `@pytest.mark.integration` and are deselected by default via `addopts = "-m 'not integration'"` in pyproject.toml.
+- **Coverage vs speed:** 23 integration tests run in ~0.6s — fast enough to run alongside unit tests in CI when explicitly selected.

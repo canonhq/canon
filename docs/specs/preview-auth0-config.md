@@ -1,7 +1,7 @@
 ---
 title: "Preview Environment Auth0 Configuration"
 type: spec
-status: in_progress
+status: done
 owner: ng
 team: platform
 review_status: in_progress

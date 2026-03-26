@@ -232,7 +232,7 @@ When `hierarchy` is absent, all sections create "Task" issues (current behavior)
 <!-- canon:ticket:github:433 -->
 ## 3. Multi-System Routing
 
-<!-- canon:system:3 status:in_progress -->
+<!-- canon:system:3 status:done -->
 
 Support multiple ticket systems per repo, with routing rules that determine which system a given section targets.
 
@@ -493,7 +493,7 @@ Existing repos must work without changes. The migration path:
 <!-- canon:ticket:github:436 -->
 ## 7. Adapter Protocol Changes
 
-<!-- canon:system:7 status:in_progress -->
+<!-- canon:system:7 status:done -->
 
 Extend the `TicketAdapter` protocol to support the richer mapping model without breaking existing adapters.
 
