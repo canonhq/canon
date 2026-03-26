@@ -191,3 +191,25 @@ Secret name for GitHub Tickets credentials (ticket sync via GitHub Issues)
 {{ include "canon.fullname" . }}-github-tickets
 {{- end -}}
 {{- end }}
+
+{{/*
+Secret name for Stripe credentials
+*/}}
+{{- define "canon.stripeSecretName" -}}
+{{- if .Values.secrets.stripe.existingSecret -}}
+{{ .Values.secrets.stripe.existingSecret }}
+{{- else -}}
+{{ include "canon.fullname" . }}-stripe
+{{- end -}}
+{{- end }}
+
+{{/*
+Secret name for SMTP credentials
+*/}}
+{{- define "canon.smtpSecretName" -}}
+{{- if .Values.secrets.smtp.existingSecret -}}
+{{ .Values.secrets.smtp.existingSecret }}
+{{- else -}}
+{{ include "canon.fullname" . }}-smtp
+{{- end -}}
+{{- end }}

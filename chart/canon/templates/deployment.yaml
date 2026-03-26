@@ -82,6 +82,14 @@ spec:
             - secretRef:
                 name: {{ include "canon.slackSecretName" . }}
           {{- end }}
+          {{- if or .Values.secrets.stripe.secretKey .Values.secrets.stripe.existingSecret }}
+            - secretRef:
+                name: {{ include "canon.stripeSecretName" . }}
+          {{- end }}
+          {{- if or .Values.secrets.smtp.host .Values.secrets.smtp.existingSecret }}
+            - secretRef:
+                name: {{ include "canon.smtpSecretName" . }}
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

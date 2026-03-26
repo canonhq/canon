@@ -1,7 +1,7 @@
 ---
 title: "Infrastructure Enablement: Billing, Email & Auth0 M2M"
 type: spec
-status: draft
+status: in_progress
 owner: ng
 team: platform
 review_status: draft
@@ -115,7 +115,7 @@ Ensure Stripe resources are applied and outputs are available.
 ## 4. canon-private: Helm Chart Updates
 
 ### 4.1 Stripe Secret Template
-<!-- canon:system:4.1 status:todo -->
+<!-- canon:system:4.1 status:done -->
 
 Add `secrets.stripe` to `values.yaml` and a corresponding K8s Secret template.
 
@@ -150,7 +150,7 @@ values to `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
 - [ ] `helm template` renders correctly with no Stripe values (secret omitted)
 
 ### 4.2 SMTP Secret Template
-<!-- canon:system:4.2 status:todo -->
+<!-- canon:system:4.2 status:done -->
 
 Add `secrets.smtp` to `values.yaml` and a corresponding K8s Secret template.
 
@@ -179,7 +179,7 @@ secrets:
 - [ ] `helm template` renders correctly in all 3 modes (values, existingSecret, omitted)
 
 ### 4.3 Auth0 M2M in Existing Secret
-<!-- canon:system:4.3 status:in_progress -->
+<!-- canon:system:4.3 status:done -->
 
 The `canon-auth0` K8s secret already exists but is missing M2M credentials.
 No new Helm template needed — just update the deploy workflow to include them.
@@ -191,7 +191,7 @@ No new Helm template needed — just update the deploy workflow to include them.
 - [ ] Existing `secret.yaml` template includes M2M fields when set
 
 ### 4.4 Production Values
-<!-- canon:system:4.4 status:todo -->
+<!-- canon:system:4.4 status:done -->
 
 Update `values-production.yaml` to reference new `existingSecret` names.
 
@@ -211,7 +211,7 @@ secrets:
 ## 5. canon-private: Deploy Workflow Updates
 
 ### 5.1 Stripe Secret in deploy.yml
-<!-- canon:system:5.1 status:todo -->
+<!-- canon:system:5.1 status:done -->
 
 Add Stripe env vars to the "Ensure app secrets" step and create a `canon-stripe`
 K8s secret.
@@ -223,7 +223,7 @@ K8s secret.
 - [ ] Secret created with `--dry-run=client -o yaml | kubectl apply -f -` pattern
 
 ### 5.2 SMTP Secret in deploy.yml
-<!-- canon:system:5.2 status:todo -->
+<!-- canon:system:5.2 status:done -->
 
 Add SMTP env vars and create a `canon-smtp` K8s secret.
 
@@ -259,7 +259,7 @@ app gates on `stripe_enabled` and `smtp_enabled` properties.
 - [ ] No errors logged at startup when billing/SMTP is unconfigured
 
 ## 6. Helm Template Tests
-<!-- canon:system:6 status:todo -->
+<!-- canon:system:6 status:done -->
 
 Add test cases to `tests/test_helm/test_template_rendering.py` for the new
 secret templates and deployment envFrom conditions.

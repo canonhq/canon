@@ -75,6 +75,8 @@ secrets:
   ## @param secrets.auth0.clientSecret Auth0 application client secret
   ## @param secrets.auth0.audience Auth0 API audience (required for JWT access tokens)
   ## @param secrets.auth0.deviceClientId Auth0 Native app client ID for CLI device auth
+  ## @param secrets.auth0.m2mClientId Auth0 M2M application client ID
+  ## @param secrets.auth0.m2mClientSecret Auth0 M2M application client secret
   ## @param secrets.auth0.existingSecret Use existing secret
   auth0:
     domain: ""
@@ -82,6 +84,8 @@ secrets:
     clientSecret: ""
     audience: ""
     deviceClientId: ""
+    m2mClientId: ""
+    m2mClientSecret: ""
     existingSecret: ""
 
   ## @section OIDC secrets (optional — alternative to Auth0, for generic OIDC providers)
@@ -142,6 +146,42 @@ secrets:
   ## @param secrets.slack.existingSecret Use existing secret
   slack:
     webhookUrl: ""
+    existingSecret: ""
+
+  ## @section Stripe secrets (optional — billing)
+  ## @param secrets.stripe.secretKey Stripe secret key
+  ## @param secrets.stripe.publishableKey Stripe publishable key
+  ## @param secrets.stripe.webhookSecret Stripe webhook signing secret
+  ## @param secrets.stripe.starterMonthlyPriceId Stripe price ID for starter monthly plan
+  ## @param secrets.stripe.starterAnnualPriceId Stripe price ID for starter annual plan
+  ## @param secrets.stripe.proMonthlyPriceId Stripe price ID for pro monthly plan
+  ## @param secrets.stripe.proAnnualPriceId Stripe price ID for pro annual plan
+  ## @param secrets.stripe.byokEncryptionKey BYOK encryption key
+  ## @param secrets.stripe.existingSecret Use existing secret
+  stripe:
+    secretKey: ""
+    publishableKey: ""
+    webhookSecret: ""
+    starterMonthlyPriceId: ""
+    starterAnnualPriceId: ""
+    proMonthlyPriceId: ""
+    proAnnualPriceId: ""
+    byokEncryptionKey: ""
+    existingSecret: ""
+
+  ## @section SMTP secrets (optional — enterprise contact email)
+  ## @param secrets.smtp.host SMTP server hostname
+  ## @param secrets.smtp.port SMTP server port
+  ## @param secrets.smtp.user SMTP username
+  ## @param secrets.smtp.password SMTP password
+  ## @param secrets.smtp.from SMTP from address
+  ## @param secrets.smtp.existingSecret Use existing secret
+  smtp:
+    host: ""
+    port: "587"
+    user: ""
+    password: ""
+    from: ""
     existingSecret: ""
 
 ## @section Application configuration
