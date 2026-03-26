@@ -24,7 +24,7 @@ A security review identified three vulnerabilities that must be resolved before 
 <!-- canon:ticket:github:409 -->
 ## 2. Secure Unauthenticated MCP Endpoint
 
-<!-- canon:system:2 status:todo -->
+<!-- canon:system:2 status:in_progress -->
 
 **Severity: HIGH**
 
