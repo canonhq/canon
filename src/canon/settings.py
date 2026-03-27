@@ -184,6 +184,14 @@ class Settings(BaseSettings):
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""
+
+    @field_validator("smtp_port", mode="before")
+    @classmethod
+    def _empty_smtp_port(cls, v: object) -> object:
+        """Treat empty string as missing so the default (587) is used."""
+        if v == "":
+            return 587
+        return v
     smtp_password: SecretStr = SecretStr("")
     smtp_from: str = ""
     smtp_tls: bool = True
