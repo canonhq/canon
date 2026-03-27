@@ -33,6 +33,7 @@ KNOWN_TOP_KEYS = {
     "agents",
     "ide",
     "sre",
+    "slack",
     "ticket_systems",
     "routing",
     "auth_profiles",
@@ -44,6 +45,25 @@ KNOWN_IDE_AUTO_CONTEXT_KEYS = {"enabled", "on_session_start", "on_prompt", "max_
 KNOWN_IDE_AUTO_VERIFY_KEYS = {"enabled", "on_stop", "on_commit", "confidence"}
 KNOWN_IDE_AI_EXPOSURE_KEYS = {"default", "restricted_tags"}
 KNOWN_SRE_KEYS = {"alerts_channel", "auto_triage", "weekly_digest", "error_spike_threshold"}
+KNOWN_SLACK_KEYS = {
+    "default_channel",
+    "sre_channel",
+    "notifications",
+    "quiet_hours",
+    "digest",
+}
+KNOWN_SLACK_NOTIFICATION_KEYS = {
+    "spec_status_change",
+    "spec_created",
+    "coverage_regression",
+    "stale_spec_warning",
+    "pr_analysis_summary",
+    "ticket_sync_failure",
+    "review_requested",
+    "coverage_threshold",
+}
+KNOWN_SLACK_QUIET_HOURS_KEYS = {"start", "end"}
+KNOWN_SLACK_DIGEST_KEYS = {"channel", "schedule"}
 
 ConfidenceLevel = Literal["medium", "high"]
 VALID_CONFIDENCE_LEVELS: frozenset[str] = frozenset(get_args(ConfidenceLevel))
@@ -80,6 +100,35 @@ class SreConfig(BaseModel):
     error_spike_threshold: int = 10
 
 
+class SlackNotificationConfig(BaseModel):
+    spec_status_change: bool = True
+    spec_created: bool = True
+    coverage_regression: bool = True
+    stale_spec_warning: bool = True
+    pr_analysis_summary: bool = True
+    ticket_sync_failure: bool = True
+    review_requested: bool = True
+    coverage_threshold: int = 80
+
+
+class SlackQuietHoursConfig(BaseModel):
+    start: str = "22:00"
+    end: str = "08:00"
+
+
+class SlackDigestConfig(BaseModel):
+    channel: str = ""
+    schedule: str = "monday 09:00"
+
+
+class SlackConfig(BaseModel):
+    default_channel: str = "#canon-specs"
+    sre_channel: str = ""
+    notifications: SlackNotificationConfig = SlackNotificationConfig()
+    quiet_hours: SlackQuietHoursConfig | None = None
+    digest: SlackDigestConfig = SlackDigestConfig()
+
+
 class IdeConfig(BaseModel):
     auto_context: AutoContextConfig = AutoContextConfig()
     auto_verify: AutoVerifyConfig = AutoVerifyConfig()
@@ -109,6 +158,7 @@ class CanonConfig(BaseModel):
     agents: AgentsConfig = AgentsConfig()
     ide: IdeConfig = IdeConfig()
     sre: SreConfig = SreConfig()
+    slack: SlackConfig = SlackConfig()
     ticket_mapping: TicketMappingConfig | None = None
 
 
@@ -467,6 +517,67 @@ def parse_canon_yaml(raw: str) -> ConfigResult:
                 )
                 del sre["alerts_channel"]
 
+    # Validate slack section
+    if "slack" in obj:
+        if not isinstance(obj["slack"], dict):
+            diagnostics.append(Diagnostic(severity="error", message='"slack" must be a mapping'))
+            del obj["slack"]
+        else:
+            slack = obj["slack"]
+            assert isinstance(slack, dict)
+            for key in list(slack.keys()):
+                if key not in KNOWN_SLACK_KEYS:
+                    diagnostics.append(
+                        Diagnostic(severity="warning", message=f'Unknown slack key: "{key}"')
+                    )
+            for key in ("default_channel", "sre_channel"):
+                if key in slack and not isinstance(slack[key], str):
+                    diagnostics.append(
+                        Diagnostic(severity="error", message=f'"slack.{key}" must be a string')
+                    )
+                    del slack[key]
+            if "notifications" in slack:
+                if not isinstance(slack["notifications"], dict):
+                    diagnostics.append(
+                        Diagnostic(
+                            severity="error", message='"slack.notifications" must be a mapping'
+                        )
+                    )
+                    del slack["notifications"]
+                else:
+                    notif = slack["notifications"]
+                    assert isinstance(notif, dict)
+                    for key in list(notif.keys()):
+                        if key not in KNOWN_SLACK_NOTIFICATION_KEYS:
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="warning",
+                                    message=f'Unknown slack.notifications key: "{key}"',
+                                )
+                            )
+            if "quiet_hours" in slack and not isinstance(slack["quiet_hours"], dict):
+                diagnostics.append(
+                    Diagnostic(severity="error", message='"slack.quiet_hours" must be a mapping')
+                )
+                del slack["quiet_hours"]
+            if "digest" in slack:
+                if not isinstance(slack["digest"], dict):
+                    diagnostics.append(
+                        Diagnostic(severity="error", message='"slack.digest" must be a mapping')
+                    )
+                    del slack["digest"]
+                else:
+                    digest = slack["digest"]
+                    assert isinstance(digest, dict)
+                    for key in list(digest.keys()):
+                        if key not in KNOWN_SLACK_DIGEST_KEYS:
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="warning",
+                                    message=f'Unknown slack.digest key: "{key}"',
+                                )
+                            )
+
     # Validate ticket_systems / routing / auth_profiles
     ticket_mapping = _parse_ticket_mapping(obj, diagnostics)
 
@@ -722,6 +833,62 @@ def _merge_with_defaults(
             else 10,
         )
 
+    slack_data = partial.get("slack")
+    slack = SlackConfig()
+    if isinstance(slack_data, dict):
+        notif_data = slack_data.get("notifications")
+        notifications = SlackNotificationConfig()
+        if isinstance(notif_data, dict):
+            kwargs: dict = {}
+            for key in (
+                "spec_status_change",
+                "spec_created",
+                "coverage_regression",
+                "stale_spec_warning",
+                "pr_analysis_summary",
+                "ticket_sync_failure",
+                "review_requested",
+            ):
+                if isinstance(notif_data.get(key), bool):
+                    kwargs[key] = notif_data[key]
+            if isinstance(notif_data.get("coverage_threshold"), int) and not isinstance(
+                notif_data.get("coverage_threshold"), bool
+            ):
+                kwargs["coverage_threshold"] = notif_data["coverage_threshold"]
+            notifications = SlackNotificationConfig(**kwargs)
+
+        qh_data = slack_data.get("quiet_hours")
+        quiet_hours = None
+        if isinstance(qh_data, dict):
+            quiet_hours = SlackQuietHoursConfig(
+                start=qh_data["start"] if isinstance(qh_data.get("start"), str) else "22:00",
+                end=qh_data["end"] if isinstance(qh_data.get("end"), str) else "08:00",
+            )
+
+        digest_data = slack_data.get("digest")
+        digest = SlackDigestConfig()
+        if isinstance(digest_data, dict):
+            digest = SlackDigestConfig(
+                channel=digest_data["channel"]
+                if isinstance(digest_data.get("channel"), str)
+                else "",
+                schedule=digest_data["schedule"]
+                if isinstance(digest_data.get("schedule"), str)
+                else "monday 09:00",
+            )
+
+        slack = SlackConfig(
+            default_channel=slack_data["default_channel"]
+            if isinstance(slack_data.get("default_channel"), str)
+            else "#canon-specs",
+            sre_channel=slack_data["sre_channel"]
+            if isinstance(slack_data.get("sre_channel"), str)
+            else "",
+            notifications=notifications,
+            quiet_hours=quiet_hours,
+            digest=digest,
+        )
+
     return CanonConfig(
         team=partial["team"] if isinstance(partial.get("team"), str) else None,
         ticket_system=partial["ticket_system"]
@@ -736,5 +903,6 @@ def _merge_with_defaults(
         agents=agents,
         ide=ide,
         sre=sre,
+        slack=slack,
         ticket_mapping=ticket_mapping,
     )

@@ -1,6 +1,6 @@
 ---
 title: "Slack App for Canon"
-status: draft
+status: in_progress
 owner: ng
 team: canon
 ticket_project: canonhq/canon
@@ -25,7 +25,7 @@ The existing `SlackAlerter` (outbound webhooks) handles SRE alerts and weekly di
 
 ## 2. Slack App Setup & Architecture
 
-<!-- canon:system:2 status:todo -->
+<!-- canon:system:2 status:done -->
 
 ### 2.1 App Configuration
 
@@ -63,7 +63,7 @@ New environment variables in `Settings`:
 
 ## 3. Slash Command: `/canon`
 
-<!-- canon:system:3 status:todo -->
+<!-- canon:system:3 status:in_progress -->
 
 The `/canon` slash command provides structured access to spec data.
 
@@ -115,7 +115,7 @@ All responses use Slack Block Kit:
 
 ## 4. Natural Language Queries via @canon
 
-<!-- canon:system:4 status:todo -->
+<!-- canon:system:4 status:in_progress -->
 
 ### 4.1 Mention Handler
 
@@ -166,7 +166,7 @@ Users can DM the bot directly without `@canon` — all DMs are treated as natura
 
 ## 5. Proactive Notifications
 
-<!-- canon:system:5 status:todo -->
+<!-- canon:system:5 status:in_progress -->
 
 ### 5.1 Event Types
 
@@ -238,7 +238,7 @@ slack:
 
 ## 6. Workflow Actions from Slack
 
-<!-- canon:system:6 status:todo -->
+<!-- canon:system:6 status:in_progress -->
 
 ### 6.1 Button Actions
 
@@ -281,7 +281,7 @@ The "Request Changes" action opens a Slack modal with:
 
 ## 7. Slack-Native Dashboards
 
-<!-- canon:system:7 status:todo -->
+<!-- canon:system:7 status:in_progress -->
 
 ### 7.1 Coverage Dashboard
 
@@ -325,7 +325,7 @@ The dashboard message includes a "Refresh" button. Optionally, a scheduled updat
 
 ## 8. Team Digest Channels
 
-<!-- canon:system:8 status:todo -->
+<!-- canon:system:8 status:in_progress -->
 
 ### 8.1 Per-Team Digests
 
@@ -382,7 +382,7 @@ _Week of Mar 17–23, 2026_
 
 ## 9. Multi-Workspace Support
 
-<!-- canon:system:9 status:todo -->
+<!-- canon:system:9 status:in_progress -->
 
 ### 9.1 Installation Flow
 

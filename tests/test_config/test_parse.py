@@ -506,3 +506,101 @@ agents:
         assert result.config.agents.pr_analysis is False
         assert result.config.agents.realization_check is False
         assert result.config.agents.stale_detection == "14d"
+
+
+class TestSlackConfig:
+    def test_parses_full_slack_config(self):
+        raw = """
+slack:
+  default_channel: "#eng-specs"
+  sre_channel: "#sre-alerts"
+  notifications:
+    spec_status_change: true
+    spec_created: false
+    coverage_threshold: 90
+  quiet_hours:
+    start: "22:00"
+    end: "08:00"
+  digest:
+    channel: "#weekly"
+    schedule: "friday 10:00"
+"""
+        result = parse_canon_yaml(raw)
+        assert len(result.diagnostics) == 0
+        slack = result.config.slack
+        assert slack.default_channel == "#eng-specs"
+        assert slack.sre_channel == "#sre-alerts"
+        assert slack.notifications.spec_status_change is True
+        assert slack.notifications.spec_created is False
+        assert slack.notifications.coverage_threshold == 90
+        assert slack.quiet_hours is not None
+        assert slack.quiet_hours.start == "22:00"
+        assert slack.digest.channel == "#weekly"
+        assert slack.digest.schedule == "friday 10:00"
+
+    def test_missing_slack_section_returns_defaults(self):
+        raw = """
+team: test
+"""
+        result = parse_canon_yaml(raw)
+        slack = result.config.slack
+        assert slack.default_channel == "#canon-specs"
+        assert slack.sre_channel == ""
+        assert slack.notifications.spec_status_change is True
+        assert slack.quiet_hours is None
+
+    def test_unknown_slack_key_warns(self):
+        raw = """
+slack:
+  default_channel: "#specs"
+  bogus_key: true
+"""
+        result = parse_canon_yaml(raw)
+        warnings = [d for d in result.diagnostics if d.severity == "warning"]
+        assert any("bogus_key" in w.message for w in warnings)
+
+    def test_non_mapping_slack_errors(self):
+        raw = """
+slack: "not a mapping"
+"""
+        result = parse_canon_yaml(raw)
+        errors = [d for d in result.diagnostics if d.severity == "error"]
+        assert any("slack" in e.message and "mapping" in e.message for e in errors)
+
+    def test_non_mapping_notifications_errors(self):
+        raw = """
+slack:
+  notifications: "not a mapping"
+"""
+        result = parse_canon_yaml(raw)
+        errors = [d for d in result.diagnostics if d.severity == "error"]
+        assert any("notifications" in e.message for e in errors)
+
+    def test_non_mapping_digest_errors(self):
+        raw = """
+slack:
+  digest: "not a mapping"
+"""
+        result = parse_canon_yaml(raw)
+        errors = [d for d in result.diagnostics if d.severity == "error"]
+        assert any("digest" in e.message for e in errors)
+
+    def test_unknown_notification_key_warns(self):
+        raw = """
+slack:
+  notifications:
+    bad_key: true
+"""
+        result = parse_canon_yaml(raw)
+        warnings = [d for d in result.diagnostics if d.severity == "warning"]
+        assert any("bad_key" in w.message for w in warnings)
+
+    def test_unknown_digest_key_warns(self):
+        raw = """
+slack:
+  digest:
+    bad_key: true
+"""
+        result = parse_canon_yaml(raw)
+        warnings = [d for d in result.diagnostics if d.severity == "warning"]
+        assert any("bad_key" in w.message for w in warnings)

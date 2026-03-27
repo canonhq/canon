@@ -270,6 +270,42 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     except Exception:
         logger.warning("Failed to initialise MCP server", exc_info=True)
 
+    # Slack bot (optional — interactive Slack app)
+    app.state.slack_bot = None
+    if settings.slack_bot_enabled:
+        from .slack import create_slack_app
+
+        slack_bot = create_slack_app(settings)
+        if slack_bot is not None:
+            app.state.slack_bot = slack_bot
+            if not slack_bot.socket_mode:
+                # HTTP mode: mount as ASGI sub-app
+                from starlette.routing import Mount
+                from starlette.types import Receive, Scope, Send
+
+                async def slack_asgi(scope: Scope, receive: Receive, send: Send) -> None:
+                    await slack_bot.handler.handle(scope, receive, send)
+
+                app.routes.insert(0, Mount("/slack/events", app=slack_asgi))
+                logger.info("Slack bot mounted at /slack/events (HTTP mode)")
+            else:
+                # Socket mode: start async handler
+                from slack_bolt.adapter.socket_mode.async_handler import (
+                    AsyncSocketModeHandler,
+                )
+
+                app.state.slack_socket_handler = AsyncSocketModeHandler(
+                    slack_bot.app, settings.slack_app_token
+                )
+                import asyncio
+
+                app.state.slack_socket_task = asyncio.create_task(
+                    app.state.slack_socket_handler.start_async()
+                )
+                logger.info("Slack bot started (Socket Mode)")
+    else:
+        logger.info("Slack bot not configured — /slack/events will return 503")
+
     if mcp_server is not None:
         async with mcp_server.session_manager.run():
             yield
@@ -277,6 +313,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         yield
 
     # Shutdown
+    # Shutdown Slack socket mode if active
+    slack_task = getattr(app.state, "slack_socket_task", None)
+    if slack_task is not None:
+        slack_task.cancel()
+        import asyncio
+
+        await asyncio.gather(slack_task, return_exceptions=True)
+    slack_socket = getattr(app.state, "slack_socket_handler", None)
+    if slack_socket is not None:
+        await slack_socket.close_async()
     phq = getattr(app.state, "posthog_query_client", None)
     if phq is not None:
         await phq.aclose()
@@ -298,6 +344,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 app = FastAPI(title="Canon", docs_url=None, redoc_url=None, lifespan=lifespan)
+
+# 503 fallback when Slack bot is not configured
+if not settings.slack_bot_enabled:
+
+    @app.post("/slack/events")
+    async def slack_events_unavailable() -> Response:
+        return Response(
+            content="Slack bot not configured",
+            status_code=503,
+        )
 
 
 def _error_template(request: Request, template: str, status_code: int) -> Response:

@@ -152,6 +152,16 @@ class Settings(BaseSettings):
     def slack_alerts_enabled(self) -> bool:
         return bool(self.slack_alerts_webhook_url)
 
+    # Slack Bot (interactive app — extends the webhook-only SlackAlerter)
+    slack_bot_token: str = ""  # xoxb- bot user OAuth token
+    slack_signing_secret: str = ""  # Request signature verification
+    slack_app_token: str = ""  # xapp- socket mode token (optional)
+
+    @property
+    def slack_bot_enabled(self) -> bool:
+        """True when the interactive Slack bot is fully configured."""
+        return bool(self.slack_bot_token and self.slack_signing_secret)
+
     # Server
     port: int = 3000
     log_level: str = "info"
