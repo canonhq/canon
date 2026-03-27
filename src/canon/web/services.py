@@ -991,6 +991,7 @@ async def get_tasks(
     status: str | None = None,
     repo_filter: str | None = None,
     search_index: object | None = None,
+    expand: str | None = None,
 ) -> TasksApiResponse:
     """Extract actionable tasks from all specs across the org."""
     overview = await get_org_overview(client, org, cache, search_index=search_index)
@@ -1037,6 +1038,12 @@ async def get_tasks(
                             spec_file_path=detail.document.file_path,
                             repo_owner=repo.owner,
                             repo_name=repo.repo,
+                            acceptance_criteria=[
+                                {"text": ac.text, "checked": ac.checked}
+                                for ac in section.acceptance_criteria
+                            ]
+                            if expand == "acs"
+                            else [],
                         )
                     )
             except Exception:

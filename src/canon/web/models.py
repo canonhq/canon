@@ -201,6 +201,7 @@ class TaskItem(BaseModel):
     spec_file_path: str = ""
     repo_owner: str = ""
     repo_name: str = ""
+    acceptance_criteria: list[dict[str, object]] = []
 
 
 class TasksApiResponse(BaseModel):

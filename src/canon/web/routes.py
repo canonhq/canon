@@ -705,6 +705,7 @@ async def api_tasks(
     org: str,
     status: str | None = None,
     repo: str | None = None,
+    expand: str | None = None,
     _user: CurrentUser = Depends(require_permission(Permission.SPECS_READ)),
 ):
     """JSON tasks data — actionable work items from all specs."""
@@ -712,7 +713,13 @@ async def api_tasks(
     cache = _get_cache(request)
     search_index = getattr(request.app.state, "search_index", None)
     result = await get_tasks(
-        client, org, cache, status=status, repo_filter=repo, search_index=search_index
+        client,
+        org,
+        cache,
+        status=status,
+        repo_filter=repo,
+        search_index=search_index,
+        expand=expand,
     )
     return JSONResponse(content=result.model_dump())
 
