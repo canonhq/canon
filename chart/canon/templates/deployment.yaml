@@ -78,7 +78,7 @@ spec:
             - secretRef:
                 name: {{ include "canon.posthogSecretName" . }}
           {{- end }}
-          {{- if or .Values.secrets.slack.webhookUrl .Values.secrets.slack.existingSecret }}
+          {{- if or .Values.secrets.slack.webhookUrl .Values.secrets.slack.botToken .Values.secrets.slack.existingSecret }}
             - secretRef:
                 name: {{ include "canon.slackSecretName" . }}
           {{- end }}

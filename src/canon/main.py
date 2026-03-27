@@ -279,14 +279,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         if slack_bot is not None:
             app.state.slack_bot = slack_bot
             if not slack_bot.socket_mode:
-                # HTTP mode: mount as ASGI sub-app
-                from starlette.routing import Mount
-                from starlette.types import Receive, Scope, Send
+                # HTTP mode: add as a FastAPI route
+                @app.post("/slack/events")
+                async def slack_events(req):
+                    return await slack_bot.handler.handle(req)
 
-                async def slack_asgi(scope: Scope, receive: Receive, send: Send) -> None:
-                    await slack_bot.handler.handle(scope, receive, send)
-
-                app.routes.insert(0, Mount("/slack/events", app=slack_asgi))
                 logger.info("Slack bot mounted at /slack/events (HTTP mode)")
             else:
                 # Socket mode: start async handler

@@ -141,11 +141,17 @@ secrets:
     projectId: ""
     existingSecret: ""
 
-  ## @section Slack secrets (optional — SRE alerting)
+  ## @section Slack secrets (optional — SRE alerting + interactive bot)
   ## @param secrets.slack.webhookUrl Slack incoming webhook URL for alerts
+  ## @param secrets.slack.botToken Slack bot user OAuth token (xoxb-)
+  ## @param secrets.slack.signingSecret Slack request signing secret
+  ## @param secrets.slack.appToken Slack app-level token for Socket Mode (xapp-)
   ## @param secrets.slack.existingSecret Use existing secret
   slack:
     webhookUrl: ""
+    botToken: ""
+    signingSecret: ""
+    appToken: ""
     existingSecret: ""
 
   ## @section Stripe secrets (optional — billing)
