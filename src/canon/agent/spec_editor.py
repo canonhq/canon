@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator
 
 import anthropic
+
+from canon import analytics
 
 from .client import AgentConfig, ClaudeClient
 
@@ -76,14 +79,19 @@ async def _stream_completion(
     user_message: str,
     client: ClaudeClient,
     config: AgentConfig | None = None,
+    *,
+    feature: str = "spec_edit",
+    action: str = "",
+    distinct_id: str = "",
 ) -> AsyncIterator[str]:
-    """Stream a completion from Claude."""
+    """Stream a completion from Claude, emitting a ``$ai_generation`` event on success."""
     api_key = client.api_key
     if not client.is_available or not api_key:
         yield "<!-- AI editing unavailable: ANTHROPIC_API_KEY not set -->\n"
         return
 
     cfg = config or SPEC_EDITOR_CONFIG
+    start = time.monotonic()
 
     try:
         async with (
@@ -98,6 +106,26 @@ async def _stream_completion(
         ):
             async for text in stream.text_stream:
                 yield text
+
+            # Token counts are only available after the full stream is consumed.
+            # We emit manually because the PostHog AsyncAnthropic wrapper does
+            # not support the .messages.stream() context manager pattern.
+            try:
+                final = await stream.get_final_message()
+                duration = time.monotonic() - start
+                analytics.track_ai_generation(
+                    model=cfg.model,
+                    input_tokens=final.usage.input_tokens,
+                    output_tokens=final.usage.output_tokens,
+                    latency_seconds=duration,
+                    feature=feature,
+                    action=action,
+                    distinct_id=distinct_id or analytics.SERVER_ACTOR,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to capture LLM usage for %s/%s", feature, action, exc_info=True
+                )
     except anthropic.APIError as e:
         logger.error("Spec editing API error: %s", e)
         yield "\n\n<!-- Editing failed. Please try again. -->\n"
@@ -117,7 +145,9 @@ async def improve_section_stream(
             f"\nExisting acceptance criteria (for context, do not include in output):\n{acs}"
         )
 
-    async for chunk in _stream_completion(IMPROVE_SYSTEM_PROMPT, "\n".join(parts), client):
+    async for chunk in _stream_completion(
+        IMPROVE_SYSTEM_PROMPT, "\n".join(parts), client, action="improve"
+    ):
         yield chunk
 
 
@@ -129,7 +159,9 @@ async def generate_acs_stream(
     """Stream generated acceptance criteria for a spec section."""
     user_message = f"Section: {title}\n\nContent:\n{content}"
 
-    async for chunk in _stream_completion(GENERATE_ACS_SYSTEM_PROMPT, user_message, client):
+    async for chunk in _stream_completion(
+        GENERATE_ACS_SYSTEM_PROMPT, user_message, client, action="generate_acs"
+    ):
         yield chunk
 
 
@@ -141,5 +173,7 @@ async def expand_section_stream(
     """Stream an expanded version of a spec section's prose."""
     user_message = f"Section: {title}\n\nCurrent content:\n{content}"
 
-    async for chunk in _stream_completion(EXPAND_SYSTEM_PROMPT, user_message, client):
+    async for chunk in _stream_completion(
+        EXPAND_SYSTEM_PROMPT, user_message, client, action="expand"
+    ):
         yield chunk

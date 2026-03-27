@@ -115,6 +115,73 @@ class TestStreamCompletion:
         assert call_kwargs["temperature"] == 0.5
 
     @pytest.mark.asyncio
+    async def test_tracks_ai_generation_after_stream(self):
+        """After streaming completes, $ai_generation is emitted."""
+        client = _make_client()
+
+        mock_text_stream = AsyncStreamMock(["Hello ", "world!"], input_tokens=100, output_tokens=50)
+
+        mock_stream_ctx = AsyncMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_text_stream)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_async_anthropic = AsyncMock()
+        mock_async_anthropic.__aenter__ = AsyncMock(return_value=mock_async_anthropic)
+        mock_async_anthropic.__aexit__ = AsyncMock(return_value=False)
+        mock_async_anthropic.messages.stream = MagicMock(return_value=mock_stream_ctx)
+
+        with (
+            patch(
+                "canon.agent.spec_editor.anthropic.AsyncAnthropic",
+                return_value=mock_async_anthropic,
+            ),
+            patch("canon.agent.spec_editor.analytics.track_ai_generation") as mock_track,
+        ):
+            chunks = []
+            async for chunk in _stream_completion(
+                "system", "user", client, feature="spec_edit", action="improve"
+            ):
+                chunks.append(chunk)
+
+        assert chunks == ["Hello ", "world!"]
+        mock_track.assert_called_once()
+        call_kwargs = mock_track.call_args[1]
+        assert call_kwargs["model"] == SPEC_EDITOR_CONFIG.model
+        assert call_kwargs["input_tokens"] == 100
+        assert call_kwargs["output_tokens"] == 50
+        assert call_kwargs["feature"] == "spec_edit"
+        assert call_kwargs["action"] == "improve"
+
+    @pytest.mark.asyncio
+    async def test_analytics_failure_does_not_break_streaming(self):
+        """If get_final_message() raises, streaming still works."""
+        client = _make_client()
+
+        mock_text_stream = AsyncStreamMock(["Hello ", "world!"])
+        # Override get_final_message to raise
+        mock_text_stream.get_final_message = AsyncMock(side_effect=RuntimeError("boom"))
+
+        mock_stream_ctx = AsyncMock()
+        mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_text_stream)
+        mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_async_anthropic = AsyncMock()
+        mock_async_anthropic.__aenter__ = AsyncMock(return_value=mock_async_anthropic)
+        mock_async_anthropic.__aexit__ = AsyncMock(return_value=False)
+        mock_async_anthropic.messages.stream = MagicMock(return_value=mock_stream_ctx)
+
+        with patch(
+            "canon.agent.spec_editor.anthropic.AsyncAnthropic",
+            return_value=mock_async_anthropic,
+        ):
+            chunks = []
+            async for chunk in _stream_completion("system", "user", client):
+                chunks.append(chunk)
+
+        # Streaming still yields all chunks despite analytics failure
+        assert chunks == ["Hello ", "world!"]
+
+    @pytest.mark.asyncio
     async def test_handles_api_error(self):
         """On anthropic.APIError, yields an error comment."""
         client = _make_client()
@@ -152,7 +219,7 @@ class TestImproveSectionStream:
         client = _make_client()
         captured_args = {}
 
-        async def mock_stream(system_prompt, user_message, client_arg, config=None):
+        async def mock_stream(system_prompt, user_message, client_arg, config=None, **kwargs):
             captured_args["system"] = system_prompt
             captured_args["message"] = user_message
             yield "improved"
@@ -169,7 +236,7 @@ class TestImproveSectionStream:
         client = _make_client()
         captured_args = {}
 
-        async def mock_stream(system_prompt, user_message, client_arg, config=None):
+        async def mock_stream(system_prompt, user_message, client_arg, config=None, **kwargs):
             captured_args["message"] = user_message
             yield "improved"
 
@@ -186,7 +253,7 @@ class TestImproveSectionStream:
         client = _make_client()
         captured_args = {}
 
-        async def mock_stream(system_prompt, user_message, client_arg, config=None):
+        async def mock_stream(system_prompt, user_message, client_arg, config=None, **kwargs):
             captured_args["message"] = user_message
             yield "improved"
 
@@ -206,7 +273,7 @@ class TestImproveSectionStream:
         client = _make_client()
         captured_args = {}
 
-        async def mock_stream(system_prompt, user_message, client_arg, config=None):
+        async def mock_stream(system_prompt, user_message, client_arg, config=None, **kwargs):
             captured_args["message"] = user_message
             yield "improved"
 
@@ -227,7 +294,7 @@ class TestGenerateAcsStream:
         client = _make_client()
         captured_args = {}
 
-        async def mock_stream(system_prompt, user_message, client_arg, config=None):
+        async def mock_stream(system_prompt, user_message, client_arg, config=None, **kwargs):
             captured_args["system"] = system_prompt
             captured_args["message"] = user_message
             yield "- [ ] AC"
@@ -251,7 +318,7 @@ class TestExpandSectionStream:
         client = _make_client()
         captured_args = {}
 
-        async def mock_stream(system_prompt, user_message, client_arg, config=None):
+        async def mock_stream(system_prompt, user_message, client_arg, config=None, **kwargs):
             captured_args["system"] = system_prompt
             captured_args["message"] = user_message
             yield "expanded"
@@ -281,9 +348,13 @@ class TestSpecEditorConfig:
 class AsyncStreamMock:
     """Mock for an async text_stream attribute."""
 
-    def __init__(self, chunks: list[str]) -> None:
+    def __init__(
+        self, chunks: list[str], *, input_tokens: int = 10, output_tokens: int = 5
+    ) -> None:
         self._chunks = chunks
         self._index = 0
+        self._input_tokens = input_tokens
+        self._output_tokens = output_tokens
 
     @property
     def text_stream(self):
@@ -298,3 +369,12 @@ class AsyncStreamMock:
         chunk = self._chunks[self._index]
         self._index += 1
         return chunk
+
+    async def get_final_message(self):
+        """Return a mock final message with usage data."""
+        usage = MagicMock()
+        usage.input_tokens = self._input_tokens
+        usage.output_tokens = self._output_tokens
+        msg = MagicMock()
+        msg.usage = usage
+        return msg

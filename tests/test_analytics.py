@@ -88,6 +88,81 @@ def test_track_swallows_exception():
     analytics.track("some_event")
 
 
+# ── get_client ──────────────────────────────────────────────
+
+
+def test_get_client_returns_none_when_not_initialised():
+    assert analytics.get_client() is None
+
+
+def test_get_client_returns_client_after_init():
+    mock_cls = MagicMock()
+    with patch("posthog.Posthog", mock_cls):
+        analytics.init("phc_test_key")
+    assert analytics.get_client() is mock_cls.return_value
+
+
+# ── track_ai_generation ────────────────────────────────────
+
+
+def test_track_ai_generation_emits_event():
+    mock_client = MagicMock()
+    analytics._client = mock_client
+
+    analytics.track_ai_generation(
+        model="claude-sonnet-4-5-20250929",
+        input_tokens=100,
+        output_tokens=50,
+        latency_seconds=1.5,
+        feature="pr_analysis",
+        action="analyze",
+        groups={"organization": "acme"},
+    )
+
+    mock_client.capture.assert_called_once()
+    call_kwargs = mock_client.capture.call_args[1]
+    assert call_kwargs["event"] == "$ai_generation"
+    assert call_kwargs["distinct_id"] == analytics.SERVER_ACTOR
+    assert call_kwargs["groups"] == {"organization": "acme"}
+    props = call_kwargs["properties"]
+    assert props["$ai_model"] == "claude-sonnet-4-5-20250929"
+    assert props["$ai_provider"] == "anthropic"
+    assert props["$ai_input_tokens"] == 100
+    assert props["$ai_output_tokens"] == 50
+    assert props["$ai_latency"] == 1.5
+    assert props["feature"] == "pr_analysis"
+    assert props["action"] == "analyze"
+    assert "$ai_trace_id" in props
+
+
+def test_track_ai_generation_noop_when_not_configured():
+    # Should not raise when PostHog is not configured
+    analytics.track_ai_generation(
+        model="test",
+        input_tokens=0,
+        output_tokens=0,
+        latency_seconds=0,
+        feature="test",
+    )
+
+
+def test_track_ai_generation_includes_extra_properties():
+    mock_client = MagicMock()
+    analytics._client = mock_client
+
+    analytics.track_ai_generation(
+        model="test",
+        input_tokens=10,
+        output_tokens=20,
+        latency_seconds=0.5,
+        feature="spec_edit",
+        extra_properties={"repo": "org/repo"},
+    )
+
+    props = mock_client.capture.call_args[1]["properties"]
+    assert props["repo"] == "org/repo"
+
+
 # ── identify ────────────────────────────────────────────────
 
 

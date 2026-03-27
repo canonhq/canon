@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import date
 
 import anthropic
+
+from canon import analytics
 
 from .client import AgentConfig, ClaudeClient
 
@@ -111,6 +114,8 @@ async def generate_spec_stream(
     repo_context: RepoContext,
     client: ClaudeClient,
     config: AgentConfig | None = None,
+    *,
+    distinct_id: str = "",
 ) -> AsyncIterator[str]:
     """Stream spec generation using Claude.
 
@@ -130,6 +135,8 @@ async def generate_spec_stream(
     system_prompt = system_prompt.replace("{today}", today)
     system_prompt = system_prompt.replace("{tags}", "")
 
+    start = time.monotonic()
+
     try:
         async with (
             anthropic.AsyncAnthropic(api_key=api_key) as async_client,
@@ -143,6 +150,26 @@ async def generate_spec_stream(
         ):
             async for text in stream.text_stream:
                 yield text
+
+            # Token counts are only available after the full stream is consumed.
+            # We emit manually because the PostHog AsyncAnthropic wrapper does
+            # not support the .messages.stream() context manager pattern.
+            try:
+                final = await stream.get_final_message()
+                duration = time.monotonic() - start
+                analytics.track_ai_generation(
+                    model=cfg.model,
+                    input_tokens=final.usage.input_tokens,
+                    output_tokens=final.usage.output_tokens,
+                    latency_seconds=duration,
+                    feature="spec_generate",
+                    action="generate",
+                    distinct_id=distinct_id or analytics.SERVER_ACTOR,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to capture LLM usage for spec_generate/generate", exc_info=True
+                )
     except anthropic.APIError as e:
         logger.error("Spec generation API error: %s", e)
         yield "\n\n<!-- Generation failed. Please try again. -->\n"

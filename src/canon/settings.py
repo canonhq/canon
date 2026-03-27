@@ -192,6 +192,7 @@ class Settings(BaseSettings):
         if v == "":
             return 587
         return v
+
     smtp_password: SecretStr = SecretStr("")
     smtp_from: str = ""
     smtp_tls: bool = True

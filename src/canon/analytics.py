@@ -8,6 +8,7 @@ never breaks the application.
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,15 @@ def init(
         logger.warning("Failed to initialise PostHog client", exc_info=True)
 
 
+def get_client() -> Any:
+    """Return the PostHog client instance, or None if not initialised.
+
+    Used by the PostHog Anthropic wrapper in ClaudeClient, and as a
+    feature-detection check for PostHog-aware code paths.
+    """
+    return _client
+
+
 def shutdown() -> None:
     """Flush pending events and tear down the client."""
     global _client
@@ -82,6 +92,41 @@ def track(
         )
     except Exception:
         logger.debug("Failed to track event %s", event, exc_info=True)
+
+
+def track_ai_generation(
+    *,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    latency_seconds: float,
+    feature: str,
+    action: str = "",
+    distinct_id: str = SERVER_ACTOR,
+    groups: dict[str, str] | None = None,
+    extra_properties: dict[str, Any] | None = None,
+) -> None:
+    """Emit a ``$ai_generation`` event for PostHog LLM analytics.
+
+    Used by async streaming call sites (spec_editor, spec_generator) that
+    use vanilla AsyncAnthropic and cannot leverage the automatic PostHog
+    Anthropic wrapper.  The sync path in ClaudeClient emits these events
+    automatically via the posthog.ai.anthropic wrapper instead.
+    """
+    props: dict[str, Any] = {
+        "$ai_model": model,
+        "$ai_provider": "anthropic",
+        "$ai_input_tokens": input_tokens,
+        "$ai_output_tokens": output_tokens,
+        "$ai_latency": latency_seconds,
+        "$ai_trace_id": str(uuid.uuid4()),
+        "feature": feature,
+    }
+    if action:
+        props["action"] = action
+    if extra_properties:
+        props.update(extra_properties)
+    track("$ai_generation", distinct_id=distinct_id, properties=props, groups=groups)
 
 
 def identify(distinct_id: str, properties: dict[str, Any] | None = None) -> None:
