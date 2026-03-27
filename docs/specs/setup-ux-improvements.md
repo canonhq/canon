@@ -65,7 +65,8 @@ about `canon login` when credentials are missing.
 
 #### Acceptance Criteria
 
-- [ ] After config write, check `~/.config/canon/credentials.json` existence
+- [x] After config write, check `~/.config/canon/credentials.json` existence
+<!-- canon:realized-in:PR#474 file:src/canon/cli/setup_cmd.py -->
 - [ ] If no credentials: print hint with `canon login` command and explain what it unlocks (ticket sync, org metrics, MCP write-back)
 - [ ] If credentials exist: print "Authenticated as <org>" confirmation
 - [ ] Non-interactive mode skips the hint (no blocking prompt)
@@ -184,8 +185,9 @@ Fix naming inconsistencies and clarify the two installation paths.
 
 #### Acceptance Criteria
 
-- [ ] README has a clear decision tree: "Use CLI setup if you want repo-level config. Use marketplace install for Claude Code plugin only."
-- [ ] Both paths list what they produce (which files, which capabilities)
+- [ ] README has a clear decision tree: "Use CLI setup (`canon setup`) for repo-level config and MCP server. Use marketplace install (`claude plugin marketplace add` + `claude plugin install`) for Claude Code skills (slash commands)."
+- [x] Both paths list what they produce (which files, which capabilities)
+<!-- canon:realized-in:PR#474 file:docs-site/getting-started/installation.md -->
 - [ ] Note that `canon setup` installs skills AND writes `.mcp.json`, so marketplace install is not needed after CLI setup
 
 <!-- canon:ticket:github:425 -->
