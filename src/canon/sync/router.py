@@ -36,6 +36,29 @@ def resolve_target(
     return None
 
 
+def resolve_all_targets(
+    section: SpecSection | None,
+    doc: SpecDocument,
+    routing: list[RoutingRule],
+    systems: dict[str, TicketSystemConfig],
+) -> tuple[str | None, list[str]]:
+    """Resolve primary target and shadow targets for a section/doc.
+
+    Returns (primary_target_name, shadow_target_names).
+    When no match is found, returns (None, []).
+    """
+    if not routing:
+        if len(systems) == 1:
+            return next(iter(systems.keys())), []
+        return None, []
+
+    for rule in routing:
+        if _matches(rule, section, doc):
+            return rule.target, list(rule.shadow_targets)
+
+    return None, []
+
+
 def _matches(rule: RoutingRule, section: SpecSection | None, doc: SpecDocument) -> bool:
     """Check if a routing rule matches a section.
 

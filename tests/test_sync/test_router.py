@@ -9,7 +9,7 @@ from canon.parser.models import (
     SpecSection,
 )
 from canon.sync.mapping import RoutingRule, TicketSystemConfig
-from canon.sync.router import resolve_target
+from canon.sync.router import resolve_all_targets, resolve_target
 
 
 def _make_doc(
@@ -168,3 +168,39 @@ class TestResolveTarget:
         doc2 = _make_doc(team="ops", owner="alice")
         result2 = resolve_target(_make_section(), doc2, routing, SYSTEMS)
         assert result2 == "operations"
+
+
+class TestResolveAllTargets:
+    def test_returns_primary_and_shadows(self) -> None:
+        systems = {
+            "linear": TicketSystemConfig(system="linear", project="CANON"),
+            "jira": TicketSystemConfig(system="jira", project="CAN"),
+            "github": TicketSystemConfig(system="github", project="canonhq/canon"),
+        }
+        routing = [
+            RoutingRule(
+                match={"tags": ["product"]},
+                target="linear",
+                shadow_targets=["jira", "github"],
+            ),
+            RoutingRule(match={"default": True}, target="linear"),
+        ]
+        doc = _make_doc(tags=["product"])
+        primary, shadows = resolve_all_targets(None, doc, routing, systems)
+        assert primary == "linear"
+        assert shadows == ["jira", "github"]
+
+    def test_no_routing_single_system_no_shadows(self) -> None:
+        systems = {"primary": TicketSystemConfig(system="jira", project="PAY")}
+        primary, shadows = resolve_all_targets(_make_section(), _make_doc(), [], systems)
+        assert primary == "primary"
+        assert shadows == []
+
+    def test_no_match_returns_none(self) -> None:
+        systems = {
+            "linear": TicketSystemConfig(system="linear", project="CANON"),
+        }
+        routing = [RoutingRule(match={"tags": ["nonexistent"]}, target="linear")]
+        primary, shadows = resolve_all_targets(_make_section(), _make_doc(), routing, systems)
+        assert primary is None
+        assert shadows == []

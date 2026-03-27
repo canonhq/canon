@@ -42,7 +42,7 @@ Once the loop works, we dogfood all three adapters (Jira, Linear, GitHub Issues)
 
 ## 2. Close the Realization Loop
 
-<!-- canon:section:2 status:todo -->
+<!-- canon:section:2 status:in_progress -->
 
 Eliminate the manual gate between realization detection and spec updates.
 
@@ -72,7 +72,7 @@ On PR merge, commit spec updates **directly to the default branch** instead of c
 
 ## 3. Fix CANON.yaml and Forward Sync
 
-<!-- canon:section:3 status:todo -->
+<!-- canon:section:3 status:in_progress -->
 
 The current CANON.yaml is misconfigured — it declares `system: github` but uses Jira-style status values, which means forward sync likely silently fails or maps incorrectly.
 
@@ -104,7 +104,7 @@ Fix the config to match whichever system is actually primary. Since we're moving
 
 ## 4. Make Failures Loud
 
-<!-- canon:section:4 status:todo -->
+<!-- canon:section:4 status:in_progress -->
 
 The current system has multiple silent failure paths. When sync skips, adapter resolution fails, or the realization check errors, nothing alerts anyone.
 
@@ -127,7 +127,7 @@ The current system has multiple silent failure paths. When sync skips, adapter r
 
 ## 5. Multi-Target Routing with Shadow Sync
 
-<!-- canon:section:5 status:todo -->
+<!-- canon:section:5 status:in_progress -->
 
 Once the single-system loop is working (Sections 2-4), add multi-target routing to dogfood all three adapters through real work.
 
@@ -179,7 +179,7 @@ ticket_mapping:
 
 ## 6. Drift Detection
 
-<!-- canon:section:6 status:todo -->
+<!-- canon:section:6 status:in_progress -->
 
 With multi-target sync running, detect when systems diverge.
 

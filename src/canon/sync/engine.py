@@ -411,6 +411,131 @@ async def forward_sync(
     return markdown, result
 
 
+async def forward_sync_multi(
+    doc: SpecDocument,
+    *,
+    primary_adapter: TicketAdapter,
+    primary_config: TicketSystemConfig | None = None,
+    primary_project: str,
+    shadow_adapters: dict[str, tuple[TicketAdapter, TicketSystemConfig]] | None = None,
+    require_review: bool = False,
+    dry_run: bool = False,
+    spec_url: str = "",
+    lifecycle_sync: bool | Literal["close_only"] = True,
+    repo: str = "",
+    org: str = "",
+) -> tuple[str, SyncResult]:
+    """Forward sync to primary target + shadow targets.
+
+    Creates tickets in the primary system first, then replicates to each
+    shadow system. Shadow tickets get a ``canon:shadow`` label.
+    Shadow failures are logged but don't block primary sync.
+
+    Returns (updated_markdown, combined_sync_result).
+    """
+    # Run primary sync
+    markdown, result = await forward_sync(
+        doc,
+        primary_adapter,
+        primary_project,
+        require_review=require_review,
+        dry_run=dry_run,
+        system_config=primary_config,
+        spec_url=spec_url,
+        lifecycle_sync=lifecycle_sync,
+        repo=repo,
+        org=org,
+    )
+
+    if not shadow_adapters or dry_run:
+        return markdown, result
+
+    # Re-parse markdown to get the updated doc with primary ticket links
+    from canon.parser.models import ParseOptions
+    from canon.parser.parse import parse_spec as _parse
+
+    try:
+        updated_doc = _parse(markdown, ParseOptions(file_path=doc.file_path)).document
+    except Exception:
+        logger.warning(
+            "Failed to re-parse markdown after primary sync for %s — skipping shadow sync",
+            doc.file_path,
+        )
+        return markdown, result
+
+    # Shadow sync: create tickets in each shadow system for sections that
+    # got tickets in the primary sync
+    for shadow_name, (shadow_adapter, shadow_config) in shadow_adapters.items():
+        shadow_project = shadow_config.project or primary_project
+        for created in result.created:
+            section = _find_section(updated_doc, created.section_id)
+            if not section:
+                logger.warning(
+                    "Section %s not found after re-parse — skipping shadow sync to %s",
+                    created.section_id,
+                    shadow_name,
+                )
+                result.errors.append(
+                    SyncError(
+                        section_id=created.section_id,
+                        error=f"Section {created.section_id} not found after re-parse "
+                        f"— shadow sync to {shadow_name} skipped",
+                    )
+                )
+                continue
+
+            try:
+                shadow_ticket = await shadow_adapter.create_ticket(
+                    CreateTicketInput(
+                        project_key=shadow_project,
+                        summary=f"[Shadow] {section.title}",
+                        description=section.content,
+                        status=section.status,
+                        labels=["canon:shadow"],
+                    )
+                )
+                logger.info(
+                    "Shadow ticket created in %s: %s for section %s",
+                    shadow_name,
+                    shadow_ticket.ticket_id,
+                    section.id,
+                )
+                analytics.track(
+                    "shadow_ticket_created",
+                    properties={
+                        "repo": repo,
+                        "section_id": section.id,
+                        "shadow_system": shadow_name,
+                        "ticket_id": shadow_ticket.ticket_id,
+                        "primary_ticket_id": created.ticket_id,
+                    },
+                    groups={"organization": org} if org else None,
+                )
+            except Exception as err:
+                logger.warning(
+                    "Shadow ticket creation failed in %s for section %s: %s",
+                    shadow_name,
+                    created.section_id,
+                    err,
+                )
+                result.errors.append(
+                    SyncError(
+                        section_id=created.section_id,
+                        error=f"Shadow sync to {shadow_name} failed: {err}",
+                    )
+                )
+
+    return markdown, result
+
+
+def _find_section(doc: SpecDocument, section_id: str) -> SpecSection | None:
+    """Find a section by ID in a document."""
+    for section in _flatten_sections(doc.sections):
+        if section.id == section_id:
+            return section
+    return None
+
+
 async def _update_parent_task_lists(
     adapter: TicketAdapter,
     result: SyncResult,

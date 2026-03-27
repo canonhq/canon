@@ -235,6 +235,9 @@ class RoutingRule(BaseModel):
     target: str
     """Name of the ticket system config to route to."""
 
+    shadow_targets: list[str] = []
+    """Names of ticket system configs to shadow-sync to (read-only projections)."""
+
     @model_validator(mode="after")
     def _check_match(self) -> RoutingRule:
         valid_keys = {"tags", "team", "owner", "path", "default"}
@@ -283,6 +286,22 @@ class TicketMappingConfig(BaseModel):
                 raise ValueError(
                     f"Routing rule {i} targets unknown ticket system {rule.target!r}. "
                     f"Available: {sorted(self.ticket_systems.keys()) or '(none)'}"
+                )
+            # Validate shadow targets
+            for shadow in rule.shadow_targets:
+                if shadow not in self.ticket_systems:
+                    raise ValueError(
+                        f"Routing rule {i} has unknown shadow target {shadow!r}. "
+                        f"Available: {sorted(self.ticket_systems.keys()) or '(none)'}"
+                    )
+                if shadow == rule.target:
+                    raise ValueError(
+                        f"Routing rule {i} has shadow target {shadow!r} that is the same "
+                        f"as the primary target — a system cannot shadow itself"
+                    )
+            if len(rule.shadow_targets) != len(set(rule.shadow_targets)):
+                raise ValueError(
+                    f"Routing rule {i} has duplicate shadow targets: {rule.shadow_targets}"
                 )
 
         return self

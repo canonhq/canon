@@ -189,6 +189,17 @@ def main() -> None:
         total_changed = sum(r["changed"] for r in results)
         total_errors = sum(r["errors"] for r in results)
 
+        from canon import analytics
+
+        analytics.track(
+            "reverse_sync_cron_summary",
+            properties={
+                "files_processed": len(results),
+                "total_changed": total_changed,
+                "total_errors": total_errors,
+            },
+        )
+
         logger.info(
             "Reverse sync complete: %d files processed, %d statuses changed, %d errors",
             len(results),

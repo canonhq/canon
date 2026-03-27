@@ -279,9 +279,16 @@ async def load_repo_specs(
     for entry in all_entries:
         file_path = entry["path"]
         try:
-            content, _sha = await client.get_file_content(owner, repo, file_path, ref=ref)
+            content, file_sha = await client.get_file_content(owner, repo, file_path, ref=ref)
             result = parse_spec(content, ParseOptions(file_path=file_path))
-            specs.append({"file_path": file_path, "document": result.document, "raw": content})
+            specs.append(
+                {
+                    "file_path": file_path,
+                    "document": result.document,
+                    "raw": content,
+                    "sha": file_sha,
+                }
+            )
         except Exception:
             logger.warning("Failed to load/parse spec file: %s", file_path)
 
