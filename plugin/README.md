@@ -4,15 +4,24 @@ AI-native spec documentation — verify code against specs, track coverage, main
 
 ## Installation
 
+From the terminal:
+
+```bash
+claude plugin marketplace add canonhq/canon
+claude plugin install canon
+```
+
+Or from inside a Claude Code session:
+
 ```
 /plugin marketplace add canonhq/canon
 /plugin install canon
 ```
 
-## Commands
+## Skills
 
-| Command | Description |
-|---------|-------------|
+| Skill | Description |
+|-------|-------------|
 | `/canon:context` | Load spec context for your current task |
 | `/canon:task` | Pick up a task, implement ACs, mark done |
 | `/canon:verify` | Verify code against spec acceptance criteria |

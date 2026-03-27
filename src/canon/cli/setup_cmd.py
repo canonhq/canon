@@ -133,6 +133,44 @@ def _prompt_confirm(message: str, default: bool = True) -> bool:
     return raw in ("y", "yes")
 
 
+def _hint_claude_plugin(root: Path) -> None:
+    """Print a hint about installing the Claude Code plugin if not detected."""
+    installed_plugins = root / ".claude" / "plugins" / "installed_plugins.json"
+    if installed_plugins.exists():
+        try:
+            import json
+
+            data = json.loads(installed_plugins.read_text())
+            plugins = data.get("plugins", {})
+            for key in plugins:
+                if key.startswith("canon@"):
+                    return  # Plugin already installed
+        except (ValueError, KeyError):
+            pass
+
+    # Also check user-level plugins
+    user_plugins = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    if user_plugins.exists():
+        try:
+            import json
+
+            data = json.loads(user_plugins.read_text())
+            plugins = data.get("plugins", {})
+            for key in plugins:
+                if key.startswith("canon@"):
+                    # Check if it's installed for this project
+                    for entry in plugins[key]:
+                        if entry.get("scope") == "user" or entry.get("projectPath") == str(root):
+                            return
+        except (ValueError, KeyError):
+            pass
+
+    print()
+    print("  Tip: Install the Canon plugin for Claude Code skills (/canon:verify, etc.):")
+    print("    claude plugin marketplace add canonhq/canon")
+    print("    claude plugin install canon")
+
+
 # ─── Main command ─────────────────────────────────────────
 
 
@@ -262,6 +300,9 @@ def run_setup(
 
     if cleanup_stale_skills(root):
         print("  Cleaned up stale .claude/skills/ (skills now come from the canon plugin)")
+
+    # ── Plugin hint ────────────────────────────────────
+    _hint_claude_plugin(root)
 
     # ── Post-setup hints ─────────────────────────────────
     if detected_project:

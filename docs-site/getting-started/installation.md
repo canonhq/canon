@@ -42,26 +42,52 @@ The Canon bot will analyze your PR against the relevant specs and post a comment
 
 ## Claude Code Plugin {#claude-code-plugin}
 
-The Claude Code plugin adds spec-driven development commands to your Claude Code sessions.
+The Claude Code plugin adds spec-driven development skills (slash commands) to your Claude Code sessions.
 
 ### Install
 
+**Option A: CLI setup (recommended)**
+
+Run from your project root after creating `CANON.yaml`:
+
 ```bash
-claude plugin add canonhq/canon
+canon setup
 ```
 
-### Available Commands
+This creates `CANON.yaml`, the MCP server config (`.mcp.json`), and the spec template. To also configure the Claude Code agent instructions:
 
-| Command | Description |
-|---------|-------------|
-| `/canon-context` | Load spec context for your current task |
-| `/canon-task` | Pick up a task, implement ACs, mark done |
-| `/canon-verify` | Verify code against spec acceptance criteria |
-| `/canon-new` | Create a new spec from template |
-| `/canon-review` | Review changes against all documentation |
-| `/canon-status` | Show spec coverage dashboard |
-| `/canon-plan` | Spec-driven planning workflow |
-| `/canon-update` | Update spec statuses from code evidence |
+```bash
+canon setup --agent claude
+```
+
+**Option B: Plugin marketplace**
+
+Add the Canon marketplace and install the plugin:
+
+```bash
+claude plugin marketplace add canonhq/canon
+claude plugin install canon
+```
+
+::: tip
+`canon setup` handles MCP and agent config but does not install the Claude Code plugin. For skills (slash commands), you need the plugin installed via the marketplace.
+:::
+
+### Available Skills
+
+Once installed, skills are available as `/canon:<skill>`:
+
+| Skill | Description |
+|-------|-------------|
+| `/canon:context` | Load spec context for your current task |
+| `/canon:task` | Pick up a task, implement ACs, mark done |
+| `/canon:verify` | Verify code against spec acceptance criteria |
+| `/canon:new` | Create a new spec from template |
+| `/canon:review` | Review changes against all documentation |
+| `/canon:status` | Show spec coverage dashboard |
+| `/canon:plan` | Spec-driven planning workflow |
+| `/canon:update` | Update spec statuses from code evidence |
+| `/canon:audit` | Full spec audit: update statuses, sync tickets, commit |
 
 ## MCP Server {#mcp-server}
 
@@ -69,14 +95,14 @@ The MCP server connects any MCP-compatible coding agent to the Canon knowledge b
 
 ### Configure in Claude Code
 
-Add to your Claude Code MCP settings:
+`canon setup` automatically creates `.mcp.json` with the Canon MCP server. You can also add it manually:
 
 ```json
 {
   "mcpServers": {
     "canon": {
       "command": "uvx",
-      "args": ["canon", "mcp"]
+      "args": ["--from", "canonhq", "canon-mcp"]
     }
   }
 }
