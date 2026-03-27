@@ -1,6 +1,6 @@
 ---
 title: "Ticket Sync Enhancements"
-status: draft
+status: in_progress
 owner: ng
 team: canon
 ticket_project: canonhq/canon
@@ -91,26 +91,26 @@ Replace the cron-based reverse sync with webhook-driven updates for near-real-ti
 ### Acceptance Criteria
 
 - [x] Webhook endpoints for GitHub Issues, Jira, Linear, and Asana
-<!-- specwright:realized-in:PR#295 file:src/specwright/webhooks/router.py -->
-<!-- specwright:realized-in:PR#295 file:src/specwright/github/handlers/on_issues.py -->
-<!-- specwright:realized-in:PR#312 file:src/specwright/webhooks/router.py -->
-<!-- specwright:realized-in:PR#312 file:src/specwright/github/handlers/on_issues.py -->
+<!-- canon:realized-in:PR#295 file:src/specwright/webhooks/router.py -->
+<!-- canon:realized-in:PR#295 file:src/specwright/github/handlers/on_issues.py -->
+<!-- canon:realized-in:PR#312 file:src/specwright/webhooks/router.py -->
+<!-- canon:realized-in:PR#312 file:src/specwright/github/handlers/on_issues.py -->
 - [x] Webhook signature/authentication verification for each system
-<!-- specwright:realized-in:PR#295 file:src/specwright/webhooks/verify.py -->
-<!-- specwright:realized-in:PR#312 file:src/specwright/webhooks/verify.py -->
+<!-- canon:realized-in:PR#295 file:src/specwright/webhooks/verify.py -->
+<!-- canon:realized-in:PR#312 file:src/specwright/webhooks/verify.py -->
 - [x] Ticket status changes trigger immediate spec status updates
-<!-- specwright:realized-in:PR#295 file:src/specwright/webhooks/processor.py -->
-<!-- specwright:realized-in:PR#295 file:src/specwright/webhooks/router.py -->
-<!-- specwright:realized-in:PR#312 file:src/specwright/webhooks/processor.py -->
+<!-- canon:realized-in:PR#295 file:src/specwright/webhooks/processor.py -->
+<!-- canon:realized-in:PR#295 file:src/specwright/webhooks/router.py -->
+<!-- canon:realized-in:PR#312 file:src/specwright/webhooks/processor.py -->
 - [x] Processing is idempotent (duplicate events are safe)
-<!-- specwright:realized-in:PR#295 file:src/specwright/webhooks/processor.py -->
+<!-- canon:realized-in:PR#295 file:src/specwright/webhooks/processor.py -->
 - [x] Failed webhook processing is logged and retryable
-<!-- specwright:realized-in:PR#295 file:src/specwright/webhooks/router.py -->
+<!-- canon:realized-in:PR#295 file:src/specwright/webhooks/router.py -->
 - [x] Cron job retained as catch-up mechanism (not removed)
-<!-- specwright:realized-in:PR#312 file:src/specwright/cron/sync_status.py -->
-<!-- specwright:realized-in file:src/specwright/cron/sync_status.py -->
+<!-- canon:realized-in:PR#312 file:src/specwright/cron/sync_status.py -->
+<!-- canon:realized-in file:src/specwright/cron/sync_status.py -->
 - [x] Latency from ticket change to spec update is under 30 seconds
-<!-- specwright:realized-in:PR#295 file:src/specwright/webhooks/router.py -->
+<!-- canon:realized-in:PR#295 file:src/specwright/webhooks/router.py -->
 
 ## 4. Resolved Questions
 

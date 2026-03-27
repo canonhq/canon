@@ -61,14 +61,14 @@ Key files with hardcoded `docs/specs/` paths:
 ### Acceptance Criteria
 
 - [x] All spec discovery uses `doc_paths` from CANON.yaml (no hardcoded `docs/specs/` in app code)
-<!-- specwright:realized-in:PR#292 file:src/specwright/web/services.py -->
-<!-- specwright:realized-in:PR#292 file:src/specwright/cron/sync_status.py -->
-<!-- specwright:realized-in:PR#292 file:src/specwright/github/handlers/on_pull_request.py -->
+<!-- canon:realized-in:PR#292 file:src/specwright/web/services.py -->
+<!-- canon:realized-in:PR#292 file:src/specwright/cron/sync_status.py -->
+<!-- canon:realized-in:PR#292 file:src/specwright/github/handlers/on_pull_request.py -->
 - [ ] `canon init` creates template in the first configured spec directory
 - [x] MCP `create_spec` writes to the configured spec directory
 <!-- canon:realized-in:audit file:src/canon/mcp/server.py:654 -->
 - [x] MCP `list_specs` reads from configured spec directories
-<!-- specwright:realized-in:PR#292 file:src/specwright/mcp/server.py -->
+<!-- canon:realized-in:PR#292 file:src/specwright/mcp/server.py -->
 - [x] `filter_spec_files()` matches against configured patterns
 - [x] Spec classification uses configured patterns instead of hardcoded path prefix
 - [x] Cron jobs (sync, coverage) use configured patterns
@@ -78,7 +78,7 @@ Key files with hardcoded `docs/specs/` paths:
 
 ## 3. VitePress Site Scaffold
 
-<!-- specwright:system:3 status:done -->
+<!-- canon:system:3 status:done -->
 
 Set up the VitePress project structure, build pipeline, and local dev workflow.
 
@@ -170,7 +170,7 @@ Apply Canon's visual identity:
 
 ## 4. Getting Started
 
-<!-- specwright:system:4 status:done -->
+<!-- canon:system:4 status:done -->
 
 Write the onboarding documentation that gets a new user from zero to productive.
 
@@ -208,7 +208,7 @@ Document every field in `CANON.yaml`:
 
 ## 5. Concepts
 
-<!-- specwright:system:5 status:done -->
+<!-- canon:system:5 status:done -->
 
 Explain the mental models behind Canon. Migrate and expand content from `docs/vision.md`.
 
@@ -225,21 +225,21 @@ Explain the mental models behind Canon. Migrate and expand content from `docs/vi
 - [x] Each concept has its own page with clear explanations and diagrams
 - [x] Content from `docs/vision.md` is migrated and restructured (not just copy-pasted)
 - [x] Each concept page links to relevant guides and reference docs
-<!-- specwright:realized-in:PR#292 file:docs-site/concepts/openspec.md -->
-<!-- specwright:realized-in:PR#292 file:docs-site/concepts/living-specs.md -->
-<!-- specwright:realized-in:PR#292 file:docs-site/concepts/delta-tracking.md -->
-<!-- specwright:realized-in:PR#292 file:docs-site/concepts/agent-mesh.md -->
-<!-- specwright:realized-in:PR#292 file:docs-site/concepts/coverage.md -->
-<!-- specwright:realized-in:PR#TBD file:docs-site/concepts/openspec.md -->
-<!-- specwright:realized-in:PR#TBD file:docs-site/concepts/living-specs.md -->
-<!-- specwright:realized-in:PR#TBD file:docs-site/concepts/delta-tracking.md -->
-<!-- specwright:realized-in:PR#TBD file:docs-site/concepts/agent-mesh.md -->
-<!-- specwright:realized-in:PR#TBD file:docs-site/concepts/coverage.md -->
+<!-- canon:realized-in:PR#292 file:docs-site/concepts/openspec.md -->
+<!-- canon:realized-in:PR#292 file:docs-site/concepts/living-specs.md -->
+<!-- canon:realized-in:PR#292 file:docs-site/concepts/delta-tracking.md -->
+<!-- canon:realized-in:PR#292 file:docs-site/concepts/agent-mesh.md -->
+<!-- canon:realized-in:PR#292 file:docs-site/concepts/coverage.md -->
+<!-- canon:realized-in:PR#TBD file:docs-site/concepts/openspec.md -->
+<!-- canon:realized-in:PR#TBD file:docs-site/concepts/living-specs.md -->
+<!-- canon:realized-in:PR#TBD file:docs-site/concepts/delta-tracking.md -->
+<!-- canon:realized-in:PR#TBD file:docs-site/concepts/agent-mesh.md -->
+<!-- canon:realized-in:PR#TBD file:docs-site/concepts/coverage.md -->
 - [x] Diagrams use Mermaid (VitePress supports it natively)
 
 ## 6. Guides
 
-<!-- specwright:system:6 status:done -->
+<!-- canon:system:6 status:done -->
 
 Task-oriented documentation for common workflows.
 
@@ -286,7 +286,7 @@ Using Canon in CI/CD pipelines:
 
 ## 7. Reference
 
-<!-- specwright:system:7 status:done -->
+<!-- canon:system:7 status:done -->
 
 Comprehensive reference documentation for all Canon interfaces. CLI, MCP, and API references are auto-generated at build time.
 
@@ -340,15 +340,15 @@ Full `CANON.yaml` schema with JSON Schema or table format.
 ### Acceptance Criteria
 
 - [x] CLI reference is auto-generated at build time from `canon --help` output
-<!-- specwright:realized-in:PR#292 file:docs-site/.vitepress/scripts/gen-cli-ref.py -->
-<!-- specwright:realized-in:PR#TBD file:docs-site/.vitepress/scripts/gen-cli-ref.py -->
+<!-- canon:realized-in:PR#292 file:docs-site/.vitepress/scripts/gen-cli-ref.py -->
+<!-- canon:realized-in:PR#TBD file:docs-site/.vitepress/scripts/gen-cli-ref.py -->
 - [x] MCP reference is auto-generated from MCP server tool metadata
-<!-- specwright:realized-in:PR#292 file:docs-site/.vitepress/scripts/gen-mcp-ref.py -->
-<!-- specwright:realized-in:PR#TBD file:docs-site/.vitepress/scripts/gen-mcp-ref.py -->
+<!-- canon:realized-in:PR#292 file:docs-site/.vitepress/scripts/gen-mcp-ref.py -->
+<!-- canon:realized-in:PR#TBD file:docs-site/.vitepress/scripts/gen-mcp-ref.py -->
 - [x] Skills reference documents all 8 `/sw:*` commands with usage examples
 - [x] API reference is auto-generated from FastAPI OpenAPI schema at build time
-<!-- specwright:realized-in:PR#292 file:docs-site/.vitepress/scripts/gen-api-ref.py -->
-<!-- specwright:realized-in:PR#TBD file:docs-site/.vitepress/scripts/gen-api-ref.py -->
+<!-- canon:realized-in:PR#292 file:docs-site/.vitepress/scripts/gen-api-ref.py -->
+<!-- canon:realized-in:PR#TBD file:docs-site/.vitepress/scripts/gen-api-ref.py -->
 - [x] Spec format reference fully documents the markdown syntax including all comment types
 - [x] Configuration reference documents the complete `CANON.yaml` schema
 - [x] Auto-generated pages include a "generated on" timestamp and link to source
@@ -356,7 +356,7 @@ Full `CANON.yaml` schema with JSON Schema or table format.
 
 ## 8. Architecture
 
-<!-- specwright:system:8 status:done -->
+<!-- canon:system:8 status:done -->
 
 Technical documentation for contributors and advanced users.
 
@@ -393,7 +393,7 @@ Per-module documentation:
 
 ## 9. Contributing Guide
 
-<!-- specwright:system:9 status:done -->
+<!-- canon:system:9 status:done -->
 
 Documentation for open-source contributors.
 

@@ -15,7 +15,7 @@ Define and implement a structured review process for specs — from draft throug
 
 ## 1. Background
 
-<!-- specwright:system:1 status:done -->
+<!-- canon:system:1 status:done -->
 
 Today specs are just files in a repo with no review gates. Anyone can merge a spec change without sign-off. The vision: async, in-platform reviews where engineering leads review for feasibility, design reviews for UX, and PMs review for requirements coverage. Review status should gate ticket generation — only approved specs produce tickets.
 
@@ -23,7 +23,7 @@ Today specs are just files in a repo with no review gates. Anyone can merge a sp
 
 ## 2. Review States
 
-<!-- specwright:system:2 status:done -->
+<!-- canon:system:2 status:done -->
 
 ### 2.1 Spec Lifecycle
 

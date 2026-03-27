@@ -15,7 +15,7 @@ Add integration tests that verify end-to-end behavior through the actual FastAPI
 
 ## 1. Background
 
-<!-- specwright:system:1 status:done -->
+<!-- canon:system:1 status:done -->
 
 All existing tests are unit tests that mock external dependencies (GitHub API, Anthropic SDK, database). While comprehensive (965+ tests), they cannot catch issues like incorrect FastAPI route wiring, middleware ordering, serialization mismatches between the app and real GitHub payloads, or database query bugs.
 
@@ -23,7 +23,7 @@ All existing tests are unit tests that mock external dependencies (GitHub API, A
 
 ## 2. Webhook Handler Integration Tests
 
-<!-- specwright:system:2 status:done -->
+<!-- canon:system:2 status:done -->
 
 Test webhook handlers through the full FastAPI request/response cycle using `httpx.AsyncClient` with the real app instance.
 
@@ -43,15 +43,15 @@ Test webhook handlers through the full FastAPI request/response cycle using `htt
 ### Acceptance Criteria
 
 - [ ] Integration test suite using `httpx.AsyncClient` with the real FastAPI app
-<!-- specwright:realized-in:PR#118 file:tests/integration/conftest.py -->
-<!-- specwright:realized-in:PR#118 file:tests/integration/test_webhook.py -->
+<!-- canon:realized-in:PR#118 file:tests/integration/conftest.py -->
+<!-- canon:realized-in:PR#118 file:tests/integration/test_webhook.py -->
 - [ ] Tests for push, PR, and issue_comment webhook handlers
 - [ ] Tests verify the full request → handler → response chain (not just handler functions)
 - [ ] Webhook signature verification tested with real HMAC payloads
 - [ ] Tests use recorded GitHub webhook payloads as fixtures
 - [ ] External API calls mocked at the HTTP level (httpx mock, not service mock)
 - [ ] Integration tests run in CI alongside unit tests
-<!-- specwright:realized-in:PR#118 file:.github/workflows/ci.yml -->
+<!-- canon:realized-in:PR#118 file:.github/workflows/ci.yml -->
 
 <!-- canon:ticket:github:401 -->
 ## 3. GitHub API Client Integration Tests

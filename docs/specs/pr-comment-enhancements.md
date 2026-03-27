@@ -15,7 +15,7 @@ Add Canon web app deep links to GitHub PR comments and enable preview deployment
 
 ## 1. Background
 
-<!-- specwright:system:1 status:done -->
+<!-- canon:system:1 status:done -->
 
 When the Canon agent posts comments on PRs (spec coverage, analysis results), the comments don't link back to the Canon web app. Users have no easy way to navigate from a PR comment to the relevant spec in the editor. Additionally, the Spec Explorer web UI has no preview deployment capability — reviewers can't see UI changes before merging.
 
@@ -23,7 +23,7 @@ When the Canon agent posts comments on PRs (spec coverage, analysis results), th
 
 ## 2. Web App Links in PR Comments
 
-<!-- specwright:system:2 status:done -->
+<!-- canon:system:2 status:done -->
 
 Update the GitHub comment templates in the agent/analyzer to include deep links to the Canon web app for each referenced spec.
 
@@ -41,22 +41,22 @@ For each spec mentioned in a PR comment, include a link like:
 ### Acceptance Criteria
 
 - [x] PR comments include deep links to the Canon web app
-<!-- specwright:realized-in:PR#117 file:src/specwright/agent/analyzer.py -->
+<!-- canon:realized-in:PR#117 file:src/specwright/agent/analyzer.py -->
 - [x] Links point to the correct spec/section in the web app
-<!-- specwright:realized-in:PR#117 file:tests/test_agent/test_analyzer.py -->
+<!-- canon:realized-in:PR#117 file:tests/test_agent/test_analyzer.py -->
 - [x] Links use the configured Canon domain (not hardcoded)
-<!-- specwright:realized-in:PR#117 file:src/specwright/settings.py -->
-<!-- specwright:realized-in:PR#117 file:src/specwright/github/handlers/on_pull_request.py -->
-<!-- specwright:realized-in:PR#298 file:chart/specwright/templates/configmap.yaml -->
-<!-- specwright:realized-in:PR#298 file:chart/specwright/values.yaml -->
+<!-- canon:realized-in:PR#117 file:src/specwright/settings.py -->
+<!-- canon:realized-in:PR#117 file:src/specwright/github/handlers/on_pull_request.py -->
+<!-- canon:realized-in:PR#298 file:chart/specwright/templates/configmap.yaml -->
+<!-- canon:realized-in:PR#298 file:chart/specwright/values.yaml -->
 - [x] Comments degrade gracefully if web app URL is not configured (omit links, don't error)
-<!-- specwright:realized-in:PR#117 file:src/specwright/agent/analyzer.py -->
+<!-- canon:realized-in:PR#117 file:src/specwright/agent/analyzer.py -->
 - [x] Existing PR comment formatting is preserved
-<!-- specwright:realized-in:PR#117 file:tests/test_agent/test_analyzer.py -->
+<!-- canon:realized-in:PR#117 file:tests/test_agent/test_analyzer.py -->
 
 ## 3. Preview Deployments for Spec Explorer
 
-<!-- specwright:system:3 status:done -->
+<!-- canon:system:3 status:done -->
 
 Enable preview deployments for the Spec Explorer web UI so reviewers can see UI changes before merging. The main webhook handler cannot be previewed (single webhook URL), but the read-only web UI can.
 
@@ -69,20 +69,20 @@ Enable preview deployments for the Spec Explorer web UI so reviewers can see UI 
 ### Acceptance Criteria
 
 - [x] PRs that modify `templates/` or `static/` files trigger a preview deployment
-<!-- specwright:realized-in:PR#298 file:.github/workflows/preview.yml -->
-<!-- specwright:realized-in file:.github/workflows/preview.yml -->
+<!-- canon:realized-in:PR#298 file:.github/workflows/preview.yml -->
+<!-- canon:realized-in file:.github/workflows/preview.yml -->
 - [x] Preview URL is accessible and shows the updated UI
-<!-- specwright:realized-in:PR#298 file:chart/specwright/values-preview.yaml -->
-<!-- specwright:realized-in file:chart/specwright/values-preview.yaml -->
+<!-- canon:realized-in:PR#298 file:chart/specwright/values-preview.yaml -->
+<!-- canon:realized-in file:chart/specwright/values-preview.yaml -->
 - [x] Preview connects to production data source (read-only)
-<!-- specwright:realized-in file:.github/workflows/preview.yml -->
+<!-- canon:realized-in file:.github/workflows/preview.yml -->
 - [x] Preview deployments are cleaned up after PR merge/close
-<!-- specwright:realized-in file:.github/workflows/preview.yml -->
+<!-- canon:realized-in file:.github/workflows/preview.yml -->
 - [x] Preview URL is posted as a GitHub deployment status or PR comment
-<!-- specwright:realized-in:PR#298 file:src/specwright/github/handlers/on_pull_request.py -->
-<!-- specwright:realized-in:PR#298 file:src/specwright/github/client.py -->
-<!-- specwright:realized-in file:src/specwright/github/handlers/on_pull_request.py -->
-<!-- specwright:realized-in file:.github/workflows/preview.yml -->
+<!-- canon:realized-in:PR#298 file:src/specwright/github/handlers/on_pull_request.py -->
+<!-- canon:realized-in:PR#298 file:src/specwright/github/client.py -->
+<!-- canon:realized-in file:src/specwright/github/handlers/on_pull_request.py -->
+<!-- canon:realized-in file:.github/workflows/preview.yml -->
 
 ## 4. Resolved Questions
 

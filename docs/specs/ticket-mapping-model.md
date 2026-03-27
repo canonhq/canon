@@ -15,7 +15,7 @@ Replace the hardcoded ticket sync mappings with a configurable, schema-driven mo
 
 ## 1. Background
 
-<!-- specwright:system:1 status:done -->
+<!-- canon:system:1 status:done -->
 
 Today's sync layer assumes a fixed mapping between spec states and ticket system statuses (hardcoded dicts in `status_map.py`). Issue types are always "Task", there's no field mapping beyond summary/description, and each repo targets a single ticket system with a single project key.
 
@@ -110,19 +110,19 @@ Regulated environments with mandatory security review stages and custom field tr
 ### Acceptance Criteria
 
 - [x] MUST document at least 3 real enterprise Jira workflow configurations that the model supports
-<!-- specwright:realized-in:PR#314 file:docs/specs/ticket-mapping-model.md -->
+<!-- canon:realized-in:PR#314 file:docs/specs/ticket-mapping-model.md -->
 - [x] MUST preserve backward compatibility — repos without custom config behave identically to today
-<!-- specwright:realized-in:PR#106 file:tests/test_sync/test_backward_compat.py -->
+<!-- canon:realized-in:PR#106 file:tests/test_sync/test_backward_compat.py -->
 
 ## 2. Mapping Schema
 
-<!-- specwright:system:2 status:done -->
+<!-- canon:system:2 status:done -->
 
 A new `TicketMappingConfig` Pydantic model that lives in `sync/mapping.py` and is referenced from `CANON.yaml`.
 
 ### 2.1 Status Mapping
 
-<!-- specwright:system:2.1 status:done -->
+<!-- canon:system:2.1 status:done -->
 
 User-defined bidirectional status maps that replace the hardcoded dicts.
 
@@ -154,17 +154,17 @@ When `status_map.forward` is provided, it overrides individual entries in the de
 ### Acceptance Criteria
 
 - [x] MUST support user-defined forward status map (spec → ticket)
-<!-- specwright:realized-in:PR#106 file:src/specwright/sync/mapping.py -->
-<!-- specwright:realized-in:PR#291 file:src/specwright/sync/engine.py -->
+<!-- canon:realized-in:PR#106 file:src/specwright/sync/mapping.py -->
+<!-- canon:realized-in:PR#291 file:src/specwright/sync/engine.py -->
 - [x] MUST support user-defined reverse status map (ticket → spec)
 - [x] MUST fall back to current hardcoded defaults when no custom map is configured
-<!-- specwright:realized-in:PR#106 file:src/specwright/sync/status_map.py -->
+<!-- canon:realized-in:PR#106 file:src/specwright/sync/status_map.py -->
 - [x] MUST validate that all 6 spec states are covered in a custom status_map (warn if incomplete)
 - [x] SHOULD support mapping by exact status name OR by Jira statusCategory key
 
 ### 2.2 Field Mapping
 
-<!-- specwright:system:2.2 status:done -->
+<!-- canon:system:2.2 status:done -->
 
 Declarative rules for mapping spec metadata to ticket fields.
 
@@ -192,7 +192,7 @@ Field mapping is optional. When absent, behavior matches today (summary = sectio
 ### Acceptance Criteria
 
 - [x] MUST support mapping frontmatter fields to ticket fields
-<!-- specwright:realized-in:PR#106 file:src/specwright/sync/field_resolver.py -->
+<!-- canon:realized-in:PR#106 file:src/specwright/sync/field_resolver.py -->
 - [x] MUST support mapping to Jira custom fields by field ID
 - [x] MUST support literal values in field mappings
 - [x] MUST validate field map sources against known spec model fields at config parse time
@@ -223,7 +223,7 @@ When `hierarchy` is absent, all sections create "Task" issues (current behavior)
 ### Acceptance Criteria
 
 - [x] MUST support configuring issue type per section depth
-<!-- specwright:realized-in:PR#106 file:src/specwright/sync/hierarchy.py -->
+<!-- canon:realized-in:PR#106 file:src/specwright/sync/hierarchy.py -->
 - [x] MUST support auto-parenting (child section ticket linked to parent section ticket)
 - [x] MUST fall back to "Task" issue type when no hierarchy is configured
 - [x] MUST validate issue type names are non-empty strings
@@ -269,7 +269,7 @@ Routing matches against section-level or frontmatter-level metadata. When no rou
 
 - [x] MUST support defining multiple named ticket system configurations
 - [x] MUST support tag-based routing rules
-<!-- specwright:realized-in:PR#106 file:src/specwright/sync/router.py -->
+<!-- canon:realized-in:PR#106 file:src/specwright/sync/router.py -->
 - [x] MUST support a default route (fallback)
 - [x] MUST evaluate routing rules in declared order (first match wins)
 - [x] MUST fall back to single-system behavior when only one system is defined
@@ -288,7 +288,7 @@ Support org-wide defaults that individual repos inherit and can override.
 <!-- section done: old ticket #289 closed -->
 ### 4.1 Org-Level Defaults
 
-<!-- specwright:system:4.1 status:done -->
+<!-- canon:system:4.1 status:done -->
 
 An org-level config stored in a well-known location (e.g., `.github/canon.yaml` in the org's `.github` repo, or managed via the Canon web app) that provides defaults for all repos.
 
@@ -319,19 +319,19 @@ Repo-level `CANON.yaml` merges on top of org defaults using a deep-merge strateg
 ### Acceptance Criteria
 
 - [x] MUST support loading org-level defaults from a configurable source
-<!-- specwright:realized-in:PR#291 file:src/specwright/sync/org_config.py -->
-<!-- specwright:realized-in:PR#314 file: -->
+<!-- canon:realized-in:PR#291 file:src/specwright/sync/org_config.py -->
+<!-- canon:realized-in:PR#314 file: -->
 - [x] MUST deep-merge repo config on top of org defaults
-<!-- specwright:realized-in:PR#291 file:src/specwright/sync/mapping.py -->
-<!-- specwright:realized-in:PR#291 file:src/specwright/github/handlers/on_push.py -->
+<!-- canon:realized-in:PR#291 file:src/specwright/sync/mapping.py -->
+<!-- canon:realized-in:PR#291 file:src/specwright/github/handlers/on_push.py -->
 - [x] MUST allow repos to override any org default
 - [x] MUST allow repos to explicitly null-out an org default (e.g., `field_map: null`)
 - [x] SHOULD support loading org config from `.github` repo or Canon API
-<!-- specwright:realized-in:PR#291 file:src/specwright/sync/org_config.py -->
+<!-- canon:realized-in:PR#291 file:src/specwright/sync/org_config.py -->
 
 ### 4.2 Auth Profiles
 
-<!-- specwright:system:4.2 status:done -->
+<!-- canon:system:4.2 status:done -->
 
 Named credential sets that decouple auth from system config, supporting multiple Jira instances or mixed auth methods.
 
@@ -406,7 +406,7 @@ When no template is defined, use sensible defaults that match current behavior.
 ### Acceptance Criteria
 
 - [x] MUST support configurable description templates with variable interpolation
-<!-- specwright:realized-in:PR#106 file:src/specwright/sync/templates.py -->
+<!-- canon:realized-in:PR#106 file:src/specwright/sync/templates.py -->
 - [x] MUST support configurable summary templates
 - [x] MUST expose spec metadata, section data, and acceptance criteria as template variables
 - [x] MUST fall back to current behavior when no template is configured
@@ -414,7 +414,7 @@ When no template is defined, use sensible defaults that match current behavior.
 
 ## 5. Data Model (Pydantic)
 
-<!-- specwright:system:5 status:done -->
+<!-- canon:system:5 status:done -->
 
 The core Pydantic models that implement this spec. All models live in `sync/mapping.py`.
 
@@ -473,7 +473,7 @@ class TicketMappingConfig(BaseModel):
 
 ## 6. Backward Compatibility
 
-<!-- specwright:system:6 status:done -->
+<!-- canon:system:6 status:done -->
 
 Existing repos must work without changes. The migration path:
 
@@ -488,7 +488,7 @@ Existing repos must work without changes. The migration path:
 - [x] MUST NOT require changes to existing spec markdown files
 - [x] MUST pass all existing sync tests unchanged after refactor
 - [x] MUST NOT break the CLI (canon sync) or GitHub webhook handler
-<!-- specwright:realized-in:PR#291 file:src/specwright/cli/sync_cmd.py -->
+<!-- canon:realized-in:PR#291 file:src/specwright/cli/sync_cmd.py -->
 
 <!-- canon:ticket:github:436 -->
 ## 7. Adapter Protocol Changes
@@ -514,18 +514,18 @@ Changes:
 ### Acceptance Criteria
 
 - [x] MUST extend CreateTicketInput with issue_type and custom_fields
-<!-- specwright:realized-in:PR#106 file:src/specwright/sync/models.py -->
+<!-- canon:realized-in:PR#106 file:src/specwright/sync/models.py -->
 - [x] MUST add adapter capabilities discovery
-<!-- specwright:realized-in:PR#106 file:src/specwright/sync/adapters/base.py -->
+<!-- canon:realized-in:PR#106 file:src/specwright/sync/adapters/base.py -->
 - [x] MUST add config-driven factory method
-<!-- specwright:realized-in:PR#106 file:src/specwright/sync/adapters/factory.py -->
+<!-- canon:realized-in:PR#106 file:src/specwright/sync/adapters/factory.py -->
 - [x] MUST NOT break existing adapter implementations
 - [x] SHOULD add UpdateTicketInput.custom_fields for reverse field sync
 
 <!-- section done: old tickets #268, #290 closed -->
 ## 8. Rollout Plan
 
-<!-- specwright:system:8 status:done -->
+<!-- canon:system:8 status:done -->
 
 **Phase 1 — Data model + status mapping** (this spec, core)
 - Implement Pydantic models in `sync/mapping.py`

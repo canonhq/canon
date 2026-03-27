@@ -15,13 +15,13 @@ A read-only dashboard that provides centralized discovery and viewing of specifi
 
 ## 1. Background
 
-<!-- specwright:system:1 status:done -->
+<!-- canon:system:1 status:done -->
 
 Specifications are distributed across multiple repositories in `docs/specs/*.md` files. This distribution forces product managers and engineers to manually navigate GitHub directory structures to locate specifications, verify their status, or identify work in progress. The Spec Explorer consolidates this information into a unified interface, providing organization-wide visibility into all specifications and their current state.
 
 ## 2. Org Dashboard
 
-<!-- specwright:system:2 status:done -->
+<!-- canon:system:2 status:done -->
 
 The root page (`/`) displays all repositories accessible through the GitHub App installation. Repositories are partitioned into two groups: those containing specifications and those without.
 
@@ -35,33 +35,33 @@ For each specification, the dashboard displays:
 ### Acceptance Criteria
 
 - [x] Lists all repos accessible to the GitHub App installation
-<!-- specwright:realized-in:PR#75 file:src/specwright/auth/middleware.py -->
-<!-- specwright:realized-in:PR#80 file:templates/dashboard.html -->
-<!-- specwright:realized-in:PR#84 file:frontend/src/components/dashboard/OrgDashboard.vue -->
-<!-- specwright:realized-in:PR#84 file:frontend/src/components/dashboard/SpecList.vue -->
+<!-- canon:realized-in:PR#75 file:src/specwright/auth/middleware.py -->
+<!-- canon:realized-in:PR#80 file:templates/dashboard.html -->
+<!-- canon:realized-in:PR#84 file:frontend/src/components/dashboard/OrgDashboard.vue -->
+<!-- canon:realized-in:PR#84 file:frontend/src/components/dashboard/SpecList.vue -->
 - [x] Partitions repos into "with specs" and "without specs"
 - [x] Shows spec count, section progress, and AC completion per spec
-<!-- specwright:realized-in:PR#68 file:src/specwright/web/services.py -->
-<!-- specwright:realized-in:PR#68 file:src/specwright/web/models.py -->
-<!-- specwright:realized-in:PR#68 file:src/specwright/db/agent_store.py -->
+<!-- canon:realized-in:PR#68 file:src/specwright/web/services.py -->
+<!-- canon:realized-in:PR#68 file:src/specwright/web/models.py -->
+<!-- canon:realized-in:PR#68 file:src/specwright/db/agent_store.py -->
 - [x] Status badges color-coded (done=green, in_progress=yellow, blocked=red, draft=gray, todo=blue, deprecated=purple)
-<!-- specwright:realized-in:PR#84 file:frontend/src/style.css -->
-<!-- specwright:realized-in:PR#84 file:frontend/src/components/common/StatusBadge.vue -->
+<!-- canon:realized-in:PR#84 file:frontend/src/style.css -->
+<!-- canon:realized-in:PR#84 file:frontend/src/components/common/StatusBadge.vue -->
 - [x] Team and status filter dropdowns (Vue reactive, client-side filtering)
-<!-- specwright:realized-in:PR#73 file:templates/dashboard.html -->
+<!-- canon:realized-in:PR#73 file:templates/dashboard.html -->
 - [x] Dashboard displays owner information for each specification
 - [x] Dashboard displays team assignment for each specification
 - [x] Dashboard shows tags for categorization on each specification
 - [x] Dashboard displays progress indicators reflecting section completion
-<!-- specwright:realized-in:PR#296 file:frontend/src/components/common/SpecProgressIndicator.vue -->
-<!-- specwright:realized-in:PR#296 file:frontend/src/components/dashboard/SpecList.vue -->
+<!-- canon:realized-in:PR#296 file:frontend/src/components/common/SpecProgressIndicator.vue -->
+<!-- canon:realized-in:PR#296 file:frontend/src/components/dashboard/SpecList.vue -->
 - [x] Repositories without specifications are clearly separated from those with specifications
 - [x] Each specification entry is clickable and navigates to its detail page
-<!-- specwright:realized-in:PR#96 file:frontend/src/views/TasksView.vue -->
+<!-- canon:realized-in:PR#96 file:frontend/src/views/TasksView.vue -->
 
 ## 3. Repo Detail Page
 
-<!-- specwright:system:3 status:done -->
+<!-- canon:system:3 status:done -->
 
 The repository detail page (`/repos/{owner}/{repo}`) presents all specifications and documentation within a single repository. Documentation is classified by type: ADR, README, changelog, and runbook.
 
@@ -74,21 +74,21 @@ The page displays:
 ### Acceptance Criteria
 
 - [x] Breadcrumb navigation back to dashboard
-<!-- specwright:realized-in:PR#75 file:src/specwright/web/routes.py -->
-<!-- specwright:realized-in:PR#84 file:frontend/src/components/layout/Breadcrumb.vue -->
-<!-- specwright:realized-in:PR#84 file:frontend/src/views/RepoView.vue -->
+<!-- canon:realized-in:PR#75 file:src/specwright/web/routes.py -->
+<!-- canon:realized-in:PR#84 file:frontend/src/components/layout/Breadcrumb.vue -->
+<!-- canon:realized-in:PR#84 file:frontend/src/views/RepoView.vue -->
 - [x] CANON.yaml config displayed (team, ticket system, feature flags)
-<!-- specwright:realized-in:PR#84 file:frontend/src/components/repo/RepoDetail.vue -->
+<!-- canon:realized-in:PR#84 file:frontend/src/components/repo/RepoDetail.vue -->
 - [x] All specs listed with tags, owner, status, progress
-<!-- specwright:realized-in:PR#68 file:src/specwright/cron/coverage_snapshot.py -->
-<!-- specwright:realized-in:PR#84 file:frontend/src/components/repo/SpecCard.vue -->
+<!-- canon:realized-in:PR#68 file:src/specwright/cron/coverage_snapshot.py -->
+<!-- canon:realized-in:PR#84 file:frontend/src/components/repo/SpecCard.vue -->
 - [x] "Other documentation" section lists README, CHANGELOG, CONTRIBUTING, and non-spec docs
-<!-- specwright:realized-in:PR#80 file:templates/repo.html -->
-<!-- specwright:realized-in:PR#84 file:frontend/src/components/repo/DocCard.vue -->
+<!-- canon:realized-in:PR#80 file:templates/repo.html -->
+<!-- canon:realized-in:PR#84 file:frontend/src/components/repo/DocCard.vue -->
 
 ## 4. Spec Detail Page
 
-<!-- specwright:system:4 status:done -->
+<!-- canon:system:4 status:done -->
 
 The specification detail page (`/specs/{owner}/{repo}/{path}`) renders the complete specification with parsed section hierarchy, status indicators, ticket references, and acceptance criteria. All content is presented in read-only format with sanitized markdown rendering.
 
@@ -103,25 +103,25 @@ The page includes:
 ### Acceptance Criteria
 
 - [x] Frontmatter metadata displayed (title, status, owner, team, dates, tags)
-<!-- specwright:realized-in:PR#73 file:templates/spec.html -->
-<!-- specwright:realized-in:PR#84 file:frontend/src/components/spec/SpecHeader.vue -->
-<!-- specwright:realized-in:PR#296 file:frontend/src/components/spec/SpecSummary.vue -->
+<!-- canon:realized-in:PR#73 file:templates/spec.html -->
+<!-- canon:realized-in:PR#84 file:frontend/src/components/spec/SpecHeader.vue -->
+<!-- canon:realized-in:PR#296 file:frontend/src/components/spec/SpecSummary.vue -->
 - [x] Nested sections rendered with hierarchy (h2 → h3 → h4)
-<!-- specwright:realized-in:PR#70 file:src/specwright/web/render.py -->
-<!-- specwright:realized-in:PR#84 file:frontend/src/components/spec/SpecContent.vue -->
-<!-- specwright:realized-in:PR#296 file:frontend/src/components/spec/SpecSectionCard.vue -->
+<!-- canon:realized-in:PR#70 file:src/specwright/web/render.py -->
+<!-- canon:realized-in:PR#84 file:frontend/src/components/spec/SpecContent.vue -->
+<!-- canon:realized-in:PR#296 file:frontend/src/components/spec/SpecSectionCard.vue -->
 - [x] Per-section status badges
 - [x] Ticket links rendered as hyperlinks (Jira, Linear, GitHub Issues)
-<!-- specwright:realized-in:PR#84 file: -->
+<!-- canon:realized-in:PR#84 file: -->
 - [x] Blocked-by indicators shown in red
 - [x] Acceptance criteria as readonly checkboxes (checked items struck-through)
-<!-- specwright:realized-in:PR#296 file:frontend/src/components/spec/SpecAcceptanceCriteria.vue -->
+<!-- canon:realized-in:PR#296 file:frontend/src/components/spec/SpecAcceptanceCriteria.vue -->
 - [x] Markdown content rendered via mistune (backend), sanitized with DOMPurify (frontend)
 - [x] "View on GitHub" link
 
 ## 5. Live Search
 
-<!-- specwright:system:5 status:done -->
+<!-- canon:system:5 status:done -->
 
 The search functionality indexes all specifications and documentation (ADRs, guides, READMEs) across the organization. The hybrid search index supports PR analysis by retrieving relevant context documents based on PR metadata and file changes.
 
@@ -137,24 +137,24 @@ The current implementation uses client-side filtering with HTMX-powered debounce
 ### Acceptance Criteria
 
 - [x] Navbar search input with HTMX debounce (300ms)
-<!-- specwright:realized-in:PR#102 file:frontend/src/components/layout/SearchBar.vue -->
+<!-- canon:realized-in:PR#102 file:frontend/src/components/layout/SearchBar.vue -->
 - [x] Results render in dropdown partial (max 396px scroll)
-<!-- specwright:realized-in:PR#80 file:templates/partials/search_results.html -->
-<!-- specwright:realized-in:PR#84 file:frontend/src/components/layout/SearchResults.vue -->
-<!-- specwright:realized-in:PR#102 file:frontend/src/components/layout/SearchResults.vue -->
+<!-- canon:realized-in:PR#80 file:templates/partials/search_results.html -->
+<!-- canon:realized-in:PR#84 file:frontend/src/components/layout/SearchResults.vue -->
+<!-- canon:realized-in:PR#102 file:frontend/src/components/layout/SearchResults.vue -->
 - [x] Filter by team, status, tag query params
-<!-- specwright:realized-in:PR#84 file:frontend/src/api/search.ts -->
-<!-- specwright:realized-in:PR#96 file:src/specwright/web/routes.py -->
-<!-- specwright:realized-in:PR#102 file:frontend/src/views/SearchView.vue -->
-<!-- specwright:realized-in:PR#102 file:src/specwright/web/services.py -->
+<!-- canon:realized-in:PR#84 file:frontend/src/api/search.ts -->
+<!-- canon:realized-in:PR#96 file:src/specwright/web/routes.py -->
+<!-- canon:realized-in:PR#102 file:frontend/src/views/SearchView.vue -->
+<!-- canon:realized-in:PR#102 file:src/specwright/web/services.py -->
 - [x] Section-level search with keyword matching across headings, content, and ACs (replaces Voyage AI hybrid search — §7 deprecated)
 - [x] Faceted filter counts in sidebar
-<!-- specwright:realized-in:PR#102 file:src/specwright/web/models.py -->
+<!-- canon:realized-in:PR#102 file:src/specwright/web/models.py -->
 - [x] Paginated results for large orgs
 
 ## 6. Caching
 
-<!-- specwright:system:6 status:done -->
+<!-- canon:system:6 status:done -->
 
 An in-memory TTL cache reduces GitHub API calls and stores search and facet results. Webhook push events trigger cache invalidation for affected resources, including repositories, specifications, documentation, search results, and facets.
 
@@ -169,7 +169,7 @@ Cache invalidation uses prefix-based matching to efficiently clear all related e
 
 ## 7. Search Infrastructure
 
-<!-- specwright:system:7 status:deprecated -->
+<!-- canon:system:7 status:deprecated -->
 
 The search infrastructure provides semantic search capabilities through Neon Postgres with pgvector extension, Voyage AI embedding service, and an automated indexing pipeline triggered by repository push events.
 
@@ -192,7 +192,7 @@ The search API returns ranked results with snippet highlights for improved disco
 
 ## 8. Production Hardening
 
-<!-- specwright:system:8 status:done -->
+<!-- canon:system:8 status:done -->
 
 Production readiness requirements include HTTP caching headers, structured logging, error handling, and deployment configuration updates for web-specific settings.
 

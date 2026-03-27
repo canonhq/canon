@@ -55,19 +55,19 @@ The FastAPI route at `GET /` serves the SPA shell with injected meta tags and se
 ### Acceptance Criteria
 
 - [x] Landing page renders at `/` as a Vue route with `MarketingLayout`
-<!-- specwright:realized-in:PR#104 file:frontend/src/views/LandingView.vue -->
-<!-- specwright:realized-in:PR#104 file:frontend/src/router/index.ts -->
+<!-- canon:realized-in:PR#104 file:frontend/src/views/LandingView.vue -->
+<!-- canon:realized-in:PR#104 file:frontend/src/router/index.ts -->
 - [x] `vite-ssg` (or equivalent) generates static HTML at build time with full page content
 <!-- canon:realized-in:PR#451 file:frontend/vite.config.ts -->
 <!-- canon:realized-in:PR#451 file:frontend/src/main.ts -->
 <!-- canon:realized-in:PR#451 file:frontend/package.json -->
 <!-- canon:realized-in file:frontend/vite.config.ts file:frontend/src/main.ts -->
 - [x] HTML includes `<title>`, `<meta name="description">`, `og:title`, `og:description`, `og:image`, `twitter:card` tags
-<!-- specwright:realized-in:PR#104 file:src/specwright/web/routes.py -->
+<!-- canon:realized-in:PR#104 file:src/specwright/web/routes.py -->
 - [x] FastAPI serves the prerendered HTML at `GET /` (replaces the Jinja2 template route)
 <!-- canon:realized-in:PR#451 file:src/canon/web/routes.py -->
 - [x] Theme toggle works (light/dark/system) with `localStorage` persistence
-<!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/MarketingNav.vue -->
+<!-- canon:realized-in:PR#104 file:frontend/src/components/marketing/MarketingNav.vue -->
 - [x] Mobile nav works with hamburger menu
 - [x] Page loads with zero layout shift (fonts preloaded, critical CSS inlined by Vite)
 <!-- canon:realized-in:PR#451 file:frontend/index.html -->
@@ -75,7 +75,7 @@ The FastAPI route at `GET /` serves the SPA shell with injected meta tags and se
 
 ## 3. Rewrite Hero & Messaging
 
-<!-- specwright:system:3 status:done -->
+<!-- canon:system:3 status:done -->
 
 Reposition Canon from "documentation that keeps up" to a spec-driven development platform. The new messaging should convey:
 
@@ -103,16 +103,16 @@ Update the comparison cards:
 ### Acceptance Criteria
 
 - [x] Hero tagline positions Canon as a spec-driven development platform
-<!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/HeroSection.vue -->
+<!-- canon:realized-in:PR#104 file:frontend/src/components/marketing/HeroSection.vue -->
 - [x] Subtitle explains the value proposition in one clear sentence
 - [x] Two CTAs: primary (Install on GitHub) and secondary (scroll to demo)
 - [x] Problem/Solution cards updated with current product positioning
-<!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/ProblemSolution.vue -->
+<!-- canon:realized-in:PR#104 file:frontend/src/components/marketing/ProblemSolution.vue -->
 - [x] No references to deprecated infrastructure (pgvector, Vertex AI, Voyage AI)
 
 ## 4. CLI Showcase Section
 
-<!-- specwright:system:4 status:done -->
+<!-- canon:system:4 status:done -->
 
 Add a new section showcasing the `canon` CLI as a first-class developer tool. This is a major capability that the current landing page doesn't mention at all.
 
@@ -153,7 +153,7 @@ Show the MCP + skills workflow side-by-side:
 ### Acceptance Criteria
 
 - [x] Terminal mockup component shows realistic CLI output with syntax highlighting
-<!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/CliShowcase.vue -->
+<!-- canon:realized-in:PR#104 file:frontend/src/components/marketing/CliShowcase.vue -->
 - [x] At least 4 CLI commands demonstrated: `init`, `plan`, `verify`, `status`
 - [x] Claude Code / MCP integration shown alongside CLI
 - [x] Section positioned after the "How It Works" loop to show the developer experience
@@ -188,7 +188,7 @@ Update the tabbed screenshot section with current screenshots:
 ### Acceptance Criteria
 
 - [x] PR analysis demo animates on scroll using IntersectionObserver
-<!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/InteractiveDemo.vue -->
+<!-- canon:realized-in:PR#104 file:frontend/src/components/marketing/InteractiveDemo.vue -->
 - [x] Animation shows: diff appears, bot comment types in, ACs evaluate, actions appear
 - [x] Demo is replayable (replay button or scroll-triggered restart)
 - [x] Screenshot tabs updated with 4 views: Dashboard, Search, Editor, Tasks
@@ -198,7 +198,7 @@ Update the tabbed screenshot section with current screenshots:
 
 ## 6. Pricing Section
 
-<!-- specwright:system:6 status:done -->
+<!-- canon:system:6 status:done -->
 
 Add a pricing section with two tiers: self-hosted (free) and managed cloud.
 
@@ -224,7 +224,7 @@ Feature comparison between self-hosted and managed, showing both tiers get the f
 ### Acceptance Criteria
 
 - [x] Two pricing cards: Self-Hosted (free) and Managed Cloud (coming soon)
-<!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/PricingSection.vue -->
+<!-- canon:realized-in:PR#104 file:frontend/src/components/marketing/PricingSection.vue -->
 - [x] Self-hosted card has "View Setup Guide" CTA linking to self-hosting docs
 - [x] Managed cloud card has "Join Waitlist" CTA with email input
 - [x] Feature comparison table shows full feature set for both tiers
@@ -232,7 +232,7 @@ Feature comparison between self-hosted and managed, showing both tiers get the f
 
 ## 7. Updated Capabilities & Integrations
 
-<!-- specwright:system:7 status:done -->
+<!-- canon:system:7 status:done -->
 
 Refresh the capabilities grid and integrations section to reflect the current product.
 
@@ -259,9 +259,9 @@ Update to reflect actual integration status:
 ### Acceptance Criteria
 
 - [x] 6 capability cards reflect current product (not aspirational features)
-<!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/CapabilitiesGrid.vue -->
+<!-- canon:realized-in:PR#104 file:frontend/src/components/marketing/CapabilitiesGrid.vue -->
 - [x] Integration grid shows only shipped integrations (no "planned" unless actively in development)
-<!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/IntegrationsGrid.vue -->
+<!-- canon:realized-in:PR#104 file:frontend/src/components/marketing/IntegrationsGrid.vue -->
 - [x] Each capability card links to relevant docs or demo section
 
 <!-- canon:ticket:github:404 -->
@@ -295,7 +295,7 @@ Track key events on the landing page:
 - [x] PostHog initialized on landing page with `pageview` event
 <!-- canon:realized-in:PR#451 file:frontend/src/composables/usePostHog.ts -->
 - [x] CTA clicks tracked as PostHog events with labels
-<!-- specwright:realized-in:PR#104 file:frontend/src/components/marketing/CtaSection.vue -->
+<!-- canon:realized-in:PR#104 file:frontend/src/components/marketing/CtaSection.vue -->
 - [x] Section visibility tracked via IntersectionObserver
 - [x] Lighthouse Performance score >= 90
 <!-- canon:realized-in file:frontend/vite.config.ts file:frontend/index.html -->

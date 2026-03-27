@@ -18,7 +18,7 @@ The app supports three theme modes (system, light, dark) via a Pinia store and T
 
 ## 1. Theme Toggle UX Improvement
 
-<!-- specwright:system:1 status:done -->
+<!-- canon:system:1 status:done -->
 
 Enhance the 3-way theme toggle button with a tooltip so users know which mode is active and what the effective appearance is.
 
@@ -60,7 +60,7 @@ Improve light mode appearance across all marketing/landing page components.
 
 ## 4. App Pages Light Mode Polish
 
-<!-- specwright:system:4 status:done -->
+<!-- canon:system:4 status:done -->
 
 Improve light mode appearance across the logged-in app views.
 
@@ -75,7 +75,7 @@ Improve light mode appearance across the logged-in app views.
 
 ## 5. Spec Prose & Code Blocks in Light Mode
 
-<!-- specwright:system:5 status:done -->
+<!-- canon:system:5 status:done -->
 
 Ensure rendered spec content (`.spec-prose`) looks polished in light mode.
 

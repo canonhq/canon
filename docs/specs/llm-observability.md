@@ -1,6 +1,6 @@
 ---
 title: "LLM Observability via PostHog"
-status: draft
+status: in_progress
 owner: ng
 team: canon
 ticket_project: canonhq/canon

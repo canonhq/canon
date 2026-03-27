@@ -281,7 +281,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             if not slack_bot.socket_mode:
                 # HTTP mode: add as a FastAPI route
                 @app.post("/slack/events")
-                async def slack_events(req):
+                async def slack_events(req: Request):
                     return await slack_bot.handler.handle(req)
 
                 logger.info("Slack bot mounted at /slack/events (HTTP mode)")

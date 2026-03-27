@@ -19,7 +19,7 @@ Why this feature exists and what problem it solves.
 
 ## 2. Requirements
 
-<!-- specwright:system:2 status:todo -->
+<!-- canon:system:2 status:todo -->
 
 ### 2.1 Functional Requirements
 
@@ -33,7 +33,7 @@ Why this feature exists and what problem it solves.
 
 ## 3. Design
 
-<!-- specwright:system:3 status:draft -->
+<!-- canon:system:3 status:draft -->
 
 Describe the technical approach.
 
@@ -45,7 +45,7 @@ Describe the technical approach.
 
 ## 4. Rollout Plan
 
-<!-- specwright:system:4 status:draft -->
+<!-- canon:system:4 status:draft -->
 
 How this will be deployed and validated.
 
