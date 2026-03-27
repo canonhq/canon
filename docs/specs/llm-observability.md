@@ -70,8 +70,10 @@ def get_client() -> Any:
 
 ### Acceptance Criteria
 
-- [ ] `analytics.get_client()` returns the initialized PostHog client when configured
-- [ ] `analytics.get_client()` returns `None` when PostHog is not initialized
+- [x] `analytics.get_client()` returns the initialized PostHog client when configured
+<!-- canon:realized-in:PR#471 file:src/canon/analytics.py -->
+- [x] `analytics.get_client()` returns `None` when PostHog is not initialized
+<!-- canon:realized-in:PR#471 file:tests/test_analytics.py -->
 - [ ] No changes to existing `track()`, `identify()`, `capture_exception()` behavior
 
 ## 3. Wrap Sync Client (`ClaudeClient`)
@@ -116,7 +118,7 @@ response = self._client.messages.create(
 )
 ```
 
-When PostHog is not configured (OSS), the vanilla `anthropic.Anthropic` client ignores the `posthog_*` kwargs silently (they're passed as `**kwargs` and not used). **Verify this** — if the vanilla SDK raises on unknown kwargs, gate them behind a `ph is not None` check.
+When PostHog is not configured (OSS), the vanilla `anthropic.Anthropic` client is used and `posthog_*` kwargs are omitted entirely via conditional `ph_kwargs` dict construction. This prevents potential errors from unknown kwargs.
 
 ### Cloud vs OSS
 
@@ -126,9 +128,10 @@ When PostHog is not configured (OSS), the vanilla `anthropic.Anthropic` client i
 
 ### Acceptance Criteria
 
-- [ ] `ClaudeClient` uses `posthog.ai.anthropic.Anthropic` when PostHog is configured
-- [ ] `ClaudeClient` falls back to `anthropic.Anthropic` when PostHog is not configured
-- [ ] `$ai_generation` events include `feature=pr_analysis` in properties
+- [x] `ClaudeClient` uses `posthog.ai.anthropic.Anthropic` when PostHog is configured
+<!-- canon:realized-in:PR#471 file:src/canon/agent/client.py -->
+- [x] `ClaudeClient` falls back to `anthropic.Anthropic` when PostHog is not configured
+- [x] `$ai_generation` events include `feature=pr_analysis` in properties
 - [ ] `$ai_generation` events include org as `distinct_id` and `organization` group
 - [ ] `for_api_key()` (BYOK) creates a client that also uses the PostHog wrapper
 - [ ] Existing `agent_call_completed` custom event continues to fire (backward compat)
@@ -138,7 +141,7 @@ When PostHog is not configured (OSS), the vanilla `anthropic.Anthropic` client i
 
 <!-- canon:system:4 status:done -->
 
-Replace `anthropic.AsyncAnthropic` in `spec_editor.py` and `spec_generator.py` with `posthog.ai.anthropic.AsyncAnthropic` to capture `$ai_generation` events for streaming calls.
+Add manual `$ai_generation` event emission in `spec_editor.py` and `spec_generator.py` after streaming completes. The PostHog AsyncAnthropic wrapper does not support the `.messages.stream()` context manager pattern, so events are emitted via `analytics.track_ai_generation()` using token counts from `stream.get_final_message()`.
 
 ### Implementation
 
@@ -193,12 +196,15 @@ Each streaming call site should pass a `feature` and `action`:
 
 ### Acceptance Criteria
 
-- [ ] `spec_editor.py` streaming calls emit `$ai_generation` events when PostHog is configured
-- [ ] `spec_generator.py` streaming calls emit `$ai_generation` events when PostHog is configured
-- [ ] Each call includes `feature` and `action` in `posthog_properties`
-- [ ] Streaming behavior (chunk-by-chunk yielding) is unchanged
+- [x] `spec_editor.py` streaming calls emit `$ai_generation` events when PostHog is configured
+<!-- canon:realized-in:PR#471 file:src/canon/agent/spec_editor.py -->
+- [x] `spec_generator.py` streaming calls emit `$ai_generation` events when PostHog is configured
+<!-- canon:realized-in:PR#471 file:src/canon/agent/spec_generator.py -->
+- [x] Each call includes `feature` and `action` in `posthog_properties`
+- [x] Streaming behavior (chunk-by-chunk yielding) is unchanged
+<!-- canon:realized-in:PR#471 file:tests/test_agent/test_spec_editor.py -->
 - [ ] Graceful fallback to vanilla `AsyncAnthropic` when PostHog is absent
-- [ ] Error handling behavior is unchanged — API errors still logged and yielded as error comments
+- [x] Error handling behavior is unchanged — API errors still logged and yielded as error comments
 
 ## 5. Per-Org Cost Attribution
 
