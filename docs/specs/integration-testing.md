@@ -42,15 +42,15 @@ Test webhook handlers through the full FastAPI request/response cycle using `htt
 
 ### Acceptance Criteria
 
-- [ ] Integration test suite using `httpx.AsyncClient` with the real FastAPI app
+- [x] Integration test suite using `httpx.AsyncClient` with the real FastAPI app
 <!-- canon:realized-in:PR#118 file:tests/integration/conftest.py -->
 <!-- canon:realized-in:PR#118 file:tests/integration/test_webhook.py -->
-- [ ] Tests for push, PR, and issue_comment webhook handlers
-- [ ] Tests verify the full request → handler → response chain (not just handler functions)
-- [ ] Webhook signature verification tested with real HMAC payloads
-- [ ] Tests use recorded GitHub webhook payloads as fixtures
-- [ ] External API calls mocked at the HTTP level (httpx mock, not service mock)
-- [ ] Integration tests run in CI alongside unit tests
+- [x] Tests for push, PR, and issue_comment webhook handlers
+- [x] Tests verify the full request → handler → response chain (not just handler functions)
+- [x] Webhook signature verification tested with real HMAC payloads
+- [x] Tests use recorded GitHub webhook payloads as fixtures
+- [x] External API calls mocked at the HTTP level (httpx mock, not service mock)
+- [x] Integration tests run in CI alongside unit tests
 <!-- canon:realized-in:PR#118 file:.github/workflows/ci.yml -->
 
 <!-- canon:ticket:github:401 -->

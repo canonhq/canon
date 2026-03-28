@@ -54,13 +54,13 @@ Alerts are configured via PostHog Actions + Subscriptions. Configuration should 
 
 ### Acceptance Criteria
 
-- [ ] Exception spike alert configured in PostHog and firing correctly
-- [ ] New error pattern alert triggers on first-seen exception fingerprints
-- [ ] Webhook latency alert triggers when p95 exceeds threshold
-- [ ] Cron job failure alert triggers on failed cron executions
-- [ ] Error rate alert triggers when error percentage exceeds threshold
-- [ ] All alert thresholds are documented and tunable
-- [ ] Alert definitions are reproducible (API script or documented steps)
+- [x] Exception spike alert configured in PostHog and firing correctly
+- [x] New error pattern alert triggers on first-seen exception fingerprints
+- [x] Webhook latency alert triggers when p95 exceeds threshold
+- [x] Cron job failure alert triggers on failed cron executions
+- [x] Error rate alert triggers when error percentage exceeds threshold
+- [x] All alert thresholds are documented and tunable
+- [x] Alert definitions are reproducible (API script or documented steps)
 
 ## 3. Slack Webhook Notifications
 
@@ -93,13 +93,13 @@ Two complementary delivery paths:
 
 ### Acceptance Criteria
 
-- [ ] Slack incoming webhook configured for `#canon-alerts` channel
-- [ ] Webhook URL stored in Doppler and available as env var
-- [ ] Helm chart updated with Slack webhook secret
-- [ ] PostHog alert actions deliver formatted messages to Slack
-- [ ] Application-side alert module (`alerts/slack.py`) can post custom alerts
-- [ ] Alert messages include severity, summary, context, and PostHog link
-- [ ] Alert delivery failures are logged (not silently swallowed)
+- [x] Slack incoming webhook configured for `#canon-alerts` channel
+- [x] Webhook URL stored in Doppler and available as env var
+- [x] Helm chart updated with Slack webhook secret
+- [x] PostHog alert actions deliver formatted messages to Slack
+- [x] Application-side alert module (`alerts/slack.py`) can post custom alerts
+- [x] Alert messages include severity, summary, context, and PostHog link
+- [x] Alert delivery failures are logged (not silently swallowed)
 
 ## 4. SRE Dashboard in PostHog
 
@@ -127,13 +127,13 @@ Default view: last 24 hours. Presets for 1h, 6h, 24h, 7d, 30d.
 
 ### Acceptance Criteria
 
-- [ ] PostHog dashboard created with all panels listed above
-- [ ] Dashboard is shared with the Canon team
-- [ ] Error rate panel shows exceptions/minute and percentage of total requests
-- [ ] Webhook latency panel shows p50/p95/p99 percentiles
-- [ ] Request volume panel breaks down by endpoint group
-- [ ] Cron job health panel shows last run status per job type
-- [ ] Agent metrics panel shows Claude API call volume and latency
+- [x] PostHog dashboard created with all panels listed above
+- [x] Dashboard is shared with the Canon team
+- [x] Error rate panel shows exceptions/minute and percentage of total requests
+- [x] Webhook latency panel shows p50/p95/p99 percentiles
+- [x] Request volume panel breaks down by endpoint group
+- [x] Cron job health panel shows last run status per job type
+- [x] Agent metrics panel shows Claude API call volume and latency
 - [ ] Dashboard loads in under 5 seconds
 
 ## 5. Enhanced Instrumentation
@@ -162,14 +162,14 @@ Add PostHog events and properties to power the SRE dashboard and alerting. All n
 
 ### Acceptance Criteria
 
-- [ ] `request_completed` events tracked for all non-health-check HTTP requests
-- [ ] `cron_job_executed` events tracked for all cron jobs with duration and success status
-- [ ] `agent_call_completed` events tracked with model, duration, and token counts
-- [ ] `db_query_slow` events tracked for queries exceeding 500ms
-- [ ] `rate_limit_hit` events tracked when rate limiter rejects a request
-- [ ] All new events use the existing `analytics.track()` wrapper
-- [ ] Event volume does not degrade application performance (< 1ms overhead per event)
-- [ ] Events include enough context for dashboard panels and alert conditions
+- [x] `request_completed` events tracked for all non-health-check HTTP requests
+- [x] `cron_job_executed` events tracked for all cron jobs with duration and success status
+- [x] `agent_call_completed` events tracked with model, duration, and token counts
+- [x] `db_query_slow` events tracked for queries exceeding 500ms
+- [x] `rate_limit_hit` events tracked when rate limiter rejects a request
+- [x] All new events use the existing `analytics.track()` wrapper
+- [x] Event volume does not degrade application performance (< 1ms overhead per event)
+- [x] Events include enough context for dashboard panels and alert conditions
 
 ## 6. GitHub Issues from Error Patterns
 
@@ -203,13 +203,13 @@ When a new error cluster is detected in PostHog (via error tracking groups):
 
 ### Acceptance Criteria
 
-- [ ] New error patterns in PostHog automatically create GitHub issues
-- [ ] Issues include stack trace, frequency, PostHog link, and severity label
-- [ ] Duplicate errors do not create duplicate issues (fingerprint dedup)
-- [ ] Closed issues are reopened on error recurrence with a comment
-- [ ] Database table tracks error fingerprint → issue mapping
-- [ ] Canon bot adds spec context to auto-created issues when a related spec is identified
-- [ ] Auto-triage can be disabled per-repo via CANON.yaml config
+- [x] New error patterns in PostHog automatically create GitHub issues
+- [x] Issues include stack trace, frequency, PostHog link, and severity label
+- [x] Duplicate errors do not create duplicate issues (fingerprint dedup)
+- [x] Closed issues are reopened on error recurrence with a comment
+- [x] Database table tracks error fingerprint → issue mapping
+- [x] Canon bot adds spec context to auto-created issues when a related spec is identified
+- [x] Auto-triage can be disabled per-repo via CANON.yaml config
 
 ## 7. Canon Bot SRE Mode
 
@@ -244,12 +244,12 @@ A weekly summary posted to Slack (`#canon-alerts`) with:
 
 ### Acceptance Criteria
 
-- [ ] Canon bot comments on auto-created error issues with relevant spec context
-- [ ] Bot identifies spec sections related to the affected code path
-- [ ] Weekly SRE digest posted to Slack with error trends and top patterns
-- [ ] Digest includes week-over-week error count comparison
-- [ ] Digest runs as a tracked cron job
-- [ ] SRE mode can be enabled/disabled via CANON.yaml
+- [x] Canon bot comments on auto-created error issues with relevant spec context
+- [x] Bot identifies spec sections related to the affected code path
+- [x] Weekly SRE digest posted to Slack with error trends and top patterns
+- [x] Digest includes week-over-week error count comparison
+- [x] Digest runs as a tracked cron job
+- [x] SRE mode can be enabled/disabled via CANON.yaml
 
 ## 8. Configuration
 
@@ -281,10 +281,10 @@ sre:
 
 ### Acceptance Criteria
 
-- [ ] All SRE features togglable via environment variables
-- [ ] CANON.yaml `sre` section parsed and validated
-- [ ] Sensible defaults — alerting works with minimal config
-- [ ] Missing Slack webhook gracefully disables Slack delivery (no errors)
+- [x] All SRE features togglable via environment variables
+- [x] CANON.yaml `sre` section parsed and validated
+- [x] Sensible defaults — alerting works with minimal config
+- [x] Missing Slack webhook gracefully disables Slack delivery (no errors)
 
 ## 9. Rollout Plan
 
@@ -309,9 +309,9 @@ Extend Canon bot with error analysis and weekly digest. Depends on Sections 3 + 
 
 ### Acceptance Criteria
 
-- [ ] Each phase is deployable independently
-- [ ] Phase 1 can ship without Slack or GitHub issue integration
-- [ ] Alert thresholds are tuned based on 1 week of baseline data before enabling notifications
+- [x] Each phase is deployable independently
+- [x] Phase 1 can ship without Slack or GitHub issue integration
+- [x] Alert thresholds are tuned based on 1 week of baseline data before enabling notifications
 
 ## 10. Open Questions
 

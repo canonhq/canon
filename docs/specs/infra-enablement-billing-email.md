@@ -141,13 +141,13 @@ values to `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`,
 
 #### Acceptance Criteria
 
-- [ ] `values.yaml` has `secrets.stripe` section with all 8 fields + `existingSecret`
-- [ ] `secret-stripe.yaml` template creates K8s Secret conditionally
-- [ ] Env var names match `src/canon/settings.py` exactly
-- [ ] `deployment.yaml` mounts the Stripe secret via `envFrom` (conditional)
-- [ ] `helm template` renders correctly with Stripe values set
-- [ ] `helm template` renders correctly with `existingSecret` set
-- [ ] `helm template` renders correctly with no Stripe values (secret omitted)
+- [x] `values.yaml` has `secrets.stripe` section with all 8 fields + `existingSecret`
+- [x] `secret-stripe.yaml` template creates K8s Secret conditionally
+- [x] Env var names match `src/canon/settings.py` exactly
+- [x] `deployment.yaml` mounts the Stripe secret via `envFrom` (conditional)
+- [x] `helm template` renders correctly with Stripe values set
+- [x] `helm template` renders correctly with `existingSecret` set
+- [x] `helm template` renders correctly with no Stripe values (secret omitted)
 
 ### 4.2 SMTP Secret Template
 <!-- canon:system:4.2 status:done -->
@@ -172,11 +172,11 @@ secrets:
 
 #### Acceptance Criteria
 
-- [ ] `values.yaml` has `secrets.smtp` section with all 5 fields + `existingSecret`
-- [ ] `secret-smtp.yaml` template creates K8s Secret conditionally
-- [ ] Env var names match `src/canon/settings.py` exactly
-- [ ] `deployment.yaml` mounts the SMTP secret via `envFrom` (conditional)
-- [ ] `helm template` renders correctly in all 3 modes (values, existingSecret, omitted)
+- [x] `values.yaml` has `secrets.smtp` section with all 5 fields + `existingSecret`
+- [x] `secret-smtp.yaml` template creates K8s Secret conditionally
+- [x] Env var names match `src/canon/settings.py` exactly
+- [x] `deployment.yaml` mounts the SMTP secret via `envFrom` (conditional)
+- [x] `helm template` renders correctly in all 3 modes (values, existingSecret, omitted)
 
 ### 4.3 Auth0 M2M in Existing Secret
 <!-- canon:system:4.3 status:done -->
@@ -186,9 +186,9 @@ No new Helm template needed — just update the deploy workflow to include them.
 
 #### Acceptance Criteria
 
-- [ ] `AUTH0_M2M_CLIENT_ID` and `AUTH0_M2M_CLIENT_SECRET` are included in `canon-auth0` K8s secret
-- [ ] Auth0 values.yaml section documents M2M fields for non-existingSecret mode
-- [ ] Existing `secret.yaml` template includes M2M fields when set
+- [x] `AUTH0_M2M_CLIENT_ID` and `AUTH0_M2M_CLIENT_SECRET` are included in `canon-auth0` K8s secret
+- [x] Auth0 values.yaml section documents M2M fields for non-existingSecret mode
+- [x] Existing `secret.yaml` template includes M2M fields when set
 
 ### 4.4 Production Values
 <!-- canon:system:4.4 status:done -->
@@ -205,8 +205,8 @@ secrets:
 
 #### Acceptance Criteria
 
-- [ ] `values-production.yaml` references `canon-stripe` and `canon-smtp` existing secrets
-- [ ] Existing `canon-auth0` reference unchanged (M2M vars added to same secret)
+- [x] `values-production.yaml` references `canon-stripe` and `canon-smtp` existing secrets
+- [x] Existing `canon-auth0` reference unchanged (M2M vars added to same secret)
 
 ## 5. canon-private: Deploy Workflow Updates
 
@@ -218,9 +218,9 @@ K8s secret.
 
 #### Acceptance Criteria
 
-- [ ] `deploy.yml` fetches 8 Stripe secrets from Doppler
-- [ ] Creates `canon-stripe` K8s secret with all 8 env vars
-- [ ] Secret created with `--dry-run=client -o yaml | kubectl apply -f -` pattern
+- [x] `deploy.yml` fetches 8 Stripe secrets from Doppler
+- [x] Creates `canon-stripe` K8s secret with all 8 env vars
+- [x] Secret created with `--dry-run=client -o yaml | kubectl apply -f -` pattern
 
 ### 5.2 SMTP Secret in deploy.yml
 <!-- canon:system:5.2 status:done -->
@@ -229,9 +229,9 @@ Add SMTP env vars and create a `canon-smtp` K8s secret.
 
 #### Acceptance Criteria
 
-- [ ] `deploy.yml` fetches 5 SMTP secrets from Doppler
-- [ ] Creates `canon-smtp` K8s secret
-- [ ] Same creation pattern as other secrets
+- [x] `deploy.yml` fetches 5 SMTP secrets from Doppler
+- [x] Creates `canon-smtp` K8s secret
+- [x] Same creation pattern as other secrets
 
 ### 5.3 Auth0 M2M in deploy.yml
 <!-- canon:system:5.3 status:done -->
@@ -240,9 +240,9 @@ Add M2M credentials to the existing `canon-auth0` K8s secret creation.
 
 #### Acceptance Criteria
 
-- [ ] `deploy.yml` fetches `AUTH0_M2M_CLIENT_ID` and `AUTH0_M2M_CLIENT_SECRET` from Doppler
-- [ ] Both are added as `--from-literal` args to the `canon-auth0` secret creation
-- [ ] Existing Auth0 secret fields unchanged
+- [x] `deploy.yml` fetches `AUTH0_M2M_CLIENT_ID` and `AUTH0_M2M_CLIENT_SECRET` from Doppler
+- [x] Both are added as `--from-literal` args to the `canon-auth0` secret creation
+- [x] Existing Auth0 secret fields unchanged
 
 ### 5.4 Preview Workflow Updates
 <!-- canon:system:5.4 status:done -->
@@ -253,10 +253,10 @@ app gates on `stripe_enabled` and `smtp_enabled` properties.
 
 #### Acceptance Criteria
 
-- [ ] Preview deployments continue to work without Stripe or SMTP secrets
-- [ ] `settings.stripe_enabled` returns `False` when secrets are absent
-- [ ] `settings.smtp_enabled` returns `False` when secrets are absent
-- [ ] No errors logged at startup when billing/SMTP is unconfigured
+- [x] Preview deployments continue to work without Stripe or SMTP secrets
+- [x] `settings.stripe_enabled` returns `False` when secrets are absent
+- [x] `settings.smtp_enabled` returns `False` when secrets are absent
+- [x] No errors logged at startup when billing/SMTP is unconfigured
 
 ## 6. Helm Template Tests
 <!-- canon:system:6 status:done -->
@@ -266,16 +266,16 @@ secret templates and deployment envFrom conditions.
 
 #### Acceptance Criteria
 
-- [ ] Test: Stripe secret renders with all values set
-- [ ] Test: Stripe secret skipped with `existingSecret` set
-- [ ] Test: Stripe secret skipped with no values
-- [ ] Test: SMTP secret renders with all values set
-- [ ] Test: SMTP secret skipped with `existingSecret` set
-- [ ] Test: SMTP secret skipped with no values
-- [ ] Test: Deployment envFrom includes Stripe secret ref when configured
-- [ ] Test: Deployment envFrom includes SMTP secret ref when configured
-- [ ] Test: Auth0 secret includes M2M fields when set
-- [ ] All existing Helm tests continue to pass
+- [x] Test: Stripe secret renders with all values set
+- [x] Test: Stripe secret skipped with `existingSecret` set
+- [x] Test: Stripe secret skipped with no values
+- [x] Test: SMTP secret renders with all values set
+- [x] Test: SMTP secret skipped with `existingSecret` set
+- [x] Test: SMTP secret skipped with no values
+- [x] Test: Deployment envFrom includes Stripe secret ref when configured
+- [x] Test: Deployment envFrom includes SMTP secret ref when configured
+- [x] Test: Auth0 secret includes M2M fields when set
+- [x] All existing Helm tests continue to pass
 
 ## 7. Rollout Plan
 
