@@ -67,10 +67,14 @@ When `/canon review <spec>` is invoked, also call `send_review_requested()` so t
 ### Acceptance Criteria
 
 - [x] `NotificationDispatcher` instantiated at startup and stored on `app.state`
+<!-- canon:realized-in:PR#478 file:src/canon/main.py -->
 - [x] `on_push` handler detects spec status changes and calls `send_spec_status_change()`
+<!-- canon:realized-in:PR#478 file:src/canon/github/handlers/on_push.py -->
 - [x] `on_push` handler detects coverage regression and calls `send_coverage_regression()`
 - [x] `on_pull_request` handler calls `send_pr_analysis_summary()` after agent analysis
+<!-- canon:realized-in:PR#478 file:src/canon/github/handlers/on_pull_request.py -->
 - [x] Stale spec cron job runs daily and calls `send_stale_spec_warning()` for specs untouched >N days
+<!-- canon:realized-in:PR#478 file:src/canon/cron/stale_specs.py -->
 - [x] Ticket sync engine calls `send_ticket_sync_failure()` on adapter errors
 - [x] `/canon review` triggers `send_review_requested()` to the configured channel
 - [x] All notifications respect quiet hours config except critical types
@@ -101,6 +105,7 @@ Detect common query patterns to optimize response:
 ### Acceptance Criteria
 
 - [x] `handle_mention` loads up to 5 relevant specs via `SpecLoader.search()` and includes them in the Claude system prompt
+<!-- canon:realized-in:PR#478 file:src/canon/slack/mentions.py -->
 - [x] Spec context includes title, status, section count, coverage percentage, and section names
 - [x] Queries taking >3s use deferred response pattern with "thinking..." indicator
 - [x] Direct status queries ("status of X") resolve via `SpecLoader` without a Claude call
@@ -137,6 +142,7 @@ Wire `resolve_permission()` to actually map Slack users to GitHub logins. Start 
 ### Acceptance Criteria
 
 - [x] "Approve" button commits `review_status: approved` to the spec file via GitHub API
+<!-- canon:realized-in:PR#478 file:src/canon/slack/actions.py -->
 - [x] "Approve" posts threaded confirmation with commit SHA and author
 - [x] "Approve" requires WRITE or ADMIN permission
 - [x] "Request Changes" modal submission posts feedback as threaded reply and updates GitHub frontmatter
@@ -185,8 +191,10 @@ Add `/canon digest [team]` subcommand that generates and posts the digest immedi
 ### Acceptance Criteria
 
 - [x] `SlackDigestConfig` model supports `team_digests` map with channel and schedule per team
+<!-- canon:realized-in:PR#478 file:src/canon/config/parse.py -->
 - [x] `team_digests` config key is recognized in CANON.yaml validation (no "Unknown key" warning)
 - [x] Digest cron job iterates team digest configs and sends to each configured channel
+<!-- canon:realized-in:PR#478 file:src/canon/cron/team_digest.py -->
 - [x] Digest includes coverage delta from previous week
 - [x] `/canon digest [team]` subcommand posts the digest on demand
 - [x] Digest delivery failures are logged and do not block other teams' digests
@@ -212,7 +220,9 @@ If the user hasn't linked their GitHub identity, the Home Tab should show an onb
 ### Acceptance Criteria
 
 - [x] `app_home_opened` event handler registered in Bolt app
+<!-- canon:realized-in:PR#478 file:src/canon/slack/app.py -->
 - [x] Home Tab shows "My Specs" filtered by owner identity mapping
+<!-- canon:realized-in:PR#478 file:src/canon/slack/home_tab.py -->
 - [x] Home Tab shows team coverage stats
 - [x] Home Tab shows recent activity (last 10 notifications)
 - [x] Home Tab shows onboarding prompt when GitHub identity is not linked
@@ -238,8 +248,10 @@ On submit, create the spec file in the repo via GitHub API using the standard te
 ### Acceptance Criteria
 
 - [x] `/canon new <title>` opens a creation modal
+<!-- canon:realized-in:PR#478 file:src/canon/slack/commands.py -->
 - [x] Modal includes title, type, team, and background fields
 - [x] Submission creates spec file in `docs/specs/` via GitHub API commit
+<!-- canon:realized-in:PR#478 file:src/canon/slack/new_spec.py -->
 - [x] Created spec uses the standard template with frontmatter
 - [x] Confirmation message includes GitHub URL to the new spec
 - [x] Spec creation requires WRITE or ADMIN permission
@@ -279,6 +291,7 @@ slack:
 - [x] `/canon unmute <spec>` re-enables notifications
 - [x] Mute state persists across pod restarts (stored in DB or config)
 - [x] System tracks user query patterns and suggests following frequently-queried specs
+<!-- canon:realized-in:PR#478 file:src/canon/slack/interest_tracker.py -->
 - [x] Per-notification-type channel routing supported in CANON.yaml
 - [x] Channel-level overrides validated in config parser
 
