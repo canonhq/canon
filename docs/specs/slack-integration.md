@@ -26,6 +26,7 @@ The existing `SlackAlerter` (outbound webhooks) handles SRE alerts and weekly di
 ## 2. Slack App Setup & Architecture
 
 <!-- canon:system:2 status:done -->
+<!-- All 7 ACs verified and checked off -->
 
 ### 2.1 App Configuration
 
@@ -53,17 +54,24 @@ New environment variables in `Settings`:
 
 ### Acceptance Criteria
 
-- [ ] Slack app created with bot token and all required scopes listed in 2.1
-- [ ] Bolt `AsyncApp` mounted on FastAPI at `/slack/events` using `SlackRequestHandler`
-- [ ] Socket Mode activated when `SLACK_APP_TOKEN` is set, HTTP mode otherwise
-- [ ] App returns 503 on `/slack/events` when `SLACK_BOT_TOKEN` is not configured
-- [ ] `SLACK_SIGNING_SECRET` used to verify all incoming Slack requests in HTTP mode
-- [ ] Settings added to `Settings` class with `slack_bot_token`, `slack_signing_secret`, `slack_app_token` fields
-- [ ] `slack_bot_enabled` property returns True when bot token and signing secret are both set
+- [x] Slack app created with bot token and all required scopes listed in 2.1
+<!-- canon:realized-in:PR#475 file:src/canon/slack/app.py -->
+- [x] Bolt `AsyncApp` mounted on FastAPI at `/slack/events` using `SlackRequestHandler`
+<!-- canon:realized-in:PR#475 file:src/canon/slack/app.py:55 file:src/canon/main.py:283 -->
+- [x] Socket Mode activated when `SLACK_APP_TOKEN` is set, HTTP mode otherwise
+<!-- canon:realized-in:PR#475 file:src/canon/slack/app.py:56 file:src/canon/main.py:291-301 -->
+- [x] App returns 503 on `/slack/events` when `SLACK_BOT_TOKEN` is not configured
+<!-- canon:realized-in:PR#475 file:src/canon/main.py:346-352 -->
+- [x] `SLACK_SIGNING_SECRET` used to verify all incoming Slack requests in HTTP mode
+<!-- canon:realized-in:PR#475 file:src/canon/slack/app.py:32-33 -->
+- [x] Settings added to `Settings` class with `slack_bot_token`, `slack_signing_secret`, `slack_app_token` fields
+<!-- canon:realized-in:PR#475 file:src/canon/settings.py:156-157 -->
+- [x] `slack_bot_enabled` property returns True when bot token and signing secret are both set
+<!-- canon:realized-in:PR#475 file:src/canon/settings.py:163 -->
 
 ## 3. Slash Command: `/canon`
 
-<!-- canon:system:3 status:in_progress -->
+<!-- canon:system:3 status:done -->
 
 The `/canon` slash command provides structured access to spec data.
 
@@ -108,15 +116,17 @@ All responses use Slack Block Kit:
 - [x] `coverage` subcommand returns coverage metrics with optional team filter
 - [x] `dashboard` subcommand posts a visible, pinnable coverage summary to the channel
 - [x] `review` subcommand creates a review request message with approve/reject buttons
-- [ ] `help` subcommand lists all available commands with descriptions
+- [x] `help` subcommand lists all available commands with descriptions
+<!-- canon:realized-in:PR#475 file:src/canon/slack/commands.py:115-123 -->
 - [x] Unknown subcommands return an ephemeral help message
 - [x] Spec-not-found errors suggest similar spec names via fuzzy matching
 - [x] All responses except `dashboard` are ephemeral
-- [ ] Response time under 3 seconds for all structured commands (Slack's 3s timeout for slash commands; use `ack()` + deferred response for slower queries)
+- [x] Response time under 3 seconds for all structured commands (Slack's 3s timeout for slash commands; use `ack()` + deferred response for slower queries)
+<!-- canon:realized-in:PR#475 file:src/canon/slack/commands.py — all handlers call ack() immediately before async work -->
 
 ## 4. Natural Language Queries via @canon
 
-<!-- canon:system:4 status:in_progress -->
+<!-- canon:system:4 status:done -->
 
 ### 4.1 Mention Handler
 
@@ -155,19 +165,28 @@ Users can DM the bot directly without `@canon` — all DMs are treated as natura
 
 ### Acceptance Criteria
 
-- [ ] `@canon` mentions in channels route to Claude with spec context
-- [ ] Bot responds in-thread, creating a new thread if mentioned top-level
-- [ ] Thread history (up to 10 messages) included for multi-turn conversations
-- [ ] DMs to the bot are handled as NL queries without requiring mention
-- [ ] Eyes emoji reaction added on processing start, replaced with checkmark on completion
-- [ ] Up to 5 relevant specs loaded as context based on query keyword matching
-- [ ] Response time under 15 seconds for NL queries (deferred response via `respond()`)
-- [ ] Per-user rate limit of 10 NL queries/minute with clear feedback on limit hit
-- [ ] Errors from Claude API surface as a user-friendly "I couldn't answer that" message
+- [x] `@canon` mentions in channels route to Claude with spec context
+<!-- canon:realized-in:PR#475 file:src/canon/slack/mentions.py:45-92 -->
+- [x] Bot responds in-thread, creating a new thread if mentioned top-level
+<!-- canon:realized-in:PR#475 file:src/canon/slack/mentions.py:50,78 -->
+- [x] Thread history (up to 10 messages) included for multi-turn conversations
+<!-- canon:realized-in:PR#475 file:src/canon/slack/mentions.py:102-111 -->
+- [x] DMs to the bot are handled as NL queries without requiring mention
+<!-- canon:realized-in:PR#475 file:src/canon/slack/mentions.py:94-99 -->
+- [x] Eyes emoji reaction added on processing start, replaced with checkmark on completion
+<!-- canon:realized-in:PR#475 file:src/canon/slack/mentions.py:71,82-83 -->
+- [x] Up to 5 relevant specs loaded as context based on query keyword matching
+<!-- canon:realized-in file:src/canon/slack/mentions.py:108-141 -->
+- [x] Response time under 15 seconds for NL queries (deferred response via `respond()`)
+<!-- canon:realized-in:PR#475 file:src/canon/slack/mentions.py — async handler with deferred say() -->
+- [x] Per-user rate limit of 10 NL queries/minute with clear feedback on limit hit
+<!-- canon:realized-in:PR#475 file:src/canon/slack/mentions.py:22-42,62-66 -->
+- [x] Errors from Claude API surface as a user-friendly "I couldn't answer that" message
+<!-- canon:realized-in:PR#475 file:src/canon/slack/mentions.py:84-91 -->
 
 ## 5. Proactive Notifications
 
-<!-- canon:system:5 status:in_progress -->
+<!-- canon:system:5 status:done -->
 
 ### 5.1 Event Types
 
@@ -225,21 +244,32 @@ slack:
 
 ### Acceptance Criteria
 
-- [ ] Spec status change notifications posted with old/new status and GitHub link
-- [ ] New spec notifications posted with title, owner, and link
-- [ ] Coverage regression alerts fire when coverage drops below configurable threshold
-- [ ] Stale spec warnings posted when stale detection cron finds overdue specs
-- [ ] PR analysis summaries posted after agent completes PR review
-- [ ] Ticket sync failure alerts posted to SRE alerts channel
-- [ ] Each notification type independently configurable in `CANON.yaml` `slack.notifications`
-- [ ] Channel resolution follows priority: spec frontmatter > CANON.yaml > SRE channel
-- [ ] Missing channel config results in silent skip, not an error
-- [ ] Quiet hours suppress non-critical notifications (coverage regression and ticket sync failure are always delivered)
-- [ ] Notifications include actionable buttons (View in Canon, View on GitHub)
+- [x] Spec status change notifications posted with old/new status and GitHub link
+<!-- canon:realized-in:PR#475 file:src/canon/slack/notifications.py:110-138 -->
+- [x] New spec notifications posted with title, owner, and link
+<!-- canon:realized-in:PR#475 file:src/canon/slack/notifications.py:140-159 -->
+- [x] Coverage regression alerts fire when coverage drops below configurable threshold
+<!-- canon:realized-in:PR#475 file:src/canon/slack/notifications.py:161-182 -->
+- [x] Stale spec warnings posted when stale detection cron finds overdue specs
+<!-- canon:realized-in:PR#475 file:src/canon/slack/notifications.py:184-205 -->
+- [x] PR analysis summaries posted after agent completes PR review
+<!-- canon:realized-in:PR#475 file:src/canon/slack/notifications.py:207-233 -->
+- [x] Ticket sync failure alerts posted to SRE alerts channel
+<!-- canon:realized-in:PR#475 file:src/canon/slack/notifications.py:235-258 -->
+- [x] Each notification type independently configurable in `CANON.yaml` `slack.notifications`
+<!-- canon:realized-in:PR#475 file:src/canon/slack/notifications.py:22-33 file:src/canon/config/parse.py:103-111 -->
+- [x] Channel resolution follows priority: spec frontmatter > CANON.yaml > SRE channel
+<!-- canon:realized-in:PR#475 file:src/canon/slack/notifications.py:76-86 -->
+- [x] Missing channel config results in silent skip, not an error
+<!-- canon:realized-in:PR#475 file:src/canon/slack/notifications.py:85-90 -->
+- [x] Quiet hours suppress non-critical notifications (coverage regression and ticket sync failure are always delivered)
+<!-- canon:realized-in:PR#475 file:src/canon/slack/notifications.py:35-46,94-96 -->
+- [x] Notifications include actionable buttons (View in Canon, View on GitHub)
+<!-- canon:realized-in:PR#475 file:src/canon/slack/notifications.py:131,152,226,272-276 -->
 
 ## 6. Workflow Actions from Slack
 
-<!-- canon:system:6 status:in_progress -->
+<!-- canon:system:6 status:done -->
 
 ### 6.1 Button Actions
 
@@ -270,19 +300,28 @@ The "Request Changes" action opens a Slack modal with:
 
 ### Acceptance Criteria
 
-- [ ] "View in Canon" button opens the correct Spec Explorer URL
-- [ ] "Approve" button transitions spec status and posts confirmation in-thread
-- [ ] "Request Changes" opens a modal with feedback text area
-- [ ] Modal submission posts feedback as a GitHub PR comment via existing `GitHubClient`
-- [ ] "Sync Tickets" triggers ticket sync and posts a result summary
-- [ ] "Refresh" button re-fetches data and updates the original message
-- [ ] Slack user ID mapped to GitHub login for permission checks
-- [ ] Unauthorized actions return ephemeral "permission denied" message
-- [ ] All button actions acknowledge within 3 seconds (Slack timeout)
+- [x] "View in Canon" button opens the correct Spec Explorer URL
+<!-- canon:realized-in:PR#475 file:src/canon/slack/blocks.py:77-78 — buttons with URLs open as links -->
+- [x] "Approve" button transitions spec status and posts confirmation in-thread
+<!-- canon:realized-in:PR#475 file:src/canon/slack/actions.py:24-47 -->
+- [x] "Request Changes" opens a modal with feedback text area
+<!-- canon:realized-in:PR#475 file:src/canon/slack/actions.py:50-102 -->
+- [x] Modal submission posts feedback as a GitHub PR comment via existing `GitHubClient`
+<!-- canon:realized-in file:src/canon/slack/actions.py:143-175 -->
+- [x] "Sync Tickets" triggers ticket sync and posts a result summary
+<!-- canon:realized-in file:src/canon/slack/actions.py:178-226 -->
+- [x] "Refresh" button re-fetches data and updates the original message
+<!-- canon:realized-in file:src/canon/slack/actions.py:229-263 -->
+- [x] Slack user ID mapped to GitHub login for permission checks
+<!-- canon:realized-in:PR#475 file:src/canon/slack/permissions.py:18-42 -->
+- [x] Unauthorized actions return ephemeral "permission denied" message
+<!-- canon:realized-in:PR#475 file:src/canon/slack/actions.py:33-39,59-65,153-159 -->
+- [x] All button actions acknowledge within 3 seconds (Slack timeout)
+<!-- canon:realized-in:PR#475 file:src/canon/slack/actions.py — all handlers call ack() immediately -->
 
 ## 7. Slack-Native Dashboards
 
-<!-- canon:system:7 status:in_progress -->
+<!-- canon:system:7 status:done -->
 
 ### 7.1 Coverage Dashboard
 
@@ -317,16 +356,22 @@ The dashboard message includes a "Refresh" button. Optionally, a scheduled updat
 
 ### Acceptance Criteria
 
-- [ ] `/canon dashboard` posts a multi-block coverage summary to the channel
-- [ ] Dashboard includes health score, per-team coverage bars, recent updates, and attention items
-- [ ] Dashboard message is visible (not ephemeral) and pinnable
-- [ ] "Refresh" button updates the message in-place with current data
-- [ ] Optional auto-refresh via `slack.dashboard_refresh` config (daily/weekly/false)
-- [ ] Auto-refresh updates existing pinned message rather than posting new ones
+- [x] `/canon dashboard` posts a multi-block coverage summary to the channel
+<!-- canon:realized-in:PR#475 file:src/canon/slack/commands.py:380-391 file:src/canon/slack/dashboard.py:19-72 -->
+- [x] Dashboard includes health score, per-team coverage bars, recent updates, and attention items
+<!-- canon:realized-in:PR#475 file:src/canon/slack/dashboard.py:33-67 -->
+- [x] Dashboard message is visible (not ephemeral) and pinnable
+<!-- canon:realized-in:PR#475 file:src/canon/slack/commands.py:390 — response_type="in_channel" -->
+- [x] "Refresh" button updates the message in-place with current data
+<!-- canon:realized-in file:src/canon/slack/actions.py:229-263 — uses chat.update -->
+- [x] Optional auto-refresh via `slack.dashboard_refresh` config (daily/weekly/false)
+<!-- canon:realized-in file:src/canon/config/parse.py — SlackConfig.dashboard_refresh -->
+- [x] Auto-refresh updates existing pinned message rather than posting new ones
+<!-- canon:realized-in file:src/canon/slack/dashboard.py:82-110 — auto_refresh_dashboard -->
 
 ## 8. Team Digest Channels
 
-<!-- canon:system:8 status:in_progress -->
+<!-- canon:system:8 status:done -->
 
 ### 8.1 Per-Team Digests
 
@@ -373,17 +418,24 @@ _Week of Mar 17–23, 2026_
 
 ### Acceptance Criteria
 
-- [ ] Per-team digest configuration in `CANON.yaml` under `slack.team_digests`
-- [ ] Digest filters specs by team ownership
-- [ ] Digest includes coverage delta from previous week
-- [ ] Digest lists completed ACs, in-progress sections, and stale warnings
-- [ ] Digest delivered on configured schedule (day + time, UTC)
-- [ ] Digest posted to team-specific Slack channel
-- [ ] Teams without configuration are silently skipped
+- [x] Per-team digest configuration in `CANON.yaml` under `slack.team_digests`
+<!-- canon:realized-in file:src/canon/config/parse.py — SlackTeamDigestConfig + SlackConfig.team_digests -->
+- [x] Digest filters specs by team ownership
+<!-- canon:realized-in:PR#475 file:src/canon/slack/digest.py:39 -->
+- [x] Digest includes coverage delta from previous week
+<!-- canon:realized-in:PR#475 file:src/canon/slack/digest.py:41-55 -->
+- [x] Digest lists completed ACs, in-progress sections, and stale warnings
+<!-- canon:realized-in:PR#475 file:src/canon/slack/digest.py:58-88 -->
+- [x] Digest delivered on configured schedule (day + time, UTC)
+<!-- canon:realized-in file:src/canon/slack/digest.py:137-155 — should_send_digest -->
+- [x] Digest posted to team-specific Slack channel
+<!-- canon:realized-in file:src/canon/slack/digest.py:93-130 — dispatch_team_digests -->
+- [x] Teams without configuration are silently skipped
+<!-- canon:realized-in file:src/canon/slack/digest.py:107-108 — skips empty channel -->
 
 ## 9. Multi-Workspace Support
 
-<!-- canon:system:9 status:in_progress -->
+<!-- canon:system:9 status:done -->
 
 ### 9.1 Installation Flow
 
@@ -410,13 +462,20 @@ For enterprise customers sharing channels across orgs:
 
 ### Acceptance Criteria
 
-- [ ] OAuth install flow stores bot tokens per-workspace in the installation registry
-- [ ] Workspace linked to Canon org during install flow
-- [ ] Bot tokens encrypted at rest using existing BYOK encryption
-- [ ] Self-hosted mode works with manual `SLACK_BOT_TOKEN` config (no OAuth)
-- [ ] Bot responds in Slack Connect shared channels when enabled
-- [ ] Responses in shared channels scoped to the requesting org's data only
-- [ ] `slack.allow_shared_channels` config controls shared channel behavior (default: false)
+- [x] OAuth install flow stores bot tokens per-workspace in the installation registry
+<!-- canon:realized-in file:src/canon/slack/install.py:48-72 — SlackInstallStore.async_save -->
+- [x] Workspace linked to Canon org during install flow
+<!-- canon:realized-in file:src/canon/slack/install.py:64 — org_id stored with installation -->
+- [x] Bot tokens encrypted at rest using existing BYOK encryption
+<!-- canon:realized-in file:src/canon/slack/install.py:93-98 — Fernet encrypt/decrypt -->
+- [x] Self-hosted mode works with manual `SLACK_BOT_TOKEN` config (no OAuth)
+<!-- canon:realized-in:PR#475 file:src/canon/slack/install.py:28-33 file:src/canon/main.py:275-301 -->
+- [x] Bot responds in Slack Connect shared channels when enabled
+<!-- canon:realized-in file:src/canon/slack/install.py:101-119 — SharedChannelGuard.should_respond -->
+- [x] Responses in shared channels scoped to the requesting org's data only
+<!-- canon:realized-in file:src/canon/slack/install.py:121-128 — SharedChannelGuard.get_org_scope -->
+- [x] `slack.allow_shared_channels` config controls shared channel behavior (default: false)
+<!-- canon:realized-in file:src/canon/config/parse.py — SlackConfig.allow_shared_channels -->
 
 ## 10. Implementation Notes
 

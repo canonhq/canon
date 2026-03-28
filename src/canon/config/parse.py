@@ -51,6 +51,9 @@ KNOWN_SLACK_KEYS = {
     "notifications",
     "quiet_hours",
     "digest",
+    "dashboard_refresh",
+    "team_digests",
+    "allow_shared_channels",
 }
 KNOWN_SLACK_NOTIFICATION_KEYS = {
     "spec_status_change",
@@ -121,12 +124,23 @@ class SlackDigestConfig(BaseModel):
     schedule: str = "monday 09:00"
 
 
+class SlackTeamDigestConfig(BaseModel):
+    channel: str
+    schedule: str = "monday 09:00"
+
+
+DashboardRefresh = Literal["daily", "weekly", False]
+
+
 class SlackConfig(BaseModel):
     default_channel: str = "#canon-specs"
     sre_channel: str = ""
     notifications: SlackNotificationConfig = SlackNotificationConfig()
     quiet_hours: SlackQuietHoursConfig | None = None
     digest: SlackDigestConfig = SlackDigestConfig()
+    dashboard_refresh: DashboardRefresh = False
+    team_digests: dict[str, SlackTeamDigestConfig] = {}
+    allow_shared_channels: bool = False
 
 
 class IdeConfig(BaseModel):
@@ -877,6 +891,25 @@ def _merge_with_defaults(
                 else "monday 09:00",
             )
 
+        # Parse dashboard_refresh (daily/weekly/false)
+        dr_raw = slack_data.get("dashboard_refresh", False)
+        dashboard_refresh: DashboardRefresh = False
+        if dr_raw in ("daily", "weekly"):
+            dashboard_refresh = dr_raw  # type: ignore[assignment]
+
+        # Parse team_digests
+        team_digests: dict[str, SlackTeamDigestConfig] = {}
+        td_data = slack_data.get("team_digests")
+        if isinstance(td_data, dict):
+            for team_name, td_entry in td_data.items():
+                if isinstance(td_entry, dict) and isinstance(td_entry.get("channel"), str):
+                    team_digests[team_name] = SlackTeamDigestConfig(
+                        channel=td_entry["channel"],
+                        schedule=td_entry["schedule"]
+                        if isinstance(td_entry.get("schedule"), str)
+                        else "monday 09:00",
+                    )
+
         slack = SlackConfig(
             default_channel=slack_data["default_channel"]
             if isinstance(slack_data.get("default_channel"), str)
@@ -887,6 +920,9 @@ def _merge_with_defaults(
             notifications=notifications,
             quiet_hours=quiet_hours,
             digest=digest,
+            dashboard_refresh=dashboard_refresh,
+            team_digests=team_digests,
+            allow_shared_channels=bool(slack_data.get("allow_shared_channels", False)),
         )
 
     return CanonConfig(
