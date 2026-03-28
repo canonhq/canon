@@ -307,6 +307,24 @@ weeklyDigestCronJob:
   schedule: "0 9 * * 1"
   concurrencyPolicy: Forbid
 
+## @section Stale spec warning CronJob parameters
+## @param staleSpecsCronJob.enabled Enable stale spec warning CronJob
+## @param staleSpecsCronJob.schedule Cron schedule expression (default: daily at 7am UTC)
+## @param staleSpecsCronJob.concurrencyPolicy CronJob concurrency policy
+staleSpecsCronJob:
+  enabled: false
+  schedule: "0 7 * * *"
+  concurrencyPolicy: Forbid
+
+## @section Team digest CronJob parameters
+## @param teamDigestCronJob.enabled Enable team digest CronJob
+## @param teamDigestCronJob.schedule Cron schedule expression (default: Monday 9am UTC)
+## @param teamDigestCronJob.concurrencyPolicy CronJob concurrency policy
+teamDigestCronJob:
+  enabled: false
+  schedule: "0 9 * * 1"
+  concurrencyPolicy: Forbid
+
 ## @section Re-index CronJob parameters
 ## @param reindexCronJob.enabled Enable full re-index CronJob
 ## @param reindexCronJob.schedule Cron schedule expression (default: nightly at 2am)

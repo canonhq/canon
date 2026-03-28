@@ -65,8 +65,10 @@ KNOWN_SLACK_NOTIFICATION_KEYS = {
     "review_requested",
     "coverage_threshold",
 }
+# When a notification type value is a dict, these are the valid keys
+_NOTIFICATION_TYPE_SUBKEYS = {"enabled", "channel"}
 KNOWN_SLACK_QUIET_HOURS_KEYS = {"start", "end"}
-KNOWN_SLACK_DIGEST_KEYS = {"channel", "schedule"}
+KNOWN_SLACK_DIGEST_KEYS = {"channel", "schedule", "team_digests"}
 
 ConfidenceLevel = Literal["medium", "high"]
 VALID_CONFIDENCE_LEVELS: frozenset[str] = frozenset(get_args(ConfidenceLevel))
@@ -112,6 +114,8 @@ class SlackNotificationConfig(BaseModel):
     ticket_sync_failure: bool = True
     review_requested: bool = True
     coverage_threshold: int = 80
+    # Per-notification-type channel overrides (type name -> channel)
+    channel_overrides: dict[str, str] = {}
 
 
 class SlackQuietHoursConfig(BaseModel):
@@ -119,9 +123,15 @@ class SlackQuietHoursConfig(BaseModel):
     end: str = "08:00"
 
 
+class TeamDigestConfig(BaseModel):
+    channel: str
+    schedule: str = "monday 09:00"
+
+
 class SlackDigestConfig(BaseModel):
     channel: str = ""
     schedule: str = "monday 09:00"
+    team_digests: dict[str, TeamDigestConfig] = {}
 
 
 class SlackTeamDigestConfig(BaseModel):
@@ -569,6 +579,16 @@ def parse_canon_yaml(raw: str) -> ConfigResult:
                                     message=f'Unknown slack.notifications key: "{key}"',
                                 )
                             )
+                        elif isinstance(notif[key], dict):
+                            # Validate dict-form: {enabled: bool, channel: str}
+                            for subkey in list(notif[key].keys()):
+                                if subkey not in _NOTIFICATION_TYPE_SUBKEYS:
+                                    diagnostics.append(
+                                        Diagnostic(
+                                            severity="warning",
+                                            message=f'Unknown slack.notifications.{key} key: "{subkey}"',
+                                        )
+                                    )
             if "quiet_hours" in slack and not isinstance(slack["quiet_hours"], dict):
                 diagnostics.append(
                     Diagnostic(severity="error", message='"slack.quiet_hours" must be a mapping')
@@ -591,6 +611,37 @@ def parse_canon_yaml(raw: str) -> ConfigResult:
                                     message=f'Unknown slack.digest key: "{key}"',
                                 )
                             )
+                    # Validate team_digests sub-key
+                    if "team_digests" in digest:
+                        td = digest["team_digests"]
+                        if not isinstance(td, dict):
+                            diagnostics.append(
+                                Diagnostic(
+                                    severity="error",
+                                    message='"slack.digest.team_digests" must be a mapping',
+                                )
+                            )
+                            del digest["team_digests"]
+                        else:
+                            for team_name, team_data in list(td.items()):
+                                if not isinstance(team_data, dict):
+                                    diagnostics.append(
+                                        Diagnostic(
+                                            severity="error",
+                                            message=f'"slack.digest.team_digests.{team_name}" must be a mapping',
+                                        )
+                                    )
+                                    del td[team_name]
+                                elif "channel" not in team_data or not isinstance(
+                                    team_data.get("channel"), str
+                                ):
+                                    diagnostics.append(
+                                        Diagnostic(
+                                            severity="error",
+                                            message=f'"slack.digest.team_digests.{team_name}.channel" is required and must be a string',
+                                        )
+                                    )
+                                    del td[team_name]
 
     # Validate ticket_systems / routing / auth_profiles
     ticket_mapping = _parse_ticket_mapping(obj, diagnostics)
@@ -854,6 +905,7 @@ def _merge_with_defaults(
         notifications = SlackNotificationConfig()
         if isinstance(notif_data, dict):
             kwargs: dict = {}
+            channel_overrides: dict[str, str] = {}
             for key in (
                 "spec_status_change",
                 "spec_created",
@@ -863,12 +915,21 @@ def _merge_with_defaults(
                 "ticket_sync_failure",
                 "review_requested",
             ):
-                if isinstance(notif_data.get(key), bool):
-                    kwargs[key] = notif_data[key]
+                val = notif_data.get(key)
+                if isinstance(val, bool):
+                    kwargs[key] = val
+                elif isinstance(val, dict):
+                    # Dict form: {enabled: bool, channel: str}
+                    if isinstance(val.get("enabled"), bool):
+                        kwargs[key] = val["enabled"]
+                    if isinstance(val.get("channel"), str):
+                        channel_overrides[key] = val["channel"]
             if isinstance(notif_data.get("coverage_threshold"), int) and not isinstance(
                 notif_data.get("coverage_threshold"), bool
             ):
                 kwargs["coverage_threshold"] = notif_data["coverage_threshold"]
+            if channel_overrides:
+                kwargs["channel_overrides"] = channel_overrides
             notifications = SlackNotificationConfig(**kwargs)
 
         qh_data = slack_data.get("quiet_hours")
@@ -882,6 +943,19 @@ def _merge_with_defaults(
         digest_data = slack_data.get("digest")
         digest = SlackDigestConfig()
         if isinstance(digest_data, dict):
+            # Parse team_digests
+            team_digests_data = digest_data.get("team_digests")
+            team_digests: dict[str, TeamDigestConfig] = {}
+            if isinstance(team_digests_data, dict):
+                for team_name, td in team_digests_data.items():
+                    if isinstance(td, dict) and isinstance(td.get("channel"), str):
+                        team_digests[team_name] = TeamDigestConfig(
+                            channel=td["channel"],
+                            schedule=td["schedule"]
+                            if isinstance(td.get("schedule"), str)
+                            else "monday 09:00",
+                        )
+
             digest = SlackDigestConfig(
                 channel=digest_data["channel"]
                 if isinstance(digest_data.get("channel"), str)
@@ -889,6 +963,7 @@ def _merge_with_defaults(
                 schedule=digest_data["schedule"]
                 if isinstance(digest_data.get("schedule"), str)
                 else "monday 09:00",
+                team_digests=team_digests,
             )
 
         # Parse dashboard_refresh (daily/weekly/false)

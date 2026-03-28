@@ -161,6 +161,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         )
         logger.info("GitHub OAuth configured for web editor")
 
+    # Identity store for Slack→GitHub mapping
+    from .slack.identity_store import IdentityStore
+
+    app.state.identity_store = IdentityStore(db_pool=getattr(app.state, "db_pool", None))
+
     app.state.github_client = _get_client()
 
     # Log unconfigured webhook integrations (endpoints fail-closed with 503)
@@ -272,6 +277,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     # Slack bot (optional — interactive Slack app)
     app.state.slack_bot = None
+    app.state.notification_dispatcher = None
     if settings.slack_bot_enabled:
         from .slack import create_slack_app
 
@@ -300,6 +306,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                     app.state.slack_socket_handler.start_async()
                 )
                 logger.info("Slack bot started (Socket Mode)")
+
+        # Wire notification dispatcher (requires bot client)
+        if app.state.slack_bot is not None:
+            from .slack.notifications import NotificationConfig, NotificationDispatcher
+
+            notif_config = NotificationConfig()
+            dispatcher = NotificationDispatcher(
+                client=app.state.slack_bot.app.client,
+                default_channel="#canon-specs",
+                sre_channel="",
+                config=notif_config,
+                quiet_start=None,
+                quiet_end=None,
+            )
+            app.state.notification_dispatcher = dispatcher
+            logger.info("Notification dispatcher initialised")
     else:
         logger.info("Slack bot not configured — /slack/events will return 503")
 

@@ -595,6 +595,40 @@ slack:
         warnings = [d for d in result.diagnostics if d.severity == "warning"]
         assert any("bad_key" in w.message for w in warnings)
 
+    def test_notification_dict_form_with_channel(self):
+        raw = """
+slack:
+  notifications:
+    coverage_regression:
+      enabled: true
+      channel: "#eng-alerts"
+    spec_status_change:
+      enabled: false
+      channel: "#specs"
+"""
+        result = parse_canon_yaml(raw)
+        assert len(result.diagnostics) == 0
+        notif = result.config.slack.notifications
+        assert notif.coverage_regression is True
+        assert notif.spec_status_change is False
+        assert notif.channel_overrides == {
+            "coverage_regression": "#eng-alerts",
+            "spec_status_change": "#specs",
+        }
+
+    def test_notification_dict_form_unknown_subkey_warns(self):
+        raw = """
+slack:
+  notifications:
+    coverage_regression:
+      enabled: true
+      channel: "#eng-alerts"
+      bad_subkey: true
+"""
+        result = parse_canon_yaml(raw)
+        warnings = [d for d in result.diagnostics if d.severity == "warning"]
+        assert any("bad_subkey" in w.message for w in warnings)
+
     def test_unknown_digest_key_warns(self):
         raw = """
 slack:
@@ -604,3 +638,111 @@ slack:
         result = parse_canon_yaml(raw)
         warnings = [d for d in result.diagnostics if d.severity == "warning"]
         assert any("bad_key" in w.message for w in warnings)
+
+
+class TestTeamDigestsConfig:
+    def test_parses_team_digests_correctly(self):
+        raw = """
+slack:
+  digest:
+    channel: "#general-specs"
+    schedule: "monday 09:00"
+    team_digests:
+      platform:
+        channel: "#platform-specs"
+        schedule: "monday 09:00"
+      backend:
+        channel: "#backend-specs"
+        schedule: "tuesday 09:00"
+"""
+        result = parse_canon_yaml(raw)
+        assert len(result.diagnostics) == 0
+        digest = result.config.slack.digest
+        assert digest.channel == "#general-specs"
+        assert digest.schedule == "monday 09:00"
+        assert len(digest.team_digests) == 2
+        assert digest.team_digests["platform"].channel == "#platform-specs"
+        assert digest.team_digests["platform"].schedule == "monday 09:00"
+        assert digest.team_digests["backend"].channel == "#backend-specs"
+        assert digest.team_digests["backend"].schedule == "tuesday 09:00"
+
+    def test_team_digest_missing_channel_produces_error(self):
+        raw = """
+slack:
+  digest:
+    channel: "#general-specs"
+    team_digests:
+      platform:
+        schedule: "monday 09:00"
+"""
+        result = parse_canon_yaml(raw)
+        errors = [d for d in result.diagnostics if d.severity == "error"]
+        assert len(errors) == 1
+        assert "team_digests.platform.channel" in errors[0].message
+        assert "required" in errors[0].message
+        # The invalid team digest entry should be removed
+        assert len(result.config.slack.digest.team_digests) == 0
+
+    def test_non_mapping_team_digests_produces_error(self):
+        raw = """
+slack:
+  digest:
+    channel: "#general-specs"
+    team_digests: "not a mapping"
+"""
+        result = parse_canon_yaml(raw)
+        errors = [d for d in result.diagnostics if d.severity == "error"]
+        assert len(errors) == 1
+        assert "team_digests" in errors[0].message
+        assert "mapping" in errors[0].message
+
+    def test_team_digests_key_does_not_produce_unknown_key_warning(self):
+        raw = """
+slack:
+  digest:
+    channel: "#general-specs"
+    team_digests:
+      platform:
+        channel: "#platform-specs"
+"""
+        result = parse_canon_yaml(raw)
+        warnings = [d for d in result.diagnostics if d.severity == "warning"]
+        assert len(warnings) == 0
+
+    def test_team_digests_defaults_to_empty_dict(self):
+        raw = """
+slack:
+  digest:
+    channel: "#general-specs"
+    schedule: "monday 09:00"
+"""
+        result = parse_canon_yaml(raw)
+        assert len(result.diagnostics) == 0
+        assert result.config.slack.digest.team_digests == {}
+
+    def test_team_digest_uses_default_schedule(self):
+        raw = """
+slack:
+  digest:
+    channel: "#general-specs"
+    team_digests:
+      platform:
+        channel: "#platform-specs"
+"""
+        result = parse_canon_yaml(raw)
+        assert len(result.diagnostics) == 0
+        assert result.config.slack.digest.team_digests["platform"].schedule == "monday 09:00"
+
+    def test_non_mapping_team_entry_produces_error(self):
+        raw = """
+slack:
+  digest:
+    channel: "#general-specs"
+    team_digests:
+      platform: "not a mapping"
+"""
+        result = parse_canon_yaml(raw)
+        errors = [d for d in result.diagnostics if d.severity == "error"]
+        assert len(errors) == 1
+        assert "team_digests.platform" in errors[0].message
+        assert "mapping" in errors[0].message

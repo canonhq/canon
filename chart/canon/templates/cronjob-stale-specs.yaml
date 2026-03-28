@@ -1,0 +1,60 @@
+{{- if .Values.staleSpecsCronJob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "canon.fullname" . }}-stale-specs
+  labels:
+    {{- include "canon.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.staleSpecsCronJob.schedule | quote }}
+  concurrencyPolicy: {{ .Values.staleSpecsCronJob.concurrencyPolicy }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "canon.selectorLabels" . | nindent 12 }}
+        spec:
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ include "canon.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          restartPolicy: OnFailure
+          containers:
+            - name: stale-specs
+              image: {{ include "canon.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["python", "-m", "canon.cron.stale_specs"]
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "canon.fullname" . }}
+                - secretRef:
+                    name: {{ include "canon.githubSecretName" . }}
+                - secretRef:
+                    name: {{ include "canon.anthropicSecretName" . }}
+              {{- if or .Values.secrets.neon.databaseUrl .Values.secrets.neon.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.neonSecretName" . }}
+              {{- end }}
+              {{- if or .Values.secrets.posthog.apiKey .Values.secrets.posthog.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.posthogSecretName" . }}
+              {{- end }}
+              {{- if or .Values.secrets.slack.webhookUrl .Values.secrets.slack.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.slackSecretName" . }}
+              {{- end }}
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir: {}
+{{- end }}

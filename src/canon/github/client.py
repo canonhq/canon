@@ -370,6 +370,14 @@ class GitHubClient:
         """List reviews on a pull request."""
         return await self._get_list(f"/repos/{owner}/{repo}/pulls/{pull_number}/reviews")
 
+    async def get_collaborator_permission(self, owner: str, repo: str, username: str) -> str:
+        """Get a user's permission level on a repository.
+
+        Returns one of: admin, maintain, write, triage, read, none.
+        """
+        data = await self._get(f"/repos/{owner}/{repo}/collaborators/{username}/permission")
+        return data.get("permission", "none")
+
     # ─── Doc PRs (Git Data API) ───────────────────────
 
     async def _get_default_branch(self, owner: str, repo: str) -> str:
