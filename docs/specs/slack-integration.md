@@ -100,17 +100,18 @@ All responses use Slack Block Kit:
 
 ### Acceptance Criteria
 
-- [ ] `/canon` slash command registered and dispatching to subcommand handlers
-- [ ] `status` subcommand returns spec details with section-level AC progress
-- [ ] `list` subcommand returns filtered spec list with status badges, max 10 results
-- [ ] `search` subcommand returns keyword-matched specs with snippet context
-- [ ] `coverage` subcommand returns coverage metrics with optional team filter
-- [ ] `dashboard` subcommand posts a visible, pinnable coverage summary to the channel
-- [ ] `review` subcommand creates a review request message with approve/reject buttons
+- [x] `/canon` slash command registered and dispatching to subcommand handlers
+<!-- canon:realized-in:PR#475 file:src/canon/slack/commands.py -->
+- [x] `status` subcommand returns spec details with section-level AC progress
+- [x] `list` subcommand returns filtered spec list with status badges, max 10 results
+- [x] `search` subcommand returns keyword-matched specs with snippet context
+- [x] `coverage` subcommand returns coverage metrics with optional team filter
+- [x] `dashboard` subcommand posts a visible, pinnable coverage summary to the channel
+- [x] `review` subcommand creates a review request message with approve/reject buttons
 - [ ] `help` subcommand lists all available commands with descriptions
-- [ ] Unknown subcommands return an ephemeral help message
-- [ ] Spec-not-found errors suggest similar spec names via fuzzy matching
-- [ ] All responses except `dashboard` are ephemeral
+- [x] Unknown subcommands return an ephemeral help message
+- [x] Spec-not-found errors suggest similar spec names via fuzzy matching
+- [x] All responses except `dashboard` are ephemeral
 - [ ] Response time under 3 seconds for all structured commands (Slack's 3s timeout for slash commands; use `ack()` + deferred response for slower queries)
 
 ## 4. Natural Language Queries via @canon
