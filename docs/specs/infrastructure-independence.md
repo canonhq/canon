@@ -56,7 +56,8 @@ Set up Terraform project structure and state management in this repo.
 
 - [x] `infra/` directory with Terraform modules for each concern
 <!-- canon:realized-in:audit file:infra/main.tf -->
-- [x] Terraform state stored in DigitalOcean Spaces (S3-compatible) or Terraform Cloud
+<!-- canon:realized-in:PR#480 file:infra/main.tf -->
+- [x] Terraform state stored in DigitalOcean Spaces (S3-compatible) or Terraform Cloud. Kubernetes providers use data source lookups instead of module outputs to avoid chicken-and-egg dependency issues during resource imports.
 <!-- canon:realized-in:audit file:infra/main.tf:16-27 -->
 - [x] `infra/README.md` documenting how to init, plan, apply
 <!-- canon:realized-in:audit file:infra/README.md -->
@@ -75,7 +76,7 @@ Set up Terraform project structure and state management in this repo.
 
 <!-- canon:system:2 status:in_progress -->
 
-Provision Canon's own Kubernetes cluster on DigitalOcean.
+Provision Canon's own Kubernetes cluster on DigitalOcean. During migration, Canon uses the existing gv-shared cluster and registry to avoid disruption. A dedicated cluster and registry will be provisioned in a future phase.
 
 ### Acceptance Criteria
 
