@@ -1,6 +1,6 @@
 {
   "name": "canon",
-  "description": "AI-native spec documentation — verify code against specs, track coverage, maintain living docs. Powered by Canon.",
+  "description": "AI-native spec-driven development — plan features from specs, implement with AC traceability, verify code against acceptance criteria, and track coverage. Powered by Canon.",
   "version": "0.1.0",
   "author": {
     "name": "Gerner Ventures"

@@ -114,6 +114,20 @@ Without MCP, insert realization comments directly:
 <!-- canon:realized-in:PR#42 file:src/auth/reset.py:15-30 -->
 ```
 
+## Companion Skill Integration
+
+Before implementing each AC, check if development discipline skills are available:
+
+- **TDD available?** If a skill matching "test-driven" is in the session, suggest
+  writing a failing test for the AC before implementing. This is recommended but
+  not required — Canon suggests, doesn't enforce.
+- **Debugging available?** If implementation fails and a skill matching "debugging"
+  or "systematic-debugging" is in the session, suggest invoking it for root cause
+  investigation before retrying.
+
+Canon's spec context is available to any skill via the Canon MCP server — external
+skills can call `mcp__canon__get_section` to understand what they're implementing.
+
 ## Workflow Tips
 
 - Always read the full section content before implementing — context matters
@@ -121,3 +135,4 @@ Without MCP, insert realization comments directly:
 - Keep ACs atomic — implement and verify one at a time
 - If an AC is unclear, ask the user for clarification before implementing
 - Use `canon verify` to double-check implementation coverage
+- For multi-task plans, use `/canon:implement` instead — it orchestrates this workflow across tasks

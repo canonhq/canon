@@ -4,6 +4,11 @@
 # Target: < 2 seconds.
 set -euo pipefail
 
+# Guard: CLAUDE_PROJECT_DIR must be set by the plugin host
+if [ -z "${CLAUDE_PROJECT_DIR:-}" ]; then
+  exit 0
+fi
+
 CANON_YAML="${CLAUDE_PROJECT_DIR}/CANON.yaml"
 
 # Quick exit if not a Canon repo
@@ -20,22 +25,63 @@ fi
 # Persist CANON_REPO env var for downstream hooks.
 # CLAUDE_ENV_FILE is set by Claude Code during SessionStart events.
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-  echo "export CANON_REPO=true" >> "$CLAUDE_ENV_FILE"
+  echo "export CANON_REPO=true" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true
 fi
 
-# Build awareness message
+# Build core skill discovery message first (before any slow operations)
 msg="This repo uses Canon specs for spec-driven development."
-msg="$msg Use Canon MCP tools (search, get_spec, list_specs) or /canon skills for spec context."
 
-# Try to get quick stats if canon CLI is available (timeout 2s)
+# Detect whether specs exist and adjust messaging
+has_specs=false
+if [ -d "${CLAUDE_PROJECT_DIR}/docs/specs" ]; then
+  has_specs=true
+fi
+
+# Try to get quick stats if canon CLI is available
+# Use portable timeout: check for GNU timeout, then macOS gtimeout, then skip
+spec_count=""
 if command -v canon >/dev/null 2>&1; then
-  stats=$(timeout 2 canon status --json 2>/dev/null || true)
+  timeout_cmd=""
+  if command -v timeout >/dev/null 2>&1; then
+    timeout_cmd="timeout 2"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    timeout_cmd="gtimeout 2"
+  fi
+  stats=$($timeout_cmd canon status --json 2>/dev/null || true)
   if [ -n "$stats" ]; then
     spec_count=$(echo "$stats" | grep -o '"total_specs":[0-9]*' | grep -o '[0-9]*' || true)
-    if [ -n "$spec_count" ]; then
-      msg="$msg ($spec_count specs tracked)"
-    fi
   fi
+fi
+
+if [ -n "$spec_count" ]; then
+  msg="$msg ($spec_count specs tracked)"
+fi
+
+if [ "$has_specs" = true ]; then
+  msg="$msg
+
+Canon skills:
+  /canon:context   — Load spec context for current task (start here)
+  /canon:task      — Pick up a single task, implement its ACs
+  /canon:implement — Execute a multi-task plan end-to-end
+  /canon:plan      — Plan: explore → propose → spec → design → tasks → implementation plan
+  /canon:new       — Create a new spec, proposal, ADR, or design doc
+  /canon:worktree  — Create isolated git worktree for spec work
+  /canon:branch    — Complete a branch: verify, update statuses, merge/PR
+  /canon:verify    — Check if code satisfies spec acceptance criteria
+  /canon:review    — Review changes against all documentation
+  /canon:update    — Update spec statuses from code evidence
+  /canon:audit     — Full spec audit with ticket sync
+  /canon:status    — Spec coverage dashboard
+  /canon:meta      — Skill discovery: find the right Canon skill for your task
+
+Use /canon:context before starting work."
+else
+  msg="$msg
+
+No specs found yet. Run /canon:new to create your first spec, or /canon:plan to plan a new feature.
+
+Canon skills: context, task, implement, plan, new, worktree, branch, verify, review, update, audit, status, meta."
 fi
 
 echo "$msg"

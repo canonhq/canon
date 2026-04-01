@@ -15,7 +15,7 @@ Build a comprehensive developer documentation site for Canon using VitePress, co
 
 ## 1. Background
 
-Canon is a spec-driven development platform with a growing surface area: a FastAPI backend, Vue 3 frontend, CLI with 8 subcommands, MCP server with 11 tools, 8 Claude Code skills, GitHub App webhooks, ticket sync adapters, and a structured spec parser. Despite being a documentation-first product, Canon lacks a proper developer documentation site.
+Canon is a spec-driven development platform with a growing surface area: a FastAPI backend, Vue 3 frontend, CLI with 8 subcommands, MCP server with 11 tools, 13 Claude Code skills, GitHub App webhooks, ticket sync adapters, and a structured spec parser. Despite being a documentation-first product, Canon lacks a proper developer documentation site.
 
 Current documentation lives in scattered locations:
 - `docs/vision.md`, `docs/agent-behavior.md`, `docs/self-hosting.md` — good conceptual docs, but not discoverable

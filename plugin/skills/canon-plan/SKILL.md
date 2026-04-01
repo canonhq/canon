@@ -3,7 +3,8 @@ name: canon-plan
 description: >
   Spec-driven planning workflow inspired by OpenSpec. Use when starting a new
   feature or project to go from exploration through spec creation to
-  implementation tasks. Follows the explore-propose-spec-design-tasks lifecycle.
+  implementation tasks and detailed implementation plans. Follows the
+  explore-propose-spec-design-tasks-plan lifecycle.
 allowed-tools:
   - Read
   - Write
@@ -84,9 +85,59 @@ Break the spec into implementation tasks:
 
 Present as a task list the user can use directly or sync to their ticket system.
 
+## Phase 6: Implementation Plan
+
+Optionally generate a detailed, executable plan that `canon-implement` can run.
+This goes beyond Phase 5's task list — each task must have enough detail for a
+subagent to execute without additional context.
+
+### Plan File Location
+
+Save to: `docs/canon/plans/YYYY-MM-DD-<spec-slug>.md`
+
+### Plan Header (required)
+
+```markdown
+# Implementation Plan: <Feature Name>
+
+**Spec:** `docs/specs/<spec-file>.md`
+**Sections covered:** <list of section IDs>
+**Dependencies:** <external dependencies or setup needed>
+**Setup commands:** <commands to run before starting>
+```
+
+### Task Structure (required per task)
+
+Each task must include:
+1. **Spec reference** — section ID and specific ACs this task addresses
+2. **File paths** — exact files to create or modify
+3. **What to change** — concrete description of the implementation approach
+4. **Complexity** — S (< 30 min), M (30-60 min), L (> 60 min)
+5. **Dependencies** — which other tasks must complete first
+
+### Quality Gates
+
+- NO placeholders: "TBD", "implement later", "add logic here" are forbidden
+- Every task must map to at least one spec AC
+- Every AC in scope must be covered by at least one task
+
+### Self-Review Checklist
+
+Before presenting the plan to the user:
+- [ ] Every task has exact file paths
+- [ ] Every AC in scope is covered by a task
+- [ ] Dependencies between tasks are identified
+- [ ] No placeholder language exists
+- [ ] Setup commands are complete and tested
+
+### Handoff
+
+Once the plan is approved, the user can execute it with `/canon:implement`.
+
 ## Workflow Tips
 
 - Don't skip exploration — understanding context prevents rework
 - Keep ACs specific and testable
 - Design docs should live alongside specs, not separately
 - Tasks should map back to spec sections for traceability
+- Phase 6 is optional — use it when the work is complex enough to need subagent execution

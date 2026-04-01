@@ -20,16 +20,26 @@ Or from inside a Claude Code session:
 
 ## Skills
 
+### Spec Management
 | Skill | Description |
 |-------|-------------|
 | `/canon:context` | Load spec context for your current task |
-| `/canon:task` | Pick up a task, implement ACs, mark done |
-| `/canon:verify` | Verify code against spec acceptance criteria |
 | `/canon:new` | Create a new spec from template |
-| `/canon:review` | Review changes against all documentation |
 | `/canon:status` | Show spec coverage dashboard |
-| `/canon:plan` | Spec-driven planning workflow |
+| `/canon:review` | Review changes against all documentation |
 | `/canon:update` | Update spec statuses from code evidence |
+| `/canon:audit` | Full spec audit with ticket sync |
+| `/canon:verify` | Verify code against spec acceptance criteria (report or gate mode) |
+
+### Development Execution
+| Skill | Description |
+|-------|-------------|
+| `/canon:plan` | Spec-driven planning: explore → propose → spec → design → tasks → implementation plan |
+| `/canon:task` | Pick up a single task, implement ACs, mark done |
+| `/canon:implement` | Execute a multi-task implementation plan with spec traceability |
+| `/canon:worktree` | Create an isolated git worktree for spec-driven work |
+| `/canon:branch` | Complete a branch: verify, update spec statuses, merge/PR/cleanup |
+| `/canon:meta` | Skill discovery — find the right Canon skill for your task |
 
 ## How It Works
 
@@ -97,3 +107,23 @@ agents:
 ```
 
 Run `canon setup` or use the GitHub Action to set up a new repo.
+
+## Agents
+
+| Agent | Description |
+|-------|-------------|
+| `canon-reviewer` | Spec-aware code review — checks changes against acceptance criteria, categorizes findings as Spec Gap, Spec Conflict, Quality Issue, or Suggestion |
+
+## Integration with External Plugins
+
+Canon's spec context is available to any Claude Code skill via the Canon MCP server. External plugins (like superpowers for TDD/debugging) can query spec context:
+
+- `mcp__canon__get_spec` — load a full spec with all sections and ACs
+- `mcp__canon__get_section` — load a specific section by ID
+- `mcp__canon__search` — find specs relevant to current work
+
+This means TDD skills can know *what* they're testing (the AC), debugging skills can know *what should work* (the spec), and code review skills can check *spec compliance* (not just code style).
+
+### Recommended Companion Plugins
+
+- **superpowers** — TDD, systematic debugging, verification discipline

@@ -32,6 +32,8 @@ Or for a specific section:
 
 ```bash
 canon verify --section <id>
+canon verify --gate              # Pass/fail gate mode
+canon verify --gate --section 2.1  # Gate a specific section
 ```
 
 This greps the codebase for keywords from each unchecked AC and classifies them
@@ -74,6 +76,40 @@ If MCP is available, offer to:
 - Record realization evidence: `mcp__canon__add_realization`
 
 Ask the user before making any writes.
+
+## Gate Mode
+
+When invoked with `--gate` (or called from another Canon skill like `canon-implement`
+or `canon-branch`), verify acts as a pass/fail gate rather than a report.
+
+### Gate Checks
+
+1. **AC Coverage** — every linked AC must have realization evidence
+2. **Test Suite** — project tests must pass (`uv run pytest`, `npm test`, etc.)
+3. **No Conflicts** — no ACs classified as "Conflicting"
+
+### Gate Output
+
+Pass:
+```
+PASS: all ACs realized, tests pass, no conflicts
+```
+
+Fail:
+```
+FAIL:
+  - 2 ACs lack realization evidence: [list]
+  - Tests failing: [summary]
+  - 1 AC conflict: [detail]
+```
+
+### When Called from Other Skills
+
+Gate mode is the default when canon-verify is invoked by:
+- `canon-implement` (after each task)
+- `canon-branch` (before merge/PR)
+
+Report mode (Steps 1-4 above) remains the default for direct user invocation.
 
 ## Spec Format Reference
 
