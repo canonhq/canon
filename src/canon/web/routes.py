@@ -631,18 +631,27 @@ def _build_session_dict(
     settings: _Settings,
 ) -> dict:
     """Build the session data dict shared by api_session and _serve_spa."""
-    permissions: list[str] = []
-    if user:
+    # Use permissions from the session (set during login from JWT claims or DB role).
+    # Fall back to basic permissions for anonymous/unauthenticated users.
+    permissions: list[str] = list(user.get("permissions", [])) if user else []
+
+    # Ensure baseline permissions: all users get specs:read, GitHub-connected
+    # users get specs:write (preserves pre-existing behavior for sessions that
+    # may not have these permissions stored).
+    if user and "specs:read" not in permissions:
         permissions.append("specs:read")
-        if github_user:
-            permissions.append("specs:write")
-            # Only grant admin to explicitly configured GitHub logins
-            login = github_user.get("login", "")
-            admin_logins = {
-                s.strip().lower() for s in settings.web_admin_logins.split(",") if s.strip()
-            }
-            if login and login.lower() in admin_logins:
-                permissions.append("specs:admin")
+    if user and github_user and "specs:write" not in permissions:
+        permissions.append("specs:write")
+
+    # web_admin_logins is an escape hatch that supplements session permissions
+    # (e.g. grant specs:admin to specific GitHub logins without DB/JWT changes).
+    if user and github_user:
+        login = github_user.get("login", "")
+        admin_logins = {
+            s.strip().lower() for s in settings.web_admin_logins.split(",") if s.strip()
+        }
+        if login and login.lower() in admin_logins and "specs:admin" not in permissions:
+            permissions.append("specs:admin")
 
     return {
         "user": user,

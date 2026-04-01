@@ -1,10 +1,16 @@
-"""Adapter factory — auto-detect from config or env vars."""
+"""Adapter factory — auto-detect from config, DB, or env vars.
+
+Credential resolution order (highest priority first):
+1. CANON.yaml auth_profiles (per-repo overrides)
+2. DB org_integrations (per-org OAuth credentials from Settings UI)
+3. Environment variables (self-hosted / env-var deployments)
+"""
 
 from __future__ import annotations
 
 import logging
 import os
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from canon.sync.adapters.base import TicketAdapter
 from canon.sync.adapters.github_issues import GitHubAdapter
@@ -12,6 +18,9 @@ from canon.sync.adapters.jira import JiraAdapter
 from canon.sync.adapters.linear import LinearAdapter
 from canon.sync.mapping import AuthProfile, TicketSystemConfig
 from canon.sync.models import GitHubConfig, JiraConfig, LinearConfig
+
+if TYPE_CHECKING:
+    from canon.db.integration_store import IntegrationStore
 
 logger = logging.getLogger(__name__)
 
@@ -151,3 +160,45 @@ def _resolve_env_prefix(
     if prefix is None:
         raise ValueError(f"No default env prefix for system {config.system!r}")
     return prefix
+
+
+async def from_org(
+    org_login: str,
+    system: Literal["jira", "linear", "github"],
+    integration_store: IntegrationStore,
+    *,
+    ticket_project: str = "",
+) -> TicketAdapter | None:
+    """Create an adapter using DB-stored OAuth credentials for an org.
+
+    Falls back to env vars if no DB integration exists.
+    Resolution: DB org_integrations → env vars.
+    """
+    config = await integration_store.get_integration_config(org_login, system)
+
+    if config and system == "jira":
+        return JiraAdapter(
+            JiraConfig(
+                auth_method="oauth",
+                access_token=config["access_token"],
+                refresh_token=config.get("refresh_token", ""),
+                cloud_id=config["cloud_id"],
+            )
+        )
+
+    if config and system == "linear":
+        return LinearAdapter(LinearConfig(access_token=config["access_token"]))
+
+    if config and system == "github":
+        # GitHub Issues via DB config (stores default repo selection)
+        default_owner = config.get("default_owner", "")
+        default_repo = config.get("default_repo", "")
+        token = config.get("token", "")
+        if token and default_owner and default_repo:
+            return GitHubAdapter(
+                GitHubConfig(token=token, default_owner=default_owner, default_repo=default_repo)
+            )
+
+    # Fall back to env var detection
+    logger.debug("No DB integration for %s/%s, falling back to env vars", org_login, system)
+    return create_adapter(ticket_project=ticket_project, system=system)

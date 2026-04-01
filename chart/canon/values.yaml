@@ -190,6 +190,17 @@ secrets:
     from: ""
     existingSecret: ""
 
+  ## @param secrets.integrations.existingSecret Use existing secret for OAuth integration credentials
+  integrations:
+    jiraOauthClientId: ""
+    jiraOauthClientSecret: ""
+    linearOauthClientId: ""
+    linearOauthClientSecret: ""
+    githubOauthClientId: ""
+    githubOauthClientSecret: ""
+    canonBaseUrl: ""
+    existingSecret: ""
+
 ## @section Application configuration
 ## @param config.port Server port
 ## @param config.logLevel Log level (debug, info, warning, error)

@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     # When unconfigured, the /webhooks/asana endpoint returns 503.
     asana_webhook_secret: str = ""
 
+    # Base URL for constructing webhook callback URLs during OAuth flows.
+    # Example: https://canonhq.co
+    canon_base_url: str = ""
+
     # Database (optional — app works without it)
     database_url: str = ""
 
@@ -126,6 +130,14 @@ class Settings(BaseSettings):
     @property
     def github_oauth_enabled(self) -> bool:
         return bool(self.github_oauth_client_id and self.github_oauth_client_secret)
+
+    # Jira Cloud OAuth 2.0 (3LO) — for org-level Jira integration
+    jira_oauth_client_id: str = ""
+    jira_oauth_client_secret: str = ""
+
+    # Linear OAuth 2.0 — for org-level Linear integration
+    linear_oauth_client_id: str = ""
+    linear_oauth_client_secret: str = ""
 
     # PostHog analytics
     posthog_key: str = ""

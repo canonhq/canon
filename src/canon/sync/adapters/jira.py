@@ -35,14 +35,26 @@ class JiraValidationError(Exception):
 class JiraAdapter:
     def __init__(self, config: JiraConfig) -> None:
         self.config = config
-        creds = base64.b64encode(f"{config.email}:{config.api_token}".encode()).decode()
-        self._client = httpx.AsyncClient(
-            base_url=f"https://{config.host}/rest/api/3",
-            headers={
+        if config.auth_method == "oauth" and config.access_token:
+            # OAuth mode: use Bearer token with Atlassian cloud API
+            base_url = f"https://api.atlassian.com/ex/jira/{config.cloud_id}/rest/api/3"
+            headers = {
+                "Authorization": f"Bearer {config.access_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+        else:
+            # API token mode (default)
+            creds = base64.b64encode(f"{config.email}:{config.api_token}".encode()).decode()
+            base_url = f"https://{config.host}/rest/api/3"
+            headers = {
                 "Authorization": f"Basic {creds}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-            },
+            }
+        self._client = httpx.AsyncClient(
+            base_url=base_url,
+            headers=headers,
             timeout=30.0,
         )
 

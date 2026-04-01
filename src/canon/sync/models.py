@@ -99,13 +99,25 @@ class SyncResult(BaseModel):
 
 
 class JiraConfig(BaseModel):
-    host: str
-    email: str
-    api_token: str
+    host: str = ""
+    email: str = ""
+    api_token: str = ""
+    # OAuth mode fields (used when auth_method="oauth")
+    auth_method: str = "api_token"  # "api_token" or "oauth"
+    access_token: str = ""
+    refresh_token: str = ""
+    cloud_id: str = ""
 
 
 class LinearConfig(BaseModel):
-    api_key: str
+    api_key: str = ""
+    # OAuth mode — access_token works identically to api_key
+    access_token: str = ""
+
+    @property
+    def effective_token(self) -> str:
+        """Return whichever token is set (api_key takes precedence)."""
+        return self.api_key or self.access_token
 
 
 class GitHubConfig(BaseModel):

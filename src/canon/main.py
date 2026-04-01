@@ -22,6 +22,7 @@ from .auth.api_key_routes import api_key_router
 from .auth.device_routes import device_router
 from .auth.github_routes import github_auth_router
 from .auth.middleware import AuthMiddleware
+from .auth.oauth_integrations import oauth_integration_router
 from .auth.refresh_routes import refresh_router
 from .auth.routes import auth_router
 from .billing.routes import router as billing_router
@@ -30,7 +31,9 @@ from .db import (
     AgentStore,
     ErrorStore,
     InstallationRegistry,
+    IntegrationStore,
     SessionStore,
+    UserConnectionStore,
     UserStore,
     close_pool,
     create_pool,
@@ -42,6 +45,7 @@ from .settings import Settings
 from .web.analytics_routes import analytics_router
 from .web.cache import TTLCache
 from .web.editor_routes import editor_router
+from .web.integration_routes import integration_router
 from .web.middleware import CacheControlMiddleware, RateLimitMiddleware, RequestLoggingMiddleware
 from .web.profile_routes import profile_router
 from .web.routes import app_router, spa_router
@@ -190,6 +194,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.agent_store = None
     app.state.user_store = None
     app.state.session_store = None
+    app.state.connection_store = None
+    app.state.integration_store = None
     app.state.stripe_client = None
     app.state.billing_service = None
     if settings.database_url:
@@ -202,6 +208,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             app.state.error_store = ErrorStore(pool)
             app.state.user_store = UserStore(pool)
             app.state.session_store = SessionStore(pool)
+            encryption_key = settings.byok_encryption_key
+            if encryption_key:
+                app.state.connection_store = UserConnectionStore(pool, encryption_key)
+                app.state.integration_store = IntegrationStore(pool, encryption_key)
             logger.info("Database pool initialised")
 
             # Billing (optional — requires Stripe keys + DB)
@@ -495,6 +505,7 @@ app.include_router(auth_router)
 app.include_router(device_router)
 app.include_router(refresh_router)
 app.include_router(github_auth_router)
+app.include_router(oauth_integration_router)
 app.include_router(api_key_router)
 
 # Mount static files — check source tree first, then Docker workdir
@@ -539,6 +550,7 @@ app.include_router(app_router)
 app.include_router(analytics_router)
 app.include_router(editor_router)
 app.include_router(profile_router)
+app.include_router(integration_router)
 app.include_router(ticket_router)
 # SPA catch-all must be last — serves Vue app for unmatched /app/* routes
 app.include_router(spa_router)

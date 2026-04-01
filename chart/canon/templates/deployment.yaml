@@ -90,6 +90,10 @@ spec:
             - secretRef:
                 name: {{ include "canon.smtpSecretName" . }}
           {{- end }}
+          {{- if or .Values.secrets.integrations.existingSecret .Values.secrets.integrations.jiraOauthClientId }}
+            - secretRef:
+                name: {{ .Values.secrets.integrations.existingSecret | default (printf "%s-integrations" (include "canon.fullname" .)) }}
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

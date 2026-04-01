@@ -23,9 +23,12 @@ LINEAR_API = "https://api.linear.app/graphql"
 class LinearAdapter:
     def __init__(self, config: LinearConfig) -> None:
         self.config = config
+        token = config.effective_token
         self._client = httpx.AsyncClient(
             headers={
-                "Authorization": config.api_key,
+                "Authorization": f"Bearer {token}"
+                if config.access_token and not config.api_key
+                else token,
                 "Content-Type": "application/json",
             },
         )
