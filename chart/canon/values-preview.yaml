@@ -45,6 +45,12 @@ coverageSnapshotCronJob:
   enabled: false
 weeklyDigestCronJob:
   enabled: false
+staleSpecsCronJob:
+  enabled: false
+teamDigestCronJob:
+  enabled: false
+auditRetentionCronJob:
+  enabled: false
 
 config:
   environment: "preview"

@@ -17,6 +17,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import ClientDisconnect
 
 from . import analytics, otel_logging
+from .admin.audit import AuditStore
+from .admin.routes import router as admin_router
+from .admin.store import AdminStore
 from .alerts.slack import SlackAlerter
 from .auth.api_key_routes import api_key_router
 from .auth.device_routes import device_router
@@ -198,6 +201,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.integration_store = None
     app.state.stripe_client = None
     app.state.billing_service = None
+    app.state.admin_store = None
+    app.state.audit_store = None
     if settings.database_url:
         try:
             pool = await create_pool(settings.database_url)
@@ -212,6 +217,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             if encryption_key:
                 app.state.connection_store = UserConnectionStore(pool, encryption_key)
                 app.state.integration_store = IntegrationStore(pool, encryption_key)
+            app.state.admin_store = AdminStore(
+                pool,
+                provider=app.state.oidc_provider,
+                cache=app.state.cache,
+            )
+            app.state.audit_store = AuditStore(pool)
             logger.info("Database pool initialised")
 
             # Billing (optional — requires Stripe keys + DB)
@@ -552,6 +563,8 @@ app.include_router(editor_router)
 app.include_router(profile_router)
 app.include_router(integration_router)
 app.include_router(ticket_router)
+# Admin API router must come before the SPA catch-all
+app.include_router(admin_router)
 # SPA catch-all must be last — serves Vue app for unmatched /app/* routes
 app.include_router(spa_router)
 

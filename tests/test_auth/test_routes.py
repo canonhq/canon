@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import jwt as pyjwt
 import pytest
 from fastapi.responses import RedirectResponse
 from httpx import ASGITransport, AsyncClient
@@ -117,7 +116,7 @@ class TestLogin:
 
 class TestCallback:
     async def test_callback_sets_session(self, client: AsyncClient):
-        """GET /auth/callback should exchange code and redirect to /app."""
+        """GET /auth/callback without org context redirects to /app/no-org."""
         with patch("canon.auth.routes.oauth") as mock_oauth:
             mock_oauth.auth0.authorize_access_token = AsyncMock(
                 return_value={
@@ -131,26 +130,28 @@ class TestCallback:
             )
             resp = await client.get("/auth/callback")
             assert resp.status_code == 307
-            assert resp.headers["location"] == "/app"
+            # No org_id in token and no GitHub membership → no-org onboarding
+            assert resp.headers["location"] == "/app/no-org"
 
     async def test_callback_with_org_redirects_to_org_dashboard(self):
-        """Callback with org context redirects to /app/{org}/ via login_org."""
+        """Callback with org_id in token + registry resolves to /app/{org}/."""
+        from types import SimpleNamespace
+
         from starlette.testclient import TestClient
 
         with (
             patch("canon.auth.routes.oauth") as mock_oauth,
+            patch("canon.auth.routes.validate_access_token") as mock_validate,
             patch("canon.main._get_client", return_value=_mock_client()),
         ):
             mock_oauth.auth0.authorize_redirect = AsyncMock(
                 return_value=RedirectResponse("https://test.us.auth0.com/authorize"),
             )
-            # Build a real JWT string with org_id + permissions claims
-            # (signature verification is skipped in the callback)
-            _access_token = pyjwt.encode(
-                {"org_id": "org_abc", "permissions": ["specs:read", "specs:write"]},
-                "test-secret",
-                algorithm="HS256",
-            )
+            # Mock validate_access_token to return claims directly
+            mock_validate.return_value = {
+                "org_id": "org_abc",
+                "permissions": ["specs:read", "specs:write"],
+            }
             mock_oauth.auth0.authorize_access_token = AsyncMock(
                 return_value={
                     "userinfo": {
@@ -159,12 +160,11 @@ class TestCallback:
                         "name": "Test",
                         "picture": "",
                     },
-                    "access_token": _access_token,
+                    "access_token": "fake-jwt-token",
                 }
             )
 
             with TestClient(app) as tc:
-                # Set settings AFTER TestClient enters (lifespan overwrites app.state.settings)
                 app.state.settings = Settings(
                     web_org="test-org",
                     auth0_domain="test.us.auth0.com",
@@ -172,14 +172,20 @@ class TestCallback:
                     auth0_client_secret="test-client-secret",
                     auth0_audience="https://canon.example.com/api",
                 )
-                # Login with org param — this sets login_org in session
+                # Set up a mock registry so org_id → org_login resolution works.
+                mock_registry = AsyncMock()
+                mock_registry.get_installation_by_oidc_org = AsyncMock(
+                    return_value=SimpleNamespace(org_login="my-org", oidc_org_id="org_abc"),
+                )
+                app.state.registry = mock_registry
+
+                # Login with org param
                 resp = tc.get("/auth/login?org=my-org", follow_redirects=False)
                 assert resp.status_code == 307
 
-                # Callback — should read login_org from session
+                # Callback — org_id in JWT resolves via registry to org_login
                 resp = tc.get("/auth/callback", follow_redirects=False)
                 assert resp.status_code == 307
-                # Should redirect to org dashboard since login_org was set
                 assert "/app/my-org/" in resp.headers["location"]
 
     async def test_callback_upserts_user_when_store_available(self):
@@ -217,7 +223,7 @@ class TestCallback:
         app.state.user_store = None
 
     async def test_callback_redirects_new_user_to_welcome(self):
-        """New user (is_new=True) gets redirected to /app/{org}/welcome."""
+        """New user (is_new=True) with verified org gets redirected to /app/{org}/welcome."""
         from starlette.testclient import TestClient
 
         mock_user_store = AsyncMock()
@@ -225,6 +231,11 @@ class TestCallback:
 
         with (
             patch("canon.auth.routes.oauth") as mock_oauth,
+            patch(
+                "canon.auth.github_membership.resolve_org_from_github",
+                new_callable=AsyncMock,
+                return_value=["my-org"],
+            ),
             patch("canon.main._get_client", return_value=_mock_client()),
         ):
             mock_oauth.auth0.authorize_redirect = AsyncMock(
@@ -237,6 +248,10 @@ class TestCallback:
                         "email": "new@example.com",
                         "name": "New User",
                         "picture": "",
+                        "https://canonhq.co/github": {
+                            "login": "newuser",
+                            "token": "ghp_test",
+                        },
                     },
                 }
             )
@@ -250,9 +265,9 @@ class TestCallback:
                     auth0_audience="https://canon.example.com/api",
                 )
                 app.state.user_store = mock_user_store
-                # Login with org param — sets login_org in session
+                app.state.registry = AsyncMock()
                 tc.get("/auth/login?org=my-org", follow_redirects=False)
-                # Callback should redirect new user to welcome
+                # Callback — GitHub membership resolves org, new user goes to welcome
                 resp = tc.get("/auth/callback", follow_redirects=False)
                 assert resp.status_code == 307
                 assert "/app/my-org/welcome" in resp.headers["location"]
@@ -260,7 +275,7 @@ class TestCallback:
             app.state.user_store = None
 
     async def test_callback_redirects_returning_user_to_dashboard(self):
-        """Returning user (is_new=False) gets redirected to /app/{org}/."""
+        """Returning user (is_new=False) with verified org gets redirected to /app/{org}/."""
         from starlette.testclient import TestClient
 
         mock_user_store = AsyncMock()
@@ -268,6 +283,11 @@ class TestCallback:
 
         with (
             patch("canon.auth.routes.oauth") as mock_oauth,
+            patch(
+                "canon.auth.github_membership.resolve_org_from_github",
+                new_callable=AsyncMock,
+                return_value=["my-org"],
+            ),
             patch("canon.main._get_client", return_value=_mock_client()),
         ):
             mock_oauth.auth0.authorize_redirect = AsyncMock(
@@ -280,6 +300,10 @@ class TestCallback:
                         "email": "existing@example.com",
                         "name": "Existing User",
                         "picture": "",
+                        "https://canonhq.co/github": {
+                            "login": "existinguser",
+                            "token": "ghp_test",
+                        },
                     },
                 }
             )
@@ -293,6 +317,7 @@ class TestCallback:
                     auth0_audience="https://canon.example.com/api",
                 )
                 app.state.user_store = mock_user_store
+                app.state.registry = AsyncMock()
                 tc.get("/auth/login?org=my-org", follow_redirects=False)
                 resp = tc.get("/auth/callback", follow_redirects=False)
                 assert resp.status_code == 307
@@ -382,6 +407,11 @@ class TestCallback:
 
         with (
             patch("canon.auth.routes.oauth") as mock_oauth,
+            patch(
+                "canon.auth.github_membership.resolve_org_from_github",
+                new_callable=AsyncMock,
+                return_value=["test-org"],
+            ),
             patch("canon.main._get_client", return_value=_mock_client()),
         ):
             mock_oauth.auth0.authorize_access_token = AsyncMock(
@@ -407,6 +437,7 @@ class TestCallback:
                     auth0_client_id="test-client-id",
                     auth0_client_secret="test-client-secret",
                 )
+                app.state.registry = AsyncMock()
                 tc.get("/auth/callback", follow_redirects=False)
 
                 # Session endpoint exposes github_user — verify it was populated

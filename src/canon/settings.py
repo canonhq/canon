@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -233,5 +233,11 @@ class Settings(BaseSettings):
         )
 
     cache_ttl_seconds: int = 300
+
+    # Deployment mode — controls cloud vs self-hosted feature gating.
+    deployment_mode: Literal["cloud", "self_hosted", "development"] = "development"
+
+    # Admin audit log retention
+    admin_audit_retention_days: int = Field(default=90, ge=1)
 
     model_config = {"env_prefix": "", "case_sensitive": False}

@@ -162,9 +162,33 @@ async def callback(request: Request):
                 except Exception:
                     logger.debug("Failed to resolve org_id %s", org_id, exc_info=True)
 
-    # Fallback: use login_org from session if we couldn't resolve from token
+    # Discard the redirect hint — it was used ONLY for the old (broken)
+    # login_org→org_login fallback.  We must still pop it to clean up the
+    # session, but never use it as proof of org membership.
+    request.session.pop("login_org", "")
+
+    # GitHub membership auto-join: if the token didn't resolve an org,
+    # check whether the user's GitHub identity belongs to an installed org.
+    # Best-effort — errors are caught inside resolve_org_from_github.
+    # Always clear stale pending_org_choices from any prior login attempt
+    # to prevent session data leaking between users on the same device.
+    request.session.pop("pending_org_choices", None)
+    registry = getattr(request.app.state, "registry", None)
     if not org_login:
-        org_login = request.session.pop("login_org", "")
+        github_claim = userinfo.get("https://canonhq.co/github") or userinfo.get(
+            "https://specwright.dev/github"
+        )
+        gh_token = github_claim.get("token", "") if isinstance(github_claim, dict) else ""
+        if gh_token and registry:
+            from .github_membership import resolve_org_from_github
+
+            matched_orgs = await resolve_org_from_github(gh_token, registry)
+            if len(matched_orgs) == 1:
+                org_login = matched_orgs[0]
+            elif len(matched_orgs) > 1:
+                # Multiple matches — store for org picker, don't set org_login
+                # so the redirect falls through to /app/choose-org
+                request.session["pending_org_choices"] = matched_orgs
 
     # Upsert user in DB
     is_new_user = False
@@ -285,7 +309,12 @@ async def callback(request: Request):
         if is_new_user:
             return RedirectResponse(url=f"/app/{org_login}/welcome")
         return RedirectResponse(url=f"/app/{org_login}/")
-    return RedirectResponse(url="/app")
+
+    # No verified org — send to onboarding page
+    pending = request.session.get("pending_org_choices")
+    if pending:
+        return RedirectResponse(url="/app/choose-org")
+    return RedirectResponse(url="/app/no-org")
 
 
 @auth_router.get("/logout")
@@ -293,6 +322,7 @@ async def logout(request: Request):
     """Clear session and redirect to provider logout."""
     request.session.pop("user", None)
     request.session.pop("github_user", None)
+    request.session.pop("pending_org_choices", None)
     return_url = str(request.base_url)
 
     # Use provider logout URL when available

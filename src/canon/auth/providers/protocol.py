@@ -70,4 +70,18 @@ class OIDCProvider(Protocol):
 
     async def get_user_orgs(self, user_id: str) -> list[OrgInfo]: ...
 
+    async def list_users(
+        self, *, page: int = 0, per_page: int = 50, search: str = ""
+    ) -> list[dict]:
+        return []
+
+    async def get_user(self, user_id: str) -> dict | None:
+        return None
+
+    async def list_organizations(self, *, page: int = 0, per_page: int = 50) -> list[dict]:
+        return []
+
+    async def get_org_members(self, org_id: str) -> list[dict]:
+        return []
+
     async def aclose(self) -> None: ...

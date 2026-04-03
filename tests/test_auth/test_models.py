@@ -66,3 +66,32 @@ class TestAnonymousUser:
 
     def test_auth_method(self):
         assert ANONYMOUS_USER.auth_method == "anonymous"
+
+
+class TestSuperAdminRole:
+    def test_super_admin_has_all_permissions(self):
+        from canon.auth.permissions import Permission, Role, permissions_for_role
+
+        perms = permissions_for_role(Role.SUPER_ADMIN)
+        for p in Permission:
+            assert p in perms, f"SUPER_ADMIN missing {p}"
+
+    def test_super_admin_has_platform_manage(self):
+        from canon.auth.permissions import Permission, Role, permissions_for_role
+
+        perms = permissions_for_role(Role.SUPER_ADMIN)
+        assert Permission.PLATFORM_MANAGE in perms
+
+    def test_admin_does_not_have_platform_manage(self):
+        from canon.auth.permissions import Permission, Role, permissions_for_role
+
+        perms = permissions_for_role(Role.ADMIN)
+        assert Permission.PLATFORM_MANAGE not in perms
+
+    def test_role_hierarchy_order(self):
+        from canon.auth.permissions import Role
+
+        roles = list(Role)
+        assert roles.index(Role.VIEWER) < roles.index(Role.EDITOR)
+        assert roles.index(Role.EDITOR) < roles.index(Role.ADMIN)
+        assert roles.index(Role.ADMIN) < roles.index(Role.SUPER_ADMIN)

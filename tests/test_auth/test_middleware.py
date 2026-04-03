@@ -141,7 +141,7 @@ class TestTenantIsolation:
         app.state.github_client = _mock_client()
 
     async def test_org_mismatch_redirects_to_login(self):
-        """Session with org_login set → accessing different org redirects to re-auth."""
+        """User without verified org membership cannot access any org's dashboard."""
         from unittest.mock import patch
 
         from starlette.testclient import TestClient
@@ -150,8 +150,7 @@ class TestTenantIsolation:
             patch("canon.auth.routes.oauth") as mock_oauth,
             patch("canon.main._get_client", return_value=_mock_client()),
         ):
-            # Return a token with org info. The callback can't resolve org_id
-            # without a registry, but we set login_org in session during login.
+            # Token has NO org_id claim — user is not a member of any org.
             mock_oauth.auth0.authorize_redirect = AsyncMock(
                 side_effect=lambda req, uri, **kw: __import__(
                     "fastapi.responses", fromlist=["RedirectResponse"]
@@ -168,7 +167,6 @@ class TestTenantIsolation:
                 }
             )
             with TestClient(app, cookies={}) as tc:
-                # Set settings AFTER TestClient enters (lifespan overwrites app.state.settings)
                 app.state.settings = Settings(
                     web_org="test-org",
                     auth0_domain="test.us.auth0.com",
@@ -177,17 +175,18 @@ class TestTenantIsolation:
                     auth0_audience="https://canon.example.com/api",
                     auth0_orgs_enabled=True,
                 )
-                # Login with org param → stores login_org in session
+                # Login with org param — stores login_org in session
                 tc.get("/auth/login?org=my-org", follow_redirects=False)
-                # Callback → pops login_org and stores in session["user"]["org_login"]
+                # Callback — login_org is NOT trusted as org_login anymore.
+                # Without org_id in token and no GitHub membership, user goes to no-org.
                 resp = tc.get("/auth/callback", follow_redirects=False)
                 assert resp.status_code == 307
-                assert "/app/my-org/" in resp.headers["location"]
+                assert "/app/no-org" in resp.headers["location"]
 
-                # Now access /app/other-org/ → should redirect because org doesn't match
+                # Accessing /app/other-org/ → should redirect because org doesn't match
                 resp = tc.get("/app/other-org/", follow_redirects=False)
                 assert resp.status_code == 307
-                assert "/auth/login?org=other-org" in resp.headers["location"]
+                assert "/auth/login" in resp.headers["location"]
 
     async def test_admin_routes_bypass_org_check(self):
         """Admin routes (/app/admin/*) should not be blocked by org matching.

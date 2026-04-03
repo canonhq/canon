@@ -32,7 +32,15 @@ class TestAuth0OrgsEnabled:
 
     async def test_all_permissions_from_claims(self):
         request = _mock_request(auth0_orgs_enabled=True)
-        claims = {"permissions": ["specs:read", "specs:write", "specs:admin", "org:manage"]}
+        claims = {
+            "permissions": [
+                "specs:read",
+                "specs:write",
+                "specs:admin",
+                "org:manage",
+                "platform:manage",
+            ]
+        }
         result = await _resolve_permissions(request, claims, "sub1")
         assert result == frozenset(Permission)
 
@@ -58,13 +66,14 @@ class TestAuth0OrgsEnabled:
 class TestDbRoleLookup:
     """Branch 2: auth0_orgs_enabled=False with user_store => DB role lookup."""
 
-    async def test_admin_gets_all_permissions(self):
+    async def test_admin_gets_all_permissions_except_platform_manage(self):
         user_store = AsyncMock()
         user_store.get_user_by_sub = AsyncMock(return_value={"role": "admin"})
         request = _mock_request(auth0_orgs_enabled=False, user_store=user_store)
         result = await _resolve_permissions(request, {}, "sub1")
-        assert result == frozenset(Permission)
-        assert len(result) == 4
+        assert Permission.PLATFORM_MANAGE not in result
+        assert result == frozenset(p for p in Permission if p != Permission.PLATFORM_MANAGE)
+        assert len(result) == len(Permission) - 1
 
     async def test_editor_gets_read_write(self):
         user_store = AsyncMock()

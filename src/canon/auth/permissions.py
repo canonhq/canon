@@ -12,6 +12,7 @@ class Permission(StrEnum):
     SPECS_WRITE = "specs:write"
     SPECS_ADMIN = "specs:admin"
     ORG_MANAGE = "org:manage"
+    PLATFORM_MANAGE = "platform:manage"
 
 
 class Role(StrEnum):
@@ -26,15 +27,18 @@ class Role(StrEnum):
     VIEWER = "viewer"
     EDITOR = "editor"
     ADMIN = "admin"
+    SUPER_ADMIN = "super_admin"
 
 
 #: Mapping from role → granted permissions (cumulative).
 #: Used by ``_resolve_permissions`` in ``deps.py`` for single-tenant OSS
 #: user resolution.
+#: ADMIN gets all permissions except PLATFORM_MANAGE; SUPER_ADMIN gets all.
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
     Role.VIEWER: frozenset({Permission.SPECS_READ}),
     Role.EDITOR: frozenset({Permission.SPECS_READ, Permission.SPECS_WRITE}),
-    Role.ADMIN: frozenset(Permission),  # all permissions
+    Role.ADMIN: frozenset(p for p in Permission if p != Permission.PLATFORM_MANAGE),
+    Role.SUPER_ADMIN: frozenset(Permission),  # all permissions
 }
 
 
@@ -53,4 +57,5 @@ PERMISSION_DESCRIPTIONS: dict[str, str] = {
     Permission.SPECS_WRITE.value: "Create and edit specs",
     Permission.SPECS_ADMIN.value: "Manage spec settings and configuration",
     Permission.ORG_MANAGE.value: "Manage organization settings",
+    Permission.PLATFORM_MANAGE.value: "Manage platform-wide settings and super-admin operations",
 }

@@ -227,6 +227,24 @@ class GenericOIDCProvider:
         """Generic OIDC has no management API — always returns empty."""
         return []
 
+    async def list_users(
+        self, *, page: int = 0, per_page: int = 50, search: str = ""
+    ) -> list[dict]:
+        """Generic OIDC has no management API — always returns empty."""
+        return []
+
+    async def get_user(self, user_id: str) -> dict | None:
+        """Generic OIDC has no management API — always returns None."""
+        return None
+
+    async def list_organizations(self, *, page: int = 0, per_page: int = 50) -> list[dict]:
+        """Generic OIDC has no management API — always returns empty."""
+        return []
+
+    async def get_org_members(self, org_id: str) -> list[dict]:
+        """Generic OIDC has no management API — always returns empty."""
+        return []
+
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self._http.aclose()

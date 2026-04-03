@@ -132,22 +132,24 @@ async def _get_user_orgs(request: Request, user: CurrentUser | None = None) -> l
             return [org_login]
         return []
 
-    # No auth0_orgs — show all from registry (no access control needed)
-    registry = getattr(request.app.state, "registry", None)
-    if registry is not None:
-        try:
-            orgs = await registry.list_orgs()
-            if orgs:
-                # Put user's current org first for UX
-                if org_login and org_login in orgs:
-                    orgs = [org_login] + [o for o in orgs if o != org_login]
-                return orgs
-        except Exception:
-            logger.warning("Failed to list orgs from registry", exc_info=True)
+    # When auth is disabled (dev/self-hosted), show all orgs from registry.
+    if not settings.auth_enabled:
+        registry = getattr(request.app.state, "registry", None)
+        if registry is not None:
+            try:
+                orgs = await registry.list_orgs()
+                if orgs:
+                    if org_login and org_login in orgs:
+                        orgs = [org_login] + [o for o in orgs if o != org_login]
+                    return orgs
+            except Exception:
+                logger.warning("Failed to list orgs from registry", exc_info=True)
+        return [_get_org(request)]
 
+    # Auth enabled: only return the user's verified org (never all orgs).
     if org_login:
         return [org_login]
-    return [_get_org(request)]
+    return []
 
 
 async def _get_client_for_org(request: Request, org: str):
@@ -361,7 +363,19 @@ async def admin_reindex(
 
 @app_router.get("/", response_class=HTMLResponse)
 async def dashboard_redirect(request: Request):
-    """Redirect /app/ to /app/{default_org}/."""
+    """Redirect /app/ to /app/{default_org}/ or /app/no-org if unaffiliated."""
+    settings = request.app.state.settings
+    if settings.auth_enabled:
+        user = _get_user(request)
+        if not user:
+            return RedirectResponse(url="/auth/login", status_code=302)
+        if not user.get("org_login"):
+            pending = (
+                request.session.get("pending_org_choices") if hasattr(request, "session") else None
+            )
+            if pending:
+                return RedirectResponse(url="/app/choose-org", status_code=302)
+            return RedirectResponse(url="/app/no-org", status_code=302)
     org = _get_org(request)
     return RedirectResponse(url=f"/app/{org}/", status_code=302)
 
@@ -391,6 +405,69 @@ async def setup_complete(request: Request, installation_id: int = 0):
     # Fallback: webhook hasn't arrived yet or no installation_id
     org = _get_org(request)
     return RedirectResponse(url=f"/app/{org}/welcome", status_code=302)
+
+
+# --- No-org onboarding routes ---
+
+
+@app_router.get("/no-org", response_class=HTMLResponse)
+async def no_org_page(request: Request):
+    """Landing page for authenticated users with no verified org membership."""
+    if spa := await _serve_spa(request, "no-org"):
+        return spa
+    settings = request.app.state.settings
+    github_app_url = settings.github_app_url if hasattr(settings, "github_app_url") else ""
+    return HTMLResponse(
+        content=f"""<!DOCTYPE html>
+<html><head><title>Canon — Get Started</title></head>
+<body style="font-family:system-ui;max-width:600px;margin:80px auto;padding:0 20px">
+<h1>Welcome to Canon</h1>
+<p>You're signed in, but you don't belong to any organization with Canon installed.</p>
+<h3>Next steps:</h3>
+<ul>
+<li><strong>Install Canon</strong> on your GitHub organization:
+    <a href="{github_app_url or "https://github.com/apps/canonhq"}">Install GitHub App</a></li>
+<li><strong>Ask an admin</strong> of an existing Canon org to invite you</li>
+</ul>
+<p><a href="/auth/logout">Sign out</a></p>
+</body></html>""",
+        status_code=200,
+    )
+
+
+@app_router.get("/choose-org", response_class=JSONResponse)
+async def choose_org_page(request: Request):
+    """Return available orgs for authenticated users with multiple matches."""
+    if spa := await _serve_spa(request, "choose-org"):
+        return spa
+    pending = request.session.get("pending_org_choices", []) if hasattr(request, "session") else []
+    if not pending:
+        return RedirectResponse(url="/app/no-org", status_code=302)
+    return JSONResponse(content={"orgs": pending})
+
+
+@app_router.post("/choose-org", response_class=RedirectResponse)
+async def choose_org_submit(request: Request):
+    """Accept an org selection from the org picker."""
+    pending = request.session.get("pending_org_choices", []) if hasattr(request, "session") else []
+    if not pending:
+        return RedirectResponse(url="/app/no-org", status_code=302)
+
+    form = await request.form()
+    chosen = str(form.get("org", ""))
+
+    if chosen not in pending:
+        return RedirectResponse(url="/app/choose-org", status_code=302)
+
+    # Set the chosen org in the session
+    session_user = request.session.get("user")
+    if session_user:
+        session_user["org_login"] = chosen
+        request.session["user"] = session_user
+        logger.info("User %s selected org %s", session_user.get("sub", "unknown"), chosen)
+    request.session.pop("pending_org_choices", None)
+
+    return RedirectResponse(url=f"/app/{chosen}/", status_code=302)
 
 
 # --- Org-scoped routes ---
@@ -681,9 +758,11 @@ async def api_session(request: Request, org: str):
     no read access to analytics data).
     """
     user = _get_user(request)
+    settings = request.app.state.settings
+    if not user and settings.auth_enabled:
+        return JSONResponse({"detail": "Authentication required"}, status_code=401)
     orgs = await _get_user_orgs(request)
     github_user = request.session.get("github_user") if hasattr(request, "session") else None
-    settings = request.app.state.settings
 
     # Validate the route org against the user's orgs to prevent
     # deep-links from injecting a wrong org into the session dict

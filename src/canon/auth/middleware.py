@@ -27,7 +27,7 @@ _ORG_PATH_RE = re.compile(r"^/app/([^/]+)")
 # Org slugs reserved for internal routes.  If a GitHub org with one of these
 # names installs the app, tenant isolation will not work correctly — the
 # installation handler validates against this set.
-RESERVED_ORG_SLUGS = frozenset({"admin"})
+RESERVED_ORG_SLUGS = frozenset({"admin", "no-org", "choose-org"})
 
 
 def _is_api_request(request: Request) -> bool:
@@ -114,10 +114,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
             else:
                 user_org = ""
 
-            # Enforce when: (a) Auth0 orgs mode is on, or (b) user has an org
-            if (settings.auth0_orgs_enabled or user_org) and (
-                not user_org or user_org.lower() != requested_org.lower()
-            ):
+            # Always enforce org isolation: user's verified org must match URL.
+            # The auth_enabled guard at the top of dispatch() already skips
+            # this entire middleware for dev/self-hosted with auth disabled.
+            if not user_org or user_org.lower() != requested_org.lower():
                 analytics.track(
                     "auth_denied",
                     properties={

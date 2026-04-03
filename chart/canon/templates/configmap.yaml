@@ -26,3 +26,5 @@ data:
   SRE_SLOW_QUERY_THRESHOLD_MS: {{ .Values.config.sreSlowQueryThresholdMs | quote }}
   SRE_AUTO_TRIAGE_ENABLED: {{ .Values.config.sreAutoTriageEnabled | quote }}
   SRE_WEEKLY_DIGEST_ENABLED: {{ .Values.config.sreWeeklyDigestEnabled | quote }}
+  DEPLOYMENT_MODE: {{ .Values.config.deploymentMode | quote }}
+  ADMIN_AUDIT_RETENTION_DAYS: {{ .Values.config.adminAuditRetentionDays | quote }}

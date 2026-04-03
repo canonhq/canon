@@ -232,6 +232,8 @@ config:
   sreSlowQueryThresholdMs: "500"
   sreAutoTriageEnabled: "true"
   sreWeeklyDigestEnabled: "false"
+  deploymentMode: "development"
+  adminAuditRetentionDays: "90"
 
 ## @section Service parameters
 ## @param service.type Kubernetes service type
@@ -343,6 +345,15 @@ teamDigestCronJob:
 reindexCronJob:
   enabled: false
   schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+
+## @section Audit retention CronJob parameters
+## @param auditRetentionCronJob.enabled Enable audit retention CronJob
+## @param auditRetentionCronJob.schedule Cron schedule expression (default: daily at 3am UTC)
+## @param auditRetentionCronJob.concurrencyPolicy CronJob concurrency policy
+auditRetentionCronJob:
+  enabled: false
+  schedule: "0 3 * * *"
   concurrencyPolicy: Forbid
 
 ## @section Autoscaling

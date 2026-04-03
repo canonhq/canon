@@ -102,6 +102,7 @@ class TestProfileRoute:
             "specs:write",
             "specs:admin",
             "org:manage",
+            "platform:manage",
         }
 
     @pytest.mark.asyncio
