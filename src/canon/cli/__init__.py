@@ -68,7 +68,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "login":
         from .login import run_login
 
-        run_login(api_key=args.api_key, server=args.server)
+        run_login(api_key=args.api_key, server=args.server, org=args.org)
     elif args.command == "logout":
         from .logout import run_logout
 

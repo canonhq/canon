@@ -151,7 +151,7 @@ class GenericOIDCProvider:
         return f"{self._end_session_endpoint}?{params}"
 
     async def get_device_code(
-        self, *, audience: str = "", scope: str = ""
+        self, *, audience: str = "", scope: str = "", organization: str = ""
     ) -> DeviceCodeResponse | None:
         await self._ensure_discovered()
         if not self._device_authorization_endpoint:
@@ -167,6 +167,10 @@ class GenericOIDCProvider:
         effective_audience = audience or self._audience
         if effective_audience:
             payload["audience"] = effective_audience
+        # ``organization`` is an Auth0 extension; generic OIDC providers that
+        # don't recognize it will ignore the extra param.
+        if organization:
+            payload["organization"] = organization
         resp = await self._http.post(self._device_authorization_endpoint, data=payload)
         if resp.status_code != 200:
             logger.warning(

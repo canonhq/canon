@@ -19,17 +19,117 @@ class TestLoginSubcommand:
             patch("canon.cli.login.run_login") as mock_run,
         ):
             main(["login"])
-            mock_run.assert_called_once_with(api_key="", server="")
+            mock_run.assert_called_once_with(api_key="", server="", org="")
 
     def test_login_with_api_key(self):
         with patch("canon.cli.login.run_login") as mock_run:
             main(["login", "--api-key", "sw_test123"])
-            mock_run.assert_called_once_with(api_key="sw_test123", server="")
+            mock_run.assert_called_once_with(api_key="sw_test123", server="", org="")
 
     def test_login_with_server(self):
         with patch("canon.cli.login.run_login") as mock_run:
             main(["login", "--server", "http://localhost:3000"])
-            mock_run.assert_called_once_with(api_key="", server="http://localhost:3000")
+            mock_run.assert_called_once_with(api_key="", server="http://localhost:3000", org="")
+
+    def test_login_with_org(self):
+        with patch("canon.cli.login.run_login") as mock_run:
+            main(["login", "--org", "canonhq"])
+            mock_run.assert_called_once_with(api_key="", server="", org="canonhq")
+
+    def test_login_device_flow_sends_org_in_body(self):
+        """When --org is set, it's forwarded in the POST body to /auth/device/code."""
+        from canon.cli.login import _login_device
+
+        # Build a fake client that captures POSTs and short-circuits the polling loop.
+        class _FakeResp:
+            def __init__(self, status_code, data):
+                self.status_code = status_code
+                self._data = data
+
+            def json(self):
+                return self._data
+
+        calls: list[tuple[str, dict]] = []
+
+        class _FakeClient:
+            def raw_post(self, path, json=None):
+                calls.append((path, json or {}))
+                if path == "/auth/device/code":
+                    return _FakeResp(
+                        200,
+                        {
+                            "device_code": "dc",
+                            "user_code": "UC",
+                            "verification_uri": "http://x",
+                            "verification_uri_complete": "http://x",
+                            "interval": 0,
+                            "expires_in": 1,
+                        },
+                    )
+                if path == "/auth/device/token":
+                    return _FakeResp(
+                        200,
+                        {
+                            "status": "approved",
+                            "access_token": "at",
+                            "refresh_token": "rt",
+                            "expires_in": 3600,
+                            "email": "u@e",
+                            "org": "canonhq",
+                        },
+                    )
+                return _FakeResp(500, {})
+
+        with patch("canon.cli._credentials.save_credentials"):
+            _login_device(_FakeClient(), org="canonhq")
+
+        assert calls[0] == ("/auth/device/code", {"org": "canonhq"})
+
+    def test_login_device_flow_omits_org_when_absent(self):
+        """No --org → empty body (preserves backwards compatibility)."""
+        from canon.cli.login import _login_device
+
+        class _FakeResp:
+            def __init__(self, status_code, data):
+                self.status_code = status_code
+                self._data = data
+
+            def json(self):
+                return self._data
+
+        calls: list[tuple[str, dict]] = []
+
+        class _FakeClient:
+            def raw_post(self, path, json=None):
+                calls.append((path, json or {}))
+                if path == "/auth/device/code":
+                    return _FakeResp(
+                        200,
+                        {
+                            "device_code": "dc",
+                            "user_code": "UC",
+                            "verification_uri": "http://x",
+                            "verification_uri_complete": "http://x",
+                            "interval": 0,
+                            "expires_in": 1,
+                        },
+                    )
+                return _FakeResp(
+                    200,
+                    {
+                        "status": "approved",
+                        "access_token": "at",
+                        "refresh_token": "rt",
+                        "expires_in": 3600,
+                        "email": "",
+                        "org": "",
+                    },
+                )
+
+        with patch("canon.cli._credentials.save_credentials"):
+            _login_device(_FakeClient(), org="")
+
+        assert calls[0] == ("/auth/device/code", {})
 
 
 class TestLogoutSubcommand:
@@ -121,3 +221,69 @@ class TestAuthStatusSubcommand:
         with patch("canon.cli.auth_cmd.run_auth_status") as mock_run:
             main(["auth", "status"])
             mock_run.assert_called_once()
+
+
+class TestDetectOrgFromGit:
+    def test_returns_owner_on_success(self, capsys):
+        from canon.cli.login import _detect_org_from_git
+
+        with patch(
+            "canon.cli._local.resolve_github_remote",
+            return_value=("acme", "widgets"),
+        ):
+            result = _detect_org_from_git()
+
+        assert result == "acme"
+        # User should see which org was auto-selected.
+        assert "acme" in capsys.readouterr().out
+
+    def test_returns_empty_when_remote_unresolvable(self, capsys):
+        from canon.cli.login import _detect_org_from_git
+
+        with patch("canon.cli._local.resolve_github_remote", return_value=None):
+            result = _detect_org_from_git()
+
+        assert result == ""
+        # Silent on the not-in-a-repo path — no noise for non-git users.
+        assert capsys.readouterr().out == ""
+
+    def test_returns_empty_when_cwd_missing(self):
+        """FileNotFoundError from Path.cwd() is handled — not a git repo."""
+        from canon.cli.login import _detect_org_from_git
+
+        with patch(
+            "canon.cli._local.resolve_github_remote",
+            side_effect=FileNotFoundError("cwd deleted"),
+        ):
+            assert _detect_org_from_git() == ""
+
+
+class TestRunLoginAutoDetect:
+    def test_auto_detects_when_org_omitted(self):
+        """run_login with no --org falls back to git auto-detection."""
+        from canon.cli.login import run_login
+
+        with (
+            patch("canon.cli.login._detect_org_from_git", return_value="detected-org") as mock_det,
+            patch("canon.cli.login._login_device") as mock_login,
+            patch("canon.cli._platform.PlatformClient"),
+        ):
+            run_login(api_key="", server="", org="")
+
+        mock_det.assert_called_once()
+        # The detected org must be threaded into _login_device.
+        assert mock_login.call_args.kwargs["org"] == "detected-org"
+
+    def test_explicit_org_skips_auto_detect(self):
+        """An explicit --org value overrides git auto-detection."""
+        from canon.cli.login import run_login
+
+        with (
+            patch("canon.cli.login._detect_org_from_git") as mock_det,
+            patch("canon.cli.login._login_device") as mock_login,
+            patch("canon.cli._platform.PlatformClient"),
+        ):
+            run_login(api_key="", server="", org="explicit-org")
+
+        mock_det.assert_not_called()
+        assert mock_login.call_args.kwargs["org"] == "explicit-org"

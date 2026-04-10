@@ -162,6 +162,29 @@ class TestDeviceCode:
         provider = GenericOIDCProvider(settings=_settings(), http_client=http)
         result = await provider.get_device_code()
         assert isinstance(result, DeviceCodeResponse)
+        # Default call must not include the Auth0 ``organization`` extension.
+        posted = http.post.call_args
+        assert "organization" not in posted.kwargs["data"]
+
+    async def test_forwards_organization_when_provided(self):
+        """Organization hint is threaded into the POST body as an Auth0 extension."""
+        http = _mock_discovery_http()
+        device_resp = MagicMock()
+        device_resp.status_code = 200
+        device_resp.json.return_value = {
+            "device_code": "dc",
+            "user_code": "UC",
+            "verification_uri": "https://idp.example.com/activate",
+            "interval": 5,
+            "expires_in": 600,
+        }
+        http.post = AsyncMock(return_value=device_resp)
+        provider = GenericOIDCProvider(settings=_settings(), http_client=http)
+
+        await provider.get_device_code(organization="org_abc123")
+
+        posted = http.post.call_args
+        assert posted.kwargs["data"]["organization"] == "org_abc123"
 
     async def test_returns_none_when_no_device_endpoint(self):
         http = AsyncMock()
