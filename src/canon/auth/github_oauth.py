@@ -28,7 +28,7 @@ class GitHubOAuthClient:
         params = {
             "client_id": self.client_id,
             "redirect_uri": redirect_uri,
-            "scope": "repo",
+            "scope": "repo read:org",
             "state": state,
         }
         return f"{GITHUB_AUTHORIZE_URL}?{urlencode(params)}"

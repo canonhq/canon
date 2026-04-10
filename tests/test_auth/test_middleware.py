@@ -52,6 +52,16 @@ class TestAuthMiddlewareEnabled:
         assert resp.status_code == 307
         assert resp.headers["location"] == "/auth/login"
 
+    async def test_api_request_returns_401_not_redirect(self, client: AsyncClient):
+        """API requests (Accept: application/json) get 401 instead of redirect."""
+        resp = await client.get(
+            "/app/test-org/api/profile",
+            headers={"Accept": "application/json"},
+        )
+        assert resp.status_code == 401
+        body = resp.json()
+        assert body["detail"] == "Not authenticated"
+
     async def test_public_routes_unaffected(self, client: AsyncClient):
         """Health, readyz, and webhook routes remain public."""
         app.state.db_pool = None
@@ -252,6 +262,34 @@ class TestTenantIsolation:
             "/app/org-b/",
             headers={
                 "Authorization": f"Bearer {key}",
+                "Accept": "application/json",
+            },
+        )
+        assert resp.status_code == 403
+        app.state.user_store = None
+
+    async def test_deactivated_user_blocked_via_api_key(self, client: AsyncClient):
+        """Deactivated users should be blocked from API key access."""
+        mock_user_store = AsyncMock()
+        mock_user_store.get_api_key_by_hash = AsyncMock(
+            return_value={
+                "user_sub": "auth0|deactivated",
+                "user_email": "deactivated@example.com",
+                "user_name": "Deactivated",
+                "org_login": "test-org",
+                "scopes": ["specs:read"],
+                "revoked_at": None,
+                "expires_at": None,
+                "user_id": 42,
+                "user_status": "deactivated",
+            }
+        )
+        app.state.user_store = mock_user_store
+
+        resp = await client.get(
+            "/app/test-org/api/profile",
+            headers={
+                "Authorization": "Bearer sw_testkey",
                 "Accept": "application/json",
             },
         )

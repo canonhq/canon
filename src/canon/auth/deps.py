@@ -41,6 +41,19 @@ async def get_current_user(request: Request) -> CurrentUser:
     # 2. Session cookie
     session_user = request.session.get("user") if hasattr(request, "session") else None
     if session_user:
+        # Check if user has been deactivated since their session was created.
+        # Fail open on DB errors so a pool hiccup doesn't 500 every request.
+        user_store = getattr(request.app.state, "user_store", None)
+        if user_store is not None:
+            sub = session_user.get("sub", "")
+            if sub:
+                try:
+                    db_user = await user_store.get_user_by_sub(sub)
+                except (OSError, TimeoutError):
+                    db_user = None
+                if db_user and db_user.get("status") == "deactivated":
+                    analytics.track("auth_denied", properties={"reason": "deactivated_user"})
+                    raise HTTPException(status_code=403, detail="Account has been deactivated")
         return _session_to_current_user(session_user)
 
     # 3. Anonymous — grant all permissions when auth is disabled
@@ -104,6 +117,9 @@ async def _resolve_api_key(request: Request, token: str) -> CurrentUser:
     if expires_at is not None and expires_at < datetime.now(UTC):
         analytics.track("auth_denied", properties={"reason": "expired_api_key"})
         raise HTTPException(status_code=401, detail="API key has expired")
+
+    if api_key.get("user_status") == "deactivated":
+        raise HTTPException(status_code=403, detail="Account has been deactivated")
 
     scopes = api_key.get("scopes", [])
     permissions = frozenset(Permission(s) for s in scopes if s in ALL_PERMISSION_VALUES)
@@ -176,6 +192,18 @@ async def _resolve_jwt(request: Request, token: str) -> CurrentUser:
         raise HTTPException(status_code=401, detail="Invalid access token") from None
 
     sub = claims.get("sub", "")
+
+    # Check if user has been deactivated since the JWT was issued
+    user_store = getattr(request.app.state, "user_store", None)
+    if user_store is not None and sub:
+        try:
+            db_user = await user_store.get_user_by_sub(sub)
+        except (OSError, TimeoutError):
+            db_user = None  # registry errors: defer to _resolve_permissions which handles these
+        if db_user and db_user.get("status") == "deactivated":
+            analytics.track("auth_denied", properties={"reason": "deactivated_user"})
+            raise HTTPException(status_code=403, detail="Account has been deactivated")
+
     permissions = await _resolve_permissions(request, claims, sub)
 
     org_id = claims.get("org_id", "")

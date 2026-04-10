@@ -92,6 +92,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 "auth_denied",
                 properties={"reason": "no_session", "path": request.url.path},
             )
+            if _is_api_request(request):
+                return JSONResponse({"detail": "Not authenticated"}, status_code=401)
             return RedirectResponse(url="/auth/login")
 
         # Tenant isolation: enforce org matching for /app/{org}/* routes.
@@ -132,5 +134,33 @@ class AuthMiddleware(BaseHTTPMiddleware):
                         status_code=403,
                     )
                 return RedirectResponse(url=f"/auth/login?org={quote(requested_org, safe='')}")
+
+            # Check if the org is suspended — block access if so.
+            # Only treat explicit "suspended" status as a block; missing rows
+            # (data inconsistency) are allowed through to avoid false positives.
+            registry = getattr(request.app.state, "registry", None)
+            if registry is not None:
+                try:
+                    installation = await registry.get_installation_by_org_any_status(requested_org)
+                    if installation is not None and installation.status == "suspended":
+                        analytics.track(
+                            "auth_denied",
+                            properties={
+                                "reason": "org_suspended",
+                                "requested_org": requested_org,
+                            },
+                        )
+                        if _is_api_request(request):
+                            return JSONResponse(
+                                {"detail": "Organization is suspended"},
+                                status_code=403,
+                            )
+                        return RedirectResponse(url="/app/no-org")
+                except Exception:
+                    logger.warning(
+                        "Failed to check suspension status for org=%s",
+                        requested_org,
+                        exc_info=True,
+                    )  # best-effort — don't block login on registry errors
 
         return await call_next(request)

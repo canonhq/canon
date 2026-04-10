@@ -139,6 +139,19 @@ class InstallationRegistry:
             )
         return _row_to_installation(row) if row else None
 
+    async def get_installation_by_org_any_status(self, org_login: str) -> Installation | None:
+        """Look up an installation by org login regardless of status.
+
+        Unlike get_installation_by_org, this returns suspended/deleted/removed
+        installations too, so callers can distinguish "not found" from "suspended".
+        """
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT * FROM gh_installations WHERE org_login = $1",
+                org_login,
+            )
+        return _row_to_installation(row) if row else None
+
     async def get_installation_by_id(self, installation_id: int) -> Installation | None:
         """Look up an installation by installation_id."""
         async with self._pool.acquire() as conn:

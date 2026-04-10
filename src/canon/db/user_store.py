@@ -157,7 +157,8 @@ class UserStore:
                     ak.*,
                     u.oidc_sub AS user_sub,
                     u.email AS user_email,
-                    u.name AS user_name
+                    u.name AS user_name,
+                    u.status AS user_status
                 FROM api_keys ak
                 JOIN users u ON u.id = ak.user_id
                 WHERE ak.key_hash = $1
@@ -216,6 +217,22 @@ class UserStore:
                 org_login,
             )
         return result == "UPDATE 1"
+
+    async def revoke_all_api_keys(self, *, user_id: int) -> int:
+        """Revoke all active API keys for a user.  Returns count revoked."""
+        async with self._pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE api_keys
+                SET revoked_at = now()
+                WHERE user_id = $1 AND revoked_at IS NULL
+                """,
+                user_id,
+            )
+        try:
+            return int(result.split()[-1])
+        except (ValueError, IndexError):
+            return 0
 
     async def delete_expired_keys(self) -> int:
         """Delete API keys that expired more than 30 days ago.  Returns count deleted."""
