@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import base64
 import json
+from typing import ClassVar
+from unittest.mock import patch
 
 from canon.agent.analyzer import (
+    PARSE_FALLBACK_SUMMARY,
     ACRealization,
     DocUpdateSuggestion,
     PRAnalysisResult,
@@ -50,16 +53,27 @@ class TestParseAnalysisResponse:
         assert result["summary"] == "test"
 
     def test_handles_malformed_json(self):
+        """Unparseable input must return the stable fallback summary — NOT
+        embed the raw model output. Previously the parser leaked short
+        unparsed responses into the summary via an ``Analysis response
+        (unparsed): ...`` prefix, which would then be posted verbatim as a
+        PR comment. That's a publishing footgun — if Claude ever returned
+        a refusal, apology, or sensitive content, it'd end up in a public
+        bot comment. The fallback summary is now a stable constant
+        regardless of input shape.
+        """
         result = parse_analysis_response("not json at all")
-        assert "unparsed" in result["summary"]
+        assert result["summary"] == PARSE_FALLBACK_SUMMARY
+        assert "unparsed" not in result["summary"]
+        assert "not json at all" not in result["summary"]
 
     def test_handles_empty_string(self):
         result = parse_analysis_response("")
-        assert result["summary"] == "Unable to parse analysis response."
+        assert result["summary"] == PARSE_FALLBACK_SUMMARY
 
     def test_handles_long_unparseable_text(self):
         result = parse_analysis_response("x" * 600)
-        assert result["summary"] == "Unable to parse analysis response."
+        assert result["summary"] == PARSE_FALLBACK_SUMMARY
 
     def test_parses_discrepancies(self):
         response = json.dumps(
@@ -129,6 +143,207 @@ class TestParseAnalysisResponse:
         )
         result = parse_analysis_response(response)
         assert "coverage_note" not in result
+
+
+class TestParseAnalysisResponseRecoveryStrategies:
+    """Ladder of extraction strategies the parser tries when the response
+    has preamble, postamble, fences, or answer tags.
+
+    These cases mirror the shapes we observed Claude actually returning on
+    production runs with ~100k input tokens, where the model routinely
+    ignores "respond with raw JSON only" in the system prompt and wraps
+    its output. Before the fix, 85% of bot runs silently fell back to
+    empty results.
+    """
+
+    _VALID_JSON_OBJ: ClassVar[dict] = {
+        "summary": "recovered",
+        "specReferences": [],
+        "discrepancies": [],
+        "docUpdates": [],
+    }
+
+    def _json(self) -> str:
+        return json.dumps(self._VALID_JSON_OBJ)
+
+    def test_preamble_before_json(self):
+        """Model prepends prose before the JSON object — recovered via
+        brace-slice strategy."""
+        response = "Here's the analysis:\n\n" + self._json()
+        result = parse_analysis_response(response)
+        assert result["summary"] == "recovered"
+
+    def test_postamble_after_json(self):
+        """Model appends prose after the JSON object."""
+        response = self._json() + "\n\nLet me know if you need adjustments."
+        result = parse_analysis_response(response)
+        assert result["summary"] == "recovered"
+
+    def test_preamble_and_postamble(self):
+        response = "I'll analyze this PR:\n" + self._json() + "\n\n— Claude"
+        result = parse_analysis_response(response)
+        assert result["summary"] == "recovered"
+
+    def test_fence_with_preamble(self):
+        """```json fence with surrounding prose — the old anchored regex
+        failed here because ``^...$`` required the entire string to be
+        the fence block."""
+        response = "I'll analyze this PR:\n\n```json\n" + self._json() + "\n```\n\nDone!"
+        result = parse_analysis_response(response)
+        assert result["summary"] == "recovered"
+
+    def test_unlabelled_fence_with_preamble(self):
+        response = "Analysis:\n```\n" + self._json() + "\n```\nEnd."
+        result = parse_analysis_response(response)
+        assert result["summary"] == "recovered"
+
+    def test_answer_tags(self):
+        """Some thinking-mode responses wrap final output in
+        ``<answer>...</answer>``."""
+        response = "<answer>\n" + self._json() + "\n</answer>"
+        result = parse_analysis_response(response)
+        assert result["summary"] == "recovered"
+
+    def test_answer_tags_with_thinking_preamble(self):
+        response = (
+            "Let me think about this...\n\n"
+            "The PR modifies auth code.\n\n"
+            "<answer>\n" + self._json() + "\n</answer>"
+        )
+        result = parse_analysis_response(response)
+        assert result["summary"] == "recovered"
+
+    def test_json_array_root_falls_through(self):
+        """A valid JSON *array* is not the expected shape — parser moves
+        on rather than treating ``[]`` as a dict."""
+        response = "[1, 2, 3]"
+        result = parse_analysis_response(response)
+        assert result["summary"] == PARSE_FALLBACK_SUMMARY
+
+    def test_json_string_root_falls_through(self):
+        """A valid JSON *string* is not the expected shape."""
+        response = '"just a string"'
+        result = parse_analysis_response(response)
+        assert result["summary"] == PARSE_FALLBACK_SUMMARY
+
+    def test_multiple_fenced_blocks_picks_first(self):
+        """If the model emits an example block before the real answer,
+        the first fence wins. This is a known limitation worth
+        documenting — if the first block is an example, the parser will
+        return that. In practice, Claude rarely emits multiple fenced
+        blocks in the PR analysis prompt."""
+        first = json.dumps({**self._VALID_JSON_OBJ, "summary": "first"})
+        second = json.dumps({**self._VALID_JSON_OBJ, "summary": "second"})
+        response = f"```json\n{first}\n```\n\nAnd here's another:\n\n```json\n{second}\n```"
+        result = parse_analysis_response(response)
+        # Document current behavior — not necessarily the ideal. The fence
+        # strategy picks the first block, not the last.
+        assert result["summary"] == "first"
+
+
+class TestParseAnalysisResponseReporting:
+    """The parser MUST report parse failures to ops so they can be
+    diagnosed. Historically it swallowed ``JSONDecodeError`` with no log
+    and no analytics event, leaving 85% of production bot runs in the
+    dark. These tests pin the reporting contract."""
+
+    def test_emits_parse_failed_event_with_response_preview(self):
+        """On total parse failure, emit a ``pr_analysis_parse_failed``
+        PostHog event with the raw response preview so operators can
+        actually see what Claude returned."""
+        raw = "garbage that is definitely not JSON"
+        with patch("canon.agent.analyzer.analytics.track") as mock_track:
+            parse_analysis_response(raw)
+
+        # Find the failure event (there may be others in the future).
+        failure_calls = [
+            c for c in mock_track.call_args_list if c.args[0] == "pr_analysis_parse_failed"
+        ]
+        assert len(failure_calls) == 1, (
+            f"expected exactly one pr_analysis_parse_failed event, got {mock_track.call_args_list}"
+        )
+        props = failure_calls[0].kwargs["properties"]
+        assert props["stage"] == "json_decode"
+        assert props["error_type"] == "JSONDecodeError"
+        assert props["response_length"] == len(raw)
+        assert props["response_preview"] == raw
+        assert props["error_message"]  # populated
+
+    def test_truncates_response_preview_to_2000_chars(self):
+        """Very long unparseable responses must not blow up the PostHog
+        event — preview is capped at 2000 chars, but response_length
+        reflects the true length so we can see outliers."""
+        raw = "x" * 10_000
+        with patch("canon.agent.analyzer.analytics.track") as mock_track:
+            parse_analysis_response(raw)
+
+        failure_call = next(
+            c for c in mock_track.call_args_list if c.args[0] == "pr_analysis_parse_failed"
+        )
+        props = failure_call.kwargs["properties"]
+        assert props["response_length"] == 10_000
+        assert len(props["response_preview"]) == 2000
+
+    def test_emits_parse_recovered_event_for_nontrivial_strategy(self):
+        """When recovery via a non-direct strategy succeeds, emit a
+        ``pr_analysis_parse_recovered`` event so we can measure how often
+        the model is wrapping its output (and tune the prompt)."""
+        response = "Here's the analysis:\n\n" + json.dumps(
+            {
+                "summary": "test",
+                "specReferences": [],
+                "discrepancies": [],
+                "docUpdates": [],
+            }
+        )
+        with patch("canon.agent.analyzer.analytics.track") as mock_track:
+            parse_analysis_response(response)
+
+        recovery_calls = [
+            c for c in mock_track.call_args_list if c.args[0] == "pr_analysis_parse_recovered"
+        ]
+        assert len(recovery_calls) == 1
+        props = recovery_calls[0].kwargs["properties"]
+        assert props["strategy"] == "brace_slice"
+        assert props["response_length"] == len(response)
+
+    def test_direct_parse_emits_no_recovery_event(self):
+        """Happy-path direct parses should not produce recovery events —
+        those are meant to measure *drift*, not every successful run."""
+        response = json.dumps(
+            {
+                "summary": "test",
+                "specReferences": [],
+                "discrepancies": [],
+                "docUpdates": [],
+            }
+        )
+        with patch("canon.agent.analyzer.analytics.track") as mock_track:
+            parse_analysis_response(response)
+
+        assert not any(
+            c.args[0] == "pr_analysis_parse_recovered" for c in mock_track.call_args_list
+        )
+        assert not any(c.args[0] == "pr_analysis_parse_failed" for c in mock_track.call_args_list)
+
+    def test_empty_response_does_not_emit_event(self):
+        """Empty responses return fallback without firing a failure event
+        — they're typically caused by API-level issues that are already
+        reported elsewhere, and firing an event here would spam PostHog
+        if the API flaps."""
+        with patch("canon.agent.analyzer.analytics.track") as mock_track:
+            parse_analysis_response("")
+
+        assert mock_track.call_count == 0
+
+    def test_analytics_failure_does_not_break_parser(self):
+        """If analytics.track itself raises (PostHog outage, key
+        misconfigured), the parser must still return a valid fallback
+        rather than propagating the exception to the webhook handler."""
+        with patch("canon.agent.analyzer.analytics.track", side_effect=RuntimeError("boom")):
+            result = parse_analysis_response("not json")
+
+        assert result["summary"] == PARSE_FALLBACK_SUMMARY
 
 
 class TestFormatAnalysisComment:

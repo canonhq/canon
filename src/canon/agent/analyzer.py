@@ -10,7 +10,9 @@ import re
 from enum import StrEnum
 from urllib.parse import quote
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+
+from canon import analytics
 
 from .client import DEFAULT_AGENT_CONFIG, AgentAPIError, AgentConfig, ClaudeClient
 from .prompts import (
@@ -20,6 +22,11 @@ from .prompts import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Stable fallback message used when the model response can't be parsed.
+# Kept as a module constant so tests and downstream code can match on it
+# deterministically instead of substring-checking prose.
+PARSE_FALLBACK_SUMMARY = "Unable to parse analysis response."
 
 # ─── Types ────────────────────────────────────────────────
 
@@ -125,92 +132,289 @@ def analyze_pr(
     )
 
 
+# ─── JSON extraction helpers ──────────────────────────────
+#
+# Claude's response format drifts with context length, model version, and
+# prompt caching. The system prompt asks for raw JSON only, but long-context
+# runs (~100k input tokens on this project) commonly produce preambles,
+# postambles, or code fences regardless. Rather than pin a single brittle
+# regex, we try a ladder of strategies and fall through until one yields
+# valid JSON.
+#
+# Observed real-world shapes that broke the old anchored-fence regex:
+#   1. "Here's my analysis:\n\n```json\n{...}\n```"
+#   2. "```json\n{...}\n```\n\nLet me know if you need anything adjusted."
+#   3. "<answer>\n{...}\n</answer>"
+#   4. "{...}\n\n(The above JSON summarizes the PR changes.)"
+#
+# `parse_analysis_response` tries strategies in order and reports which one
+# worked (or why all failed) via PostHog `pr_analysis_parse_*` events.
+
+
+def _strip_answer_tags(text: str) -> str | None:
+    """Extract content inside ``<answer>...</answer>`` if present."""
+    m = re.search(r"<answer>\s*([\s\S]*?)\s*</answer>", text, re.IGNORECASE)
+    return m.group(1).strip() if m else None
+
+
+def _strip_fence_relaxed(text: str) -> str | None:
+    """Find a fenced code block anywhere in the text, not just as the root.
+
+    Prefers explicitly-tagged ```json blocks, falls back to any ``` block.
+    This is the relaxed cousin of the old anchored regex — it tolerates
+    prose before and after the fence.
+    """
+    m = re.search(r"```json\s*\n?([\s\S]*?)\n?\s*```", text)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"```\s*\n?([\s\S]*?)\n?\s*```", text)
+    if m:
+        return m.group(1).strip()
+    return None
+
+
+def _slice_first_to_last_brace(text: str) -> str | None:
+    """Return the substring from the first ``{`` to the last ``}``.
+
+    Cheap and effective for responses that are JSON wrapped in prose, since
+    ``json.loads`` will reject the slice if braces don't line up. Never
+    matches anything useful if braces are absent, so callers should treat
+    ``None`` as "try the next strategy".
+    """
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    return text[start : end + 1]
+
+
+def _build_result_dict(parsed: dict, fallback: dict) -> dict:
+    """Map a parsed JSON dict onto the result schema used by ``analyze_pr``.
+
+    Kept separate from ``parse_analysis_response`` so schema-mapping errors
+    (``pydantic.ValidationError``) can be caught distinctly from JSON decode
+    errors — they have different operational meanings (malformed JSON vs.
+    JSON that doesn't match the expected schema).
+    """
+    realizations: list[ACRealization] = []
+    if isinstance(parsed.get("realizations"), list):
+        for r in parsed["realizations"]:
+            try:
+                status_val = r.get("status", "not_addressed")
+                realizations.append(
+                    ACRealization(
+                        spec_file=r.get("specFile", ""),
+                        section_id=r.get("sectionId", ""),
+                        section_title=r.get("sectionTitle", ""),
+                        ac_text=r.get("acText", ""),
+                        status=RealizationStatus(status_val),
+                        evidence_files=r.get("evidenceFiles", []),
+                        explanation=r.get("explanation", ""),
+                    )
+                )
+            except (ValueError, ValidationError, KeyError):
+                continue
+
+    return {
+        "summary": parsed.get("summary", fallback["summary"])
+        if isinstance(parsed.get("summary"), str)
+        else fallback["summary"],
+        "spec_references": [
+            SpecReference(
+                spec_file=r.get("specFile", ""),
+                section_id=r.get("sectionId", ""),
+                section_title=r.get("sectionTitle", ""),
+                relevance=r.get("relevance", "medium"),
+                explanation=r.get("explanation", ""),
+            )
+            for r in parsed.get("specReferences", [])
+        ]
+        if isinstance(parsed.get("specReferences"), list)
+        else [],
+        "discrepancies": [
+            SpecDiscrepancy(
+                spec_file=d.get("specFile", ""),
+                section_id=d.get("sectionId", ""),
+                section_title=d.get("sectionTitle", ""),
+                spec_says=d.get("specSays", ""),
+                pr_does=d.get("prDoes", ""),
+                severity=d.get("severity", "warning"),
+                suggested_spec_update=d.get("suggestedSpecUpdate", ""),
+            )
+            for d in parsed.get("discrepancies", [])
+        ]
+        if isinstance(parsed.get("discrepancies"), list)
+        else [],
+        "doc_updates": [
+            DocUpdateSuggestion(
+                spec_file=u.get("specFile", ""),
+                section_id=u.get("sectionId", ""),
+                current_text=u.get("currentText", ""),
+                suggested_text=u.get("suggestedText", ""),
+                reason=u.get("reason", ""),
+            )
+            for u in parsed.get("docUpdates", [])
+        ]
+        if isinstance(parsed.get("docUpdates"), list)
+        else [],
+        "realizations": realizations,
+    }
+
+
+def _report_parse_failure(
+    raw_text: str,
+    error: Exception | None,
+    *,
+    stage: str,
+) -> None:
+    """Emit a WARN log and a PostHog analytics event for a parse failure.
+
+    This is the *only* path that reports analyzer parse failures to the
+    outside world. Historically the parser swallowed JSONDecodeError silently
+    and returned a generic fallback, which left operators with an 85% bot
+    failure rate and no diagnostic signal. Every fallback now produces:
+
+      1. A ``WARN``-level log with the error type and first 300 chars of
+         the response (visible under any reasonable OTel min_level).
+      2. A ``pr_analysis_parse_failed`` PostHog event carrying the full
+         error message plus a 2000-char response preview, for structured
+         analysis in the dashboard.
+
+    ``stage`` distinguishes the failure class:
+      * ``"json_decode"`` — none of the extraction strategies produced
+        valid JSON.
+      * ``"schema_validation"`` — JSON parsed but pydantic rejected the
+        shape when building result models.
+    """
+    err_type = type(error).__name__ if error is not None else "unknown"
+    err_msg = str(error) if error is not None else ""
+    # Keep the log line compact — operators just need enough to recognize
+    # the failure class. The full payload goes to the PostHog event.
+    logger.warning(
+        "analyze_pr: failed to parse Claude response at stage=%s (len=%d, error=%s: %s): %s",
+        stage,
+        len(raw_text),
+        err_type,
+        err_msg[:200],
+        raw_text[:300].replace("\n", " ⏎ "),
+    )
+
+    try:
+        analytics.track(
+            "pr_analysis_parse_failed",
+            properties={
+                "stage": stage,
+                "error_type": err_type,
+                "error_message": err_msg[:500],
+                "response_length": len(raw_text),
+                # Keep the preview bounded so a runaway response doesn't
+                # produce an oversized PostHog event. 2000 chars is plenty
+                # to see the shape (preamble, fences, tags) and diagnose.
+                "response_preview": raw_text[:2000],
+            },
+        )
+    except Exception:
+        # Analytics must never break the main flow. Failure to report is
+        # itself a warn-level condition but should not propagate.
+        logger.debug("Failed to emit pr_analysis_parse_failed event", exc_info=True)
+
+
 def parse_analysis_response(
     text: str,
 ) -> dict:
-    """Parse JSON response from Claude, stripping code fences if present."""
+    """Parse JSON response from Claude, tolerant of preamble/postamble.
+
+    Tries a ladder of extraction strategies — direct parse, ``<answer>`` tag
+    stripping, relaxed code-fence stripping, first-brace-to-last-brace slice
+    — and returns the result of the first strategy that yields valid JSON
+    matching the expected schema.
+
+    On complete failure (no strategy yields parseable JSON, or the parsed
+    JSON fails schema validation), logs at WARN and emits a
+    ``pr_analysis_parse_failed`` PostHog event with the raw response, then
+    returns a stable fallback dict. The fallback NEVER embeds the raw
+    response in the summary — that would post the model's output verbatim
+    as a bot comment on the user's PR, which is a publishing footgun.
+    """
     fallback = {
-        "summary": "Unable to parse analysis response.",
+        "summary": PARSE_FALLBACK_SUMMARY,
         "spec_references": [],
         "discrepancies": [],
         "doc_updates": [],
+        "realizations": [],
     }
 
-    cleaned = text.strip()
-    fence_match = re.match(r"^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$", cleaned)
-    if fence_match:
-        cleaned = fence_match.group(1).strip()
+    if not text or not text.strip():
+        # Empty responses shouldn't page anyone. Return the fallback without
+        # reporting — the bot will post the generic "unable to parse" and
+        # the caller can retry.
+        return fallback
+
+    cleaned_text = text.strip()
+
+    # Each entry is (strategy_name, extracted_candidate_or_None). ``None``
+    # means "this strategy didn't find a candidate" — skip it silently.
+    # Order matters: direct parse first (most common for well-behaved
+    # responses), then most-specific-to-least-specific heuristics.
+    strategies: list[tuple[str, str | None]] = [
+        ("direct", cleaned_text),
+        ("answer_tags", _strip_answer_tags(cleaned_text)),
+        ("fence_relaxed", _strip_fence_relaxed(cleaned_text)),
+        ("brace_slice", _slice_first_to_last_brace(cleaned_text)),
+    ]
+
+    parsed: dict | None = None
+    strategy_used: str | None = None
+    last_error: Exception | None = None
+
+    for name, candidate in strategies:
+        if candidate is None:
+            continue
+        try:
+            parsed = json.loads(candidate)
+            if not isinstance(parsed, dict):
+                # Valid JSON but not an object (e.g. a list or string).
+                # Treat as decode failure so we try the next strategy.
+                last_error = TypeError(f"expected JSON object, got {type(parsed).__name__}")
+                parsed = None
+                continue
+            strategy_used = name
+            break
+        except json.JSONDecodeError as e:
+            last_error = e
+            continue
+
+    if parsed is None:
+        _report_parse_failure(text, last_error, stage="json_decode")
+        return fallback
 
     try:
-        parsed = json.loads(cleaned)
-
-        realizations: list[ACRealization] = []
-        if isinstance(parsed.get("realizations"), list):
-            for r in parsed["realizations"]:
-                try:
-                    status_val = r.get("status", "not_addressed")
-                    realizations.append(
-                        ACRealization(
-                            spec_file=r.get("specFile", ""),
-                            section_id=r.get("sectionId", ""),
-                            section_title=r.get("sectionTitle", ""),
-                            ac_text=r.get("acText", ""),
-                            status=RealizationStatus(status_val),
-                            evidence_files=r.get("evidenceFiles", []),
-                            explanation=r.get("explanation", ""),
-                        )
-                    )
-                except (ValueError, KeyError):
-                    continue
-
-        return {
-            "summary": parsed.get("summary", fallback["summary"])
-            if isinstance(parsed.get("summary"), str)
-            else fallback["summary"],
-            "spec_references": [
-                SpecReference(
-                    spec_file=r.get("specFile", ""),
-                    section_id=r.get("sectionId", ""),
-                    section_title=r.get("sectionTitle", ""),
-                    relevance=r.get("relevance", "medium"),
-                    explanation=r.get("explanation", ""),
-                )
-                for r in parsed.get("specReferences", [])
-            ]
-            if isinstance(parsed.get("specReferences"), list)
-            else [],
-            "discrepancies": [
-                SpecDiscrepancy(
-                    spec_file=d.get("specFile", ""),
-                    section_id=d.get("sectionId", ""),
-                    section_title=d.get("sectionTitle", ""),
-                    spec_says=d.get("specSays", ""),
-                    pr_does=d.get("prDoes", ""),
-                    severity=d.get("severity", "warning"),
-                    suggested_spec_update=d.get("suggestedSpecUpdate", ""),
-                )
-                for d in parsed.get("discrepancies", [])
-            ]
-            if isinstance(parsed.get("discrepancies"), list)
-            else [],
-            "doc_updates": [
-                DocUpdateSuggestion(
-                    spec_file=u.get("specFile", ""),
-                    section_id=u.get("sectionId", ""),
-                    current_text=u.get("currentText", ""),
-                    suggested_text=u.get("suggestedText", ""),
-                    reason=u.get("reason", ""),
-                )
-                for u in parsed.get("docUpdates", [])
-            ]
-            if isinstance(parsed.get("docUpdates"), list)
-            else [],
-            "realizations": realizations,
-        }
-    except (json.JSONDecodeError, KeyError):
-        if cleaned and len(cleaned) < 500:
-            return {**fallback, "summary": f"Analysis response (unparsed): {cleaned}"}
+        result = _build_result_dict(parsed, fallback)
+    except ValidationError as e:
+        _report_parse_failure(text, e, stage="schema_validation")
         return fallback
+
+    # Log non-direct successes at INFO so we can measure how often the
+    # model is wrapping its output and tune the prompt if needed. Direct
+    # successes are the happy path — no need to log them.
+    if strategy_used != "direct":
+        logger.info(
+            "analyze_pr: recovered JSON via strategy=%s (response_length=%d)",
+            strategy_used,
+            len(text),
+        )
+        try:
+            analytics.track(
+                "pr_analysis_parse_recovered",
+                properties={
+                    "strategy": strategy_used,
+                    "response_length": len(text),
+                },
+            )
+        except Exception:
+            logger.debug("Failed to emit pr_analysis_parse_recovered event", exc_info=True)
+
+    return result
 
 
 def _format_tokens(n: int) -> str:
