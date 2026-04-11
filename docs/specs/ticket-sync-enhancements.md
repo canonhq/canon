@@ -95,6 +95,7 @@ Replace the cron-based reverse sync with webhook-driven updates for near-real-ti
 <!-- canon:realized-in:PR#295 file:src/specwright/github/handlers/on_issues.py -->
 <!-- canon:realized-in:PR#312 file:src/specwright/webhooks/router.py -->
 <!-- canon:realized-in:PR#312 file:src/specwright/github/handlers/on_issues.py -->
+<!-- canon:realized-in:PR#497 file:src/canon/sync/adapters/jira.py -->
 - [x] Webhook signature/authentication verification for each system
 <!-- canon:realized-in:PR#295 file:src/specwright/webhooks/verify.py -->
 <!-- canon:realized-in:PR#312 file:src/specwright/webhooks/verify.py -->

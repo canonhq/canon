@@ -7,6 +7,7 @@ import sys
 import time
 import webbrowser
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from ._platform import PlatformClient
@@ -126,8 +127,13 @@ def _login_device(client: PlatformClient, *, org: str = "") -> None:
     # 2. Display URL + code and try to open browser
     print(f"\nOpen this URL in your browser:\n  {verification_uri}\n")
     print(f"Enter code: {user_code}\n")
-    with contextlib.suppress(Exception):
-        webbrowser.open(verification_uri)
+    # Only auto-open real http(s) URLs. A bogus value (empty, relative, or
+    # malformed) causes Python's webbrowser to fall back from remote_args to
+    # args, spawning two tabs against whatever garbage was passed in.
+    parsed = urlparse(verification_uri)
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        with contextlib.suppress(Exception):
+            webbrowser.open(verification_uri)
 
     print("Waiting for authorization...", end="", flush=True)
 

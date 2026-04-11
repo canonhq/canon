@@ -80,7 +80,10 @@ class TestLoginSubcommand:
                     )
                 return _FakeResp(500, {})
 
-        with patch("canon.cli._credentials.save_credentials"):
+        with (
+            patch("canon.cli._credentials.save_credentials"),
+            patch("canon.cli.login.webbrowser.open"),
+        ):
             _login_device(_FakeClient(), org="canonhq")
 
         assert calls[0] == ("/auth/device/code", {"org": "canonhq"})
@@ -126,7 +129,10 @@ class TestLoginSubcommand:
                     },
                 )
 
-        with patch("canon.cli._credentials.save_credentials"):
+        with (
+            patch("canon.cli._credentials.save_credentials"),
+            patch("canon.cli.login.webbrowser.open"),
+        ):
             _login_device(_FakeClient(), org="")
 
         assert calls[0] == ("/auth/device/code", {})
