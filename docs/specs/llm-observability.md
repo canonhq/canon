@@ -135,7 +135,8 @@ When PostHog is not configured (OSS), the vanilla `anthropic.Anthropic` client i
 - [ ] `$ai_generation` events include org as `distinct_id` and `organization` group
 - [ ] `for_api_key()` (BYOK) creates a client that also uses the PostHog wrapper
 - [ ] Existing `agent_call_completed` custom event continues to fire (backward compat)
-- [ ] LLM calls work identically when PostHog is absent (OSS graceful degradation)
+- [x] LLM calls work identically when PostHog is absent (OSS graceful degradation)
+<!-- canon:realized-in:PR#496 file:src/canon/agent/analyzer.py -->
 
 ## 4. Wrap Async Streaming Client
 
