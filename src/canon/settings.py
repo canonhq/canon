@@ -114,9 +114,23 @@ class Settings(BaseSettings):
     @field_validator("oidc_issuer")
     @classmethod
     def _validate_oidc_issuer(cls, v: str) -> str:
-        if v and not v.startswith("https://"):
-            raise ValueError("oidc_issuer must start with https:// (RFC 8414)")
-        return v
+        if not v:
+            return v
+        # RFC 8414 §2 requires HTTPS for production issuers. Localhost is the
+        # standard exception for local development and CI smoke tests — see
+        # OAuth 2.1 §7.5.4 (loopback interface redirection) and the long-
+        # standing industry convention that http://localhost and http://127.0.0.1
+        # are trusted origins. Without this exception, running the OIDC smoke
+        # harness against a local Keycloak or Zitadel docker container is
+        # impossible without setting up self-signed TLS.
+        if v.startswith("https://"):
+            return v
+        if v.startswith(("http://localhost", "http://127.0.0.1", "http://[::1]")):
+            return v
+        raise ValueError(
+            "oidc_issuer must start with https:// (RFC 8414); "
+            "http:// is only allowed for localhost/127.0.0.1/[::1] in local dev"
+        )
 
     # Auth0 M2M credentials for Management API (org membership queries).
     # When not set, org membership lookups are skipped.

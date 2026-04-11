@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import time
 from urllib.parse import urlencode
@@ -150,16 +151,38 @@ class GenericOIDCProvider:
         )
         return f"{self._end_session_endpoint}?{params}"
 
+    def _basic_auth_header(self) -> dict[str, str]:
+        """Build an HTTP Basic Authorization header for confidential clients.
+
+        Per RFC 6749 §2.3.1 (and RFC 8628 §3.1 which defers to it), confidential
+        clients SHOULD authenticate using HTTP Basic at the token and device
+        authorization endpoints. Basic auth is separate from the request body,
+        which is the most broadly compatible approach across providers:
+
+          * Auth0 accepts Basic for confidential device clients (it rejects
+            ``client_secret`` in the body at the device endpoint)
+          * Keycloak confidential clients *require* client authentication at
+            the device endpoint and accept Basic
+          * Zitadel accepts both Basic and body-form
+
+        Returns an empty dict when no secret is configured (public client),
+        so callers can safely spread it unconditionally.
+        """
+        if not self._client_secret:
+            return {}
+        creds = f"{self._client_id}:{self._client_secret}".encode()
+        return {"Authorization": "Basic " + base64.b64encode(creds).decode()}
+
     async def get_device_code(
         self, *, audience: str = "", scope: str = "", organization: str = ""
     ) -> DeviceCodeResponse | None:
         await self._ensure_discovered()
         if not self._device_authorization_endpoint:
             return None
-        # RFC 8628: device authorization is typically used by public clients;
-        # don't send client_secret to the device authorization endpoint as some
-        # providers reject it.  The token endpoint (poll_device_token) does
-        # authenticate the client.
+        # Do *not* put ``client_secret`` in the POST body — some providers
+        # (notably Auth0) reject it there. Confidential clients get their
+        # credentials via the HTTP Basic header instead (see
+        # ``_basic_auth_header``); public clients send nothing.
         payload: dict = {
             "client_id": self._client_id,
             "scope": scope or self._scopes + " offline_access",
@@ -171,14 +194,28 @@ class GenericOIDCProvider:
         # don't recognize it will ignore the extra param.
         if organization:
             payload["organization"] = organization
-        resp = await self._http.post(self._device_authorization_endpoint, data=payload)
+        resp = await self._http.post(
+            self._device_authorization_endpoint,
+            data=payload,
+            headers=self._basic_auth_header(),
+        )
         if resp.status_code != 200:
+            # A non-200 here is a *real* error from a provider that advertises
+            # device authorization in its discovery document. Treating it the
+            # same as "endpoint not supported" (returning None) has bitten us
+            # before: bad client credentials and provider-specific quirks get
+            # silently conflated with RFC 8628 non-support. Raise loudly so
+            # callers and operators see the actual status and body.
+            body_preview = resp.text[:500] if hasattr(resp, "text") else ""
             logger.warning(
                 "OIDC device code request failed: status=%d body=%s",
                 resp.status_code,
-                resp.text[:500],
+                body_preview,
             )
-            return None
+            raise RuntimeError(
+                f"Device authorization request failed: "
+                f"status={resp.status_code} body={body_preview!r}"
+            )
         data = resp.json()
         return DeviceCodeResponse(
             device_code=data["device_code"],

@@ -266,3 +266,35 @@ class TestPartialConfigurations:
         s = Settings(oidc_issuer="https://idp.example.com", oidc_client_id="cid")
         assert s.auth_enabled is False
         assert create_provider(s) is None
+
+
+class TestOidcIssuerValidation:
+    """``oidc_issuer`` validator — HTTPS required except for localhost."""
+
+    def test_https_issuer_accepted(self):
+        s = Settings(oidc_issuer="https://idp.example.com")
+        assert s.oidc_issuer == "https://idp.example.com"
+
+    def test_empty_issuer_accepted(self):
+        """Empty issuer means OIDC not configured — validator must not fire."""
+        s = Settings(oidc_issuer="")
+        assert s.oidc_issuer == ""
+
+    def test_plain_http_non_localhost_rejected(self):
+        with pytest.raises(ValueError, match="must start with https://"):
+            Settings(oidc_issuer="http://idp.example.com")
+
+    @pytest.mark.parametrize(
+        "issuer",
+        [
+            "http://localhost:8180/realms/canon-smoke",
+            "http://localhost/realms/canon-smoke",
+            "http://127.0.0.1:8180/realms/canon-smoke",
+            "http://[::1]:8180/realms/canon-smoke",
+        ],
+    )
+    def test_localhost_http_accepted(self, issuer: str):
+        """Localhost is the standard exception so local dev and CI smoke
+        tests against dockerized IDPs (Keycloak, Zitadel) don't need TLS."""
+        s = Settings(oidc_issuer=issuer)
+        assert s.oidc_issuer == issuer

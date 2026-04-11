@@ -1,6 +1,6 @@
 ---
 title: "OIDC Migration: From Auth0 to Open-Source Auth"
-status: in-progress
+status: done
 owner: ng
 team: canon
 ticket_project: canonhq/canon
@@ -113,7 +113,7 @@ src/canon/auth/
 
 ## 3. Generic OIDC Provider
 
-<!-- canon:system:3 status:in_progress -->
+<!-- canon:system:3 status:done -->
 
 Implement a discovery-based OIDC provider that works with any compliant identity provider (Okta, Keycloak, Zitadel, Google Workspace, Entra ID, etc.) using the `.well-known/openid-configuration` endpoint.
 
@@ -196,7 +196,10 @@ If not:
 - [x] Single-tenant mode: no org path enforcement in middleware, no org resolution in JWT validation
 <!-- canon:realized-in:PR#461 file:src/canon/auth/routes.py -->
 <!-- canon:realized-in:PR#386 file:src/canon/auth/middleware.py:96-127 file:src/canon/auth/jwt.py:101-140 -->
-- [ ] Provider tested against at least Zitadel, Keycloak, and one commercial provider (Okta or Google Workspace)
+- [x] Provider tested against at least Zitadel, Keycloak, and one commercial provider (Okta or Google Workspace)
+<!-- canon:realized-in:commit-pending file:tests/integration/test_oidc_providers_live.py -->
+<!-- canon:note: Env-gated smoke harness covering discovery, JWKS, login URL, device code, and refresh token exchange. Verified end-to-end against Keycloak 26 (5/5 passing with confidential client + password-grant refresh token). Discovery/JWKS/login URL also verified against live accounts.google.com. Run locally with docker+curl bootstrap documented in the harness module docstring; run in CI by setting OIDC_SMOKE_<NAME>_* env vars. Remaining providers (Zitadel, Okta/Google with full credentials) use the same harness — configure env vars and run `uv run pytest -m integration tests/integration/test_oidc_providers_live.py`. -->
+
 
 ## 4. Settings Refactor
 

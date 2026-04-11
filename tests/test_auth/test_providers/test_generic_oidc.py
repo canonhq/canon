@@ -199,6 +199,87 @@ class TestDeviceCode:
         result = await provider.get_device_code()
         assert result is None
 
+    async def test_sends_basic_auth_header_for_confidential_client(self):
+        """RFC 8628 §3.1 + RFC 6749 §2.3.1: confidential clients authenticate
+        via HTTP Basic at the device authorization endpoint, not via
+        ``client_secret`` in the body. Required for Keycloak compatibility —
+        body-form auth fails there with ``unauthorized_client``.
+        """
+        http = _mock_discovery_http()
+        device_resp = MagicMock()
+        device_resp.status_code = 200
+        device_resp.json.return_value = {
+            "device_code": "dc",
+            "user_code": "UC",
+            "verification_uri": "https://idp.example.com/activate",
+            "interval": 5,
+            "expires_in": 600,
+        }
+        http.post = AsyncMock(return_value=device_resp)
+        provider = GenericOIDCProvider(
+            settings=_settings(oidc_client_id="cid", oidc_client_secret="secret"),
+            http_client=http,
+        )
+
+        await provider.get_device_code()
+
+        posted = http.post.call_args
+        headers = posted.kwargs.get("headers", {})
+        assert "Authorization" in headers, (
+            "confidential client must send HTTP Basic auth at device endpoint"
+        )
+        assert headers["Authorization"].startswith("Basic "), headers["Authorization"]
+        import base64
+
+        decoded = base64.b64decode(headers["Authorization"].removeprefix("Basic ")).decode()
+        assert decoded == "cid:secret"
+        # And crucially, client_secret must NOT also be in the body
+        # (Auth0 rejects it there).
+        assert "client_secret" not in posted.kwargs["data"]
+
+    async def test_omits_basic_auth_header_for_public_client(self):
+        """Public clients (no secret configured) must not send a Basic auth header."""
+        http = _mock_discovery_http()
+        device_resp = MagicMock()
+        device_resp.status_code = 200
+        device_resp.json.return_value = {
+            "device_code": "dc",
+            "user_code": "UC",
+            "verification_uri": "https://idp.example.com/activate",
+            "interval": 5,
+            "expires_in": 600,
+        }
+        http.post = AsyncMock(return_value=device_resp)
+        provider = GenericOIDCProvider(
+            settings=_settings(oidc_client_id="cid", oidc_client_secret=""),
+            http_client=http,
+        )
+
+        await provider.get_device_code()
+
+        posted = http.post.call_args
+        headers = posted.kwargs.get("headers", {})
+        assert "Authorization" not in headers
+
+    async def test_raises_when_advertised_endpoint_returns_4xx(self):
+        """Non-200 from an advertised device endpoint must raise, not return None.
+
+        Returning None previously conflated three different cases — endpoint
+        unsupported, bad credentials, and provider-specific quirks — making
+        misconfigurations silently indistinguishable from RFC 8628 non-support.
+        Exhibited in practice when a smoke test against Google with placeholder
+        credentials returned 401 invalid_client and was swallowed.
+        """
+        http = _mock_discovery_http()
+        err_resp = MagicMock()
+        err_resp.status_code = 401
+        err_resp.text = '{"error": "invalid_client"}'
+        http.post = AsyncMock(return_value=err_resp)
+        provider = GenericOIDCProvider(settings=_settings(), http_client=http)
+
+        with pytest.raises(RuntimeError, match="status=401"):
+            await provider.get_device_code()
+
 
 def _json_response(status_code: int, body: dict) -> MagicMock:
     """Create a mock HTTP response with JSON content-type."""
