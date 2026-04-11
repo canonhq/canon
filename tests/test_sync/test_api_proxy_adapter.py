@@ -21,6 +21,22 @@ def adapter() -> CanonApiAdapter:
     return CanonApiAdapter(client, org="acme", owner="acme", repo="widgets")
 
 
+@pytest.fixture
+def jira_adapter() -> CanonApiAdapter:
+    client = _mock_platform_client()
+    return CanonApiAdapter(
+        client,
+        org="acme",
+        owner="",
+        repo="",
+        ticket_system="jira",
+        project_key="CAN",
+    )
+
+
+# ── GitHub mode (backwards compat) ──────────────────────
+
+
 class TestCreateTicket:
     @pytest.mark.asyncio
     async def test_posts_to_correct_endpoint(self, adapter: CanonApiAdapter):
@@ -48,6 +64,7 @@ class TestCreateTicket:
         body = call_args[1]["json"]
         assert body["owner"] == "acme"
         assert body["repo"] == "widgets"
+        assert body["ticket_system"] == "github"
         assert body["input"]["summary"] == "Test"
 
 
@@ -111,7 +128,99 @@ class TestLinkPR:
 
 
 class TestCapabilities:
-    def test_supports_labels(self, adapter: CanonApiAdapter):
+    def test_github_supports_labels(self, adapter: CanonApiAdapter):
         caps = adapter.capabilities
         assert caps.supports_labels is True
         assert caps.supports_custom_fields is False
+
+    def test_jira_capabilities(self, jira_adapter: CanonApiAdapter):
+        caps = jira_adapter.capabilities
+        assert caps.supports_custom_fields is True
+        assert caps.supports_hierarchy is True
+        assert caps.supports_subtasks is True
+        assert caps.supports_labels is True
+        assert caps.supports_issue_types is True
+
+    def test_unknown_system_returns_defaults(self):
+        client = _mock_platform_client()
+        adapter = CanonApiAdapter(client, org="x", owner="", repo="", ticket_system="asana")
+        caps = adapter.capabilities
+        assert caps.supports_labels is False
+
+
+class TestSystemName:
+    def test_github_default(self, adapter: CanonApiAdapter):
+        assert adapter.system_name == "github"
+
+    def test_jira(self, jira_adapter: CanonApiAdapter):
+        assert jira_adapter.system_name == "jira"
+
+
+# ── Jira mode ────────────────────────────────────────────
+
+
+class TestJiraMode:
+    @pytest.mark.asyncio
+    async def test_sends_ticket_system_in_body(self, jira_adapter: CanonApiAdapter):
+        resp = MagicMock()
+        resp.json.return_value = {
+            "ticket_id": "CAN-1",
+            "ticket_url": "https://jira.example.com/browse/CAN-1",
+        }
+        resp.raise_for_status = MagicMock()
+        jira_adapter._client.post.return_value = resp
+
+        await jira_adapter.create_ticket(
+            CreateTicketInput(
+                project_key="CAN",
+                summary="Jira test",
+                description="Body",
+                status=SectionStatus(state="todo"),
+            )
+        )
+
+        body = jira_adapter._client.post.call_args[1]["json"]
+        assert body["ticket_system"] == "jira"
+        assert body["project_key"] == "CAN"
+        assert "owner" not in body  # Empty strings are not included
+
+    @pytest.mark.asyncio
+    async def test_search_tickets(self, jira_adapter: CanonApiAdapter):
+        resp = MagicMock()
+        resp.json.return_value = [
+            {
+                "ticket_id": "CAN-10",
+                "title": "Auth flow",
+                "ticket_url": "https://jira.example.com/browse/CAN-10",
+                "state": "open",
+            }
+        ]
+        resp.raise_for_status = MagicMock()
+        jira_adapter._client.post.return_value = resp
+
+        results = await jira_adapter.search_tickets("CAN", "Auth")
+        assert len(results) == 1
+        assert results[0].ticket_id == "CAN-10"
+
+        call_args = jira_adapter._client.post.call_args
+        assert call_args[0][0] == "/app/acme/api/tickets/search"
+        body = call_args[1]["json"]
+        assert body["project_key"] == "CAN"
+        assert body["title_pattern"] == "Auth"
+
+    @pytest.mark.asyncio
+    async def test_get_status_includes_system(self, jira_adapter: CanonApiAdapter):
+        resp = MagicMock()
+        resp.json.return_value = {
+            "ticket_id": "CAN-1",
+            "status": {"state": "done"},
+            "raw_status": "Done",
+        }
+        resp.raise_for_status = MagicMock()
+        jira_adapter._client.post.return_value = resp
+
+        await jira_adapter.get_ticket_status("CAN-1")
+
+        body = jira_adapter._client.post.call_args[1]["json"]
+        assert body["ticket_system"] == "jira"
+        assert body["ticket_id"] == "CAN-1"

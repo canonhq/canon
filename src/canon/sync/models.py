@@ -107,6 +107,7 @@ class JiraConfig(BaseModel):
     access_token: str = ""
     refresh_token: str = ""
     cloud_id: str = ""
+    site_url: str = ""  # e.g. "https://acme.atlassian.net" — stored during OAuth
 
 
 class LinearConfig(BaseModel):

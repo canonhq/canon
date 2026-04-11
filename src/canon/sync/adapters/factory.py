@@ -166,30 +166,34 @@ async def from_org(
     org_login: str,
     system: Literal["jira", "linear", "github"],
     integration_store: IntegrationStore,
-    *,
-    ticket_project: str = "",
 ) -> TicketAdapter | None:
     """Create an adapter using DB-stored OAuth credentials for an org.
 
-    Falls back to env vars if no DB integration exists.
-    Resolution: DB org_integrations → env vars.
+    Returns ``None`` if no DB integration is configured for this org.
+    Deliberately does NOT fall back to server-wide env vars: in a
+    multi-tenant deployment that would let any authenticated user route
+    ticket operations through the host operator's credentials, which is
+    cross-org credential exposure.
     """
     config = await integration_store.get_integration_config(org_login, system)
+    if config is None:
+        return None
 
-    if config and system == "jira":
+    if system == "jira":
         return JiraAdapter(
             JiraConfig(
                 auth_method="oauth",
                 access_token=config["access_token"],
                 refresh_token=config.get("refresh_token", ""),
                 cloud_id=config["cloud_id"],
+                site_url=config.get("site_url", ""),
             )
         )
 
-    if config and system == "linear":
+    if system == "linear":
         return LinearAdapter(LinearConfig(access_token=config["access_token"]))
 
-    if config and system == "github":
+    if system == "github":
         # GitHub Issues via DB config (stores default repo selection)
         default_owner = config.get("default_owner", "")
         default_repo = config.get("default_repo", "")
@@ -199,6 +203,4 @@ async def from_org(
                 GitHubConfig(token=token, default_owner=default_owner, default_repo=default_repo)
             )
 
-    # Fall back to env var detection
-    logger.debug("No DB integration for %s/%s, falling back to env vars", org_login, system)
-    return create_adapter(ticket_project=ticket_project, system=system)
+    return None

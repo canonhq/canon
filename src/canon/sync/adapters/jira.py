@@ -63,6 +63,15 @@ class JiraAdapter:
         return "jira"
 
     @property
+    def _browse_base_url(self) -> str:
+        """Base URL for human-readable ticket links."""
+        if self.config.site_url:
+            return self.config.site_url.rstrip("/")
+        if self.config.host:
+            return f"https://{self.config.host}"
+        return f"https://{self.config.cloud_id}.atlassian.net"
+
+    @property
     def capabilities(self) -> AdapterCapabilities:
         return AdapterCapabilities(
             supports_custom_fields=True,
@@ -126,7 +135,7 @@ class JiraAdapter:
 
         return CreateTicketResult(
             ticket_id=data["key"],
-            ticket_url=f"https://{self.config.host}/browse/{data['key']}",
+            ticket_url=f"{self._browse_base_url}/browse/{data['key']}",
         )
 
     async def update_ticket(self, input: UpdateTicketInput) -> None:
@@ -180,13 +189,18 @@ class JiraAdapter:
 
     async def search_tickets(self, project_key: str, title_pattern: str) -> list[SearchResult]:
         """Search for existing Jira issues matching a title pattern."""
-        jql = f'project = "{project_key}" AND summary ~ "{title_pattern}" ORDER BY created ASC'
-        data = await self._request("GET", f"/search?jql={jql}&maxResults=5&fields=summary,status")
+        # Sanitize inputs to prevent JQL injection — strip quotes and backslashes
+        safe_project = project_key.replace("\\", "").replace('"', "")
+        safe_pattern = title_pattern.replace("\\", "").replace('"', "")
+        jql = f'project = "{safe_project}" AND summary ~ "{safe_pattern}" ORDER BY created ASC'
+        data = await self._request(
+            "GET", "/search", params={"jql": jql, "maxResults": "5", "fields": "summary,status"}
+        )
         return [
             SearchResult(
                 ticket_id=issue["key"],
                 title=issue["fields"]["summary"],
-                ticket_url=f"https://{self.config.host}/browse/{issue['key']}",
+                ticket_url=f"{self._browse_base_url}/browse/{issue['key']}",
                 state="closed"
                 if issue["fields"]["status"]["statusCategory"]["key"] == "done"
                 else "open",
@@ -221,6 +235,7 @@ class JiraAdapter:
         method: str,
         path: str,
         json: dict | None = None,
+        params: dict | None = None,
     ) -> dict:
         """Make a Jira API request with retry and rate limit handling."""
         last_exc: Exception | None = None
@@ -228,7 +243,7 @@ class JiraAdapter:
 
         for attempt in range(MAX_RETRIES + 1):
             try:
-                resp = await self._client.request(method, path, json=json)
+                resp = await self._client.request(method, path, json=json, params=params)
                 resp.raise_for_status()
                 if resp.status_code == 204 or not resp.content:
                     return {}

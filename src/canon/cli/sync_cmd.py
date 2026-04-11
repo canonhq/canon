@@ -56,8 +56,10 @@ def _try_remote_adapter(
 ) -> tuple[object, TicketMappingConfig] | None:
     """Try to create a server-proxied adapter for logged-in users.
 
-    Returns (adapter, mapping) if credentials exist and the ticket system is
-    GitHub (the only system the proxy supports), otherwise None.
+    Returns (adapter, mapping) if credentials exist and the Canon server
+    can handle the configured ticket system, otherwise None.
+
+    Supported systems: github (default), jira, linear.
     """
     from canon.sync.adapters.api_proxy import CanonApiAdapter
 
@@ -65,32 +67,52 @@ def _try_remote_adapter(
     from ._local import resolve_github_remote
     from ._platform import PlatformClient
 
+    log = logging.getLogger(__name__)
+
     cred = load_credentials()
     if cred is None:
+        log.debug("No Canon credentials found; run 'canon login' to enable server proxy")
         return None
 
-    # API proxy only supports GitHub for now.
-    # When ticket_system is None (unconfigured), we assume GitHub as the default.
-    if config.ticket_system and config.ticket_system != "github":
-        return None
+    system = config.ticket_system or "github"
 
-    remote = resolve_github_remote(config, root)
-    if not remote:
-        return None
+    if system == "github":
+        remote = resolve_github_remote(config, root)
+        if not remote:
+            log.debug("Could not resolve GitHub remote for server proxy")
+            return None
+        owner, repo = remote
+        org = cred.get("org_login", "") or cred.get("org", "") or owner
+        if not org:
+            log.debug("No org resolved from credentials or GitHub remote")
+            return None
+        client = PlatformClient()
+        adapter = CanonApiAdapter(client, org, owner, repo, ticket_system="github")
+        mapping = TicketMappingConfig(
+            ticket_systems={"primary": TSC(system="github", project=f"{owner}/{repo}")}
+        )
+        return adapter, mapping
 
-    owner, repo = remote
+    if system in ("jira", "linear"):
+        org = cred.get("org_login", "") or cred.get("org", "")
+        if not org:
+            log.debug("No org in Canon credentials; cannot use server proxy for %s", system)
+            return None
+        project_key = config.project_key or ""
+        client = PlatformClient()
+        adapter = CanonApiAdapter(
+            client, org, "", "", ticket_system=system, project_key=project_key
+        )
+        mapping = TicketMappingConfig(
+            ticket_systems={"primary": TSC(system=system, project=project_key)}
+        )
+        return adapter, mapping
 
-    # Resolve org from credentials, falling back to repo owner
-    org = cred.get("org_login", "") or cred.get("org", "") or owner
-    if not org:
-        return None
-
-    client = PlatformClient()
-    adapter = CanonApiAdapter(client, org, owner, repo)
-    mapping = TicketMappingConfig(
-        ticket_systems={"primary": TSC(system="github", project=f"{owner}/{repo}")}
+    log.warning(
+        "Unsupported ticket system '%s' for server proxy; supported: github, jira, linear",
+        system,
     )
-    return adapter, mapping
+    return None
 
 
 def _has_local_credentials() -> bool:
@@ -110,9 +132,28 @@ def _has_local_credentials() -> bool:
 
 
 def _try_local_or_remote(config: CanonConfig, root: Path) -> tuple[object, TicketMappingConfig]:
-    """Auto-detect: prefer local credentials, then server proxy, then local as last resort."""
+    """Auto-detect: prefer local credentials for GitHub, server proxy for Jira/Linear."""
     log = logging.getLogger(__name__)
 
+    system = config.ticket_system or "github"
+
+    # For Jira/Linear, always prefer server proxy — local credentials
+    # require managing API tokens, which is what we're trying to avoid.
+    if system in ("jira", "linear"):
+        result = _try_remote_adapter(config, root)
+        if result is not None:
+            log.debug("Using Canon server proxy for %s", system)
+            print(f"Using Canon server proxy for {system}")
+            return result
+        log.warning("Server proxy unavailable for %s; falling back to local adapter", system)
+        print(
+            f"Warning: Canon server proxy unavailable for {system}. "
+            "Run 'canon login' or set local credentials.",
+            file=sys.stderr,
+        )
+        return create_adapter_local(config, root)
+
+    # For GitHub, prefer local credentials (faster, no server round-trip).
     if _has_local_credentials():
         log.debug("Local GitHub credentials detected, using local adapter")
         return create_adapter_local(config, root)
