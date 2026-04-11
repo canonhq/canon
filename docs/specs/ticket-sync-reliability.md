@@ -121,6 +121,8 @@ number, embedded as a hidden marker in the issue body.
 <!-- canon:realized-in:PR#385 file:src/canon/sync/templates.py -->
 - [ ] `spec_slug` derived from spec file path relative to repo root (e.g., `docs/specs/auth-hardening` for `docs/specs/auth-hardening.md`)
 - [x] Fingerprint is stable across section title renames (keyed on path + number, not title)
+<!-- canon:realized-in:PR#497 file:src/canon/parser/parse.py -->
+<!-- canon:realized-in:PR#497 file:tests/test_parser/test_parse.py -->
 - [x] `render_description()` in `templates.py` includes the fingerprint in generated issue bodies
 - [ ] Custom description templates can reference `{{fingerprint}}` variable
 
