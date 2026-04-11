@@ -417,7 +417,18 @@ def _parse_frontmatter(
             )
         )
 
-    return fm, post.content, diagnostics
+    # Return raw content sliced after the frontmatter delimiter rather than
+    # post.content. python-frontmatter does not preserve 1:1 line alignment
+    # with the source — it consumes whitespace after the closing ``---``,
+    # which shifts every subsequent line number. Section start_line values
+    # are computed as (content_line + fm_line_count) and the writer
+    # (parser/writer.py::insert_ticket_links) uses those line numbers as
+    # absolute indices when inserting ticket/status comments, so any drift
+    # causes comments to be placed on the wrong line and breaks idempotent
+    # forward sync.
+    fm_line_count = _count_frontmatter_lines(raw)
+    raw_content = "\n".join(raw.split("\n")[fm_line_count:]) if fm_line_count else raw
+    return fm, raw_content, diagnostics
 
 
 def _count_frontmatter_lines(raw: str) -> int:

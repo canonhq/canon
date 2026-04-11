@@ -448,12 +448,16 @@ class TestSearchTickets:
     @pytest.mark.asyncio
     async def test_returns_parsed_results(self) -> None:
         adapter = _adapter()
+        captured_method: str | None = None
+        captured_path: str | None = None
         captured_params: dict | None = None
 
         async def fake_request(
             method: str, path: str, json: dict | None = None, params: dict | None = None
         ) -> dict:
-            nonlocal captured_params
+            nonlocal captured_method, captured_path, captured_params
+            captured_method = method
+            captured_path = path
             captured_params = params
             return {
                 "issues": [
@@ -483,7 +487,10 @@ class TestSearchTickets:
         assert results[1].ticket_id == "CAN-11"
         assert results[1].state == "closed"
         assert "CAN-10" in results[0].ticket_url
-        # JQL passed as params, not embedded in URL
+        # Must use /search/jql — the old /search endpoint returns 410 Gone
+        # since Atlassian retired it. JQL passed as params, not embedded in URL.
+        assert captured_method == "GET"
+        assert captured_path == "/search/jql"
         assert captured_params is not None
         assert "jql" in captured_params
 

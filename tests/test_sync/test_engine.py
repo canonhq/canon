@@ -106,6 +106,83 @@ More content."""
         assert adapter.created[0].summary.startswith("[Test §")
 
     @pytest.mark.asyncio
+    async def test_forward_sync_output_is_reparseable_with_correct_links(self):
+        """Regression: forward_sync output must be re-parseable with each
+        section linked to the correct ticket. This guards the full
+        parse → write-back → re-parse cycle that was broken by the
+        start_line off-by-one (fixed in PR #497)."""
+
+        class _SequentialAdapter(MockAdapter):
+            """Mock adapter that assigns a different ticket ID per create call."""
+
+            def __init__(self, ids: list[str]) -> None:
+                super().__init__()
+                self._ids = list(ids)
+                self._index = 0
+
+            async def create_ticket(self, input: CreateTicketInput) -> CreateTicketResult:
+                self.created.append(input)
+                ticket_id = self._ids[self._index]
+                self._index += 1
+                return CreateTicketResult(
+                    ticket_id=ticket_id,
+                    ticket_url=f"https://jira.example.com/browse/{ticket_id}",
+                )
+
+        raw = """---
+title: Roundtrip Test
+status: draft
+owner: test
+team: test
+---
+
+# Roundtrip Test
+
+Intro paragraph.
+
+## 1. First section
+
+<!-- canon:system:1 status:todo -->
+
+First content.
+
+## 2. Second section
+
+<!-- canon:system:2 status:todo -->
+
+Second content.
+"""
+
+        result = parse_spec(raw)
+        adapter = _SequentialAdapter(["CAN-1", "CAN-2"])
+
+        markdown, sync_result = await forward_sync(result.document, adapter, "CAN")
+        assert len(sync_result.created) == 2
+
+        # Re-parse the markdown returned by forward_sync and verify each
+        # section is linked to the correct ticket. Before the PR #497 parser
+        # fix, this failed: section 1 would link to CAN-2 (or None) and
+        # section 2 would have no link at all, breaking idempotency.
+        reparsed = parse_spec(markdown)
+        assert reparsed.document.sections[0].ticket_link is not None, (
+            "section 1 should have a ticket link after forward_sync"
+        )
+        assert reparsed.document.sections[0].ticket_link.ticket_id == "CAN-1"
+        assert reparsed.document.sections[1].ticket_link is not None, (
+            "section 2 should have a ticket link after forward_sync"
+        )
+        assert reparsed.document.sections[1].ticket_link.ticket_id == "CAN-2"
+
+        # Idempotency: re-running forward_sync on the re-parsed doc should
+        # link to existing tickets, not create new ones.
+        dedup_adapter = _SequentialAdapter(["CAN-99", "CAN-100"])
+        _, second_result = await forward_sync(reparsed.document, dedup_adapter, "CAN")
+        assert len(second_result.created) == 0, (
+            "re-running forward_sync should not create new tickets"
+        )
+        assert len(dedup_adapter.created) == 0
+
+    @pytest.mark.asyncio
     async def test_skips_sections_with_existing_tickets(self, payments_spec: str):
         result = parse_spec(payments_spec)
         adapter = MockAdapter(

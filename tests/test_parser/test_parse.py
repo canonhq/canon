@@ -889,3 +889,110 @@ team: test
         assert len(section.scenarios) == 1
         assert section.scenarios[0].name == "Happy path"
         assert len(section.scenarios[0].steps) == 3
+
+
+class TestSectionStartLineAlignment:
+    """Regression tests for start_line alignment with the raw markdown.
+
+    python-frontmatter does not preserve 1:1 line alignment with the source —
+    it consumes whitespace after the closing ``---`` delimiter. The parser
+    must compensate so that ``section.start_line`` always points at the
+    actual heading line in the original raw text — this is critical for
+    ``insert_ticket_links`` to place ticket comments in the right spot
+    (and thus for idempotent forward sync).
+
+    Guards against the regression fixed in PR #497: ticket comments were
+    inserted one line above the heading, causing forward sync to re-create
+    duplicate tickets on every run.
+    """
+
+    def test_start_line_matches_heading_with_blank_after_frontmatter(self):
+        raw = """---
+title: Test
+---
+
+# Document Title
+
+Intro paragraph.
+
+## 1. First section
+
+<!-- canon:system:1 status:todo -->
+
+Content here.
+
+## 2. Second section
+
+More content.
+"""
+        result = parse_spec(raw)
+        raw_lines = raw.split("\n")
+        for section in result.document.sections:
+            heading_line = raw_lines[section.start_line - 1]
+            assert heading_line.lstrip().startswith("## "), (
+                f"start_line={section.start_line} points to {heading_line!r}, not a heading"
+            )
+
+    def test_start_line_matches_heading_without_blank_after_frontmatter(self):
+        raw = """---
+title: Test
+---
+# Document Title
+
+## 1. Only section
+
+Content.
+"""
+        result = parse_spec(raw)
+        raw_lines = raw.split("\n")
+        for section in result.document.sections:
+            heading_line = raw_lines[section.start_line - 1]
+            assert heading_line.lstrip().startswith("## ")
+
+    def test_ticket_link_insertion_roundtrip(self):
+        """A ticket comment inserted via the writer must be parseable back
+        into the correct section's ``ticket_link`` field."""
+        from canon.parser.writer import TicketLinkInsertion, insert_ticket_links
+
+        raw = """---
+title: Test
+ticket_project: CAN
+---
+
+# Test Doc
+
+## 1. Section one
+
+<!-- canon:system:1 status:todo -->
+
+Content.
+
+## 2. Section two
+
+<!-- canon:system:2 status:todo -->
+
+More content.
+"""
+        result = parse_spec(raw)
+        doc = result.document
+
+        insertions = [
+            TicketLinkInsertion(
+                heading_line=doc.sections[0].start_line,
+                system="jira",
+                ticket_id="CAN-1",
+            ),
+            TicketLinkInsertion(
+                heading_line=doc.sections[1].start_line,
+                system="jira",
+                ticket_id="CAN-2",
+            ),
+        ]
+        updated = insert_ticket_links(doc, insertions)
+
+        # Re-parse and verify each section is linked to the correct ticket
+        result2 = parse_spec(updated)
+        assert result2.document.sections[0].ticket_link is not None
+        assert result2.document.sections[0].ticket_link.ticket_id == "CAN-1"
+        assert result2.document.sections[1].ticket_link is not None
+        assert result2.document.sections[1].ticket_link.ticket_id == "CAN-2"

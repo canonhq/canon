@@ -202,7 +202,8 @@ SSE streaming routes (`/generate`, `/ai-edit`) catch exceptions inside their gen
 
 ### Acceptance Criteria
 
-- [ ] SSE streaming route errors call `analytics.capture_exception()` before yielding an error event
+- [x] SSE streaming route errors call `analytics.capture_exception()` before yielding an error event
+<!-- canon:realized-in:PR#496 file:src/canon/agent/analyzer.py -->
 - [ ] Streaming errors include route path, user context, and error details
 - [ ] Error capture does not break the SSE event stream or connection cleanup
 

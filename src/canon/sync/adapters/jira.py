@@ -188,13 +188,22 @@ class JiraAdapter:
         )
 
     async def search_tickets(self, project_key: str, title_pattern: str) -> list[SearchResult]:
-        """Search for existing Jira issues matching a title pattern."""
+        """Search for existing Jira issues matching a title pattern.
+
+        Uses /rest/api/3/search/jql. The older /rest/api/3/search endpoint
+        was retired by Atlassian and now returns 410 Gone. The JQL-variant
+        endpoint uses ``nextPageToken``/``isLast`` instead of
+        ``startAt``/``total`` for pagination, but we only read ``issues[]``
+        which is stable across both.
+        """
         # Sanitize inputs to prevent JQL injection — strip quotes and backslashes
         safe_project = project_key.replace("\\", "").replace('"', "")
         safe_pattern = title_pattern.replace("\\", "").replace('"', "")
         jql = f'project = "{safe_project}" AND summary ~ "{safe_pattern}" ORDER BY created ASC'
         data = await self._request(
-            "GET", "/search", params={"jql": jql, "maxResults": "5", "fields": "summary,status"}
+            "GET",
+            "/search/jql",
+            params={"jql": jql, "maxResults": "5", "fields": "summary,status"},
         )
         return [
             SearchResult(
