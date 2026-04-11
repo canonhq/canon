@@ -12,12 +12,14 @@ import logging
 import sys
 
 from .. import otel_logging
+from ..alerts.cron_utils import tracked_cron
 from ..db import SessionStore, close_pool, create_pool
 from ..settings import Settings
 
 logger = logging.getLogger(__name__)
 
 
+@tracked_cron("cleanup_expired_sessions")
 async def run_cleanup() -> int:
     """Delete expired sessions.  Returns the number of sessions deleted."""
     settings = Settings()

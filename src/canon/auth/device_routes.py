@@ -19,6 +19,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from canon import analytics
+
 from .jwt import resolve_org_login, validate_access_token
 from .providers.protocol import Pending
 
@@ -128,6 +130,19 @@ async def request_device_code(request: Request, body: DeviceCodeRequest):
     if device_code_resp is None:
         raise HTTPException(status_code=501, detail="Device auth not supported by provider")
 
+    # Emit a started event so the Auth dashboard can compute a completion
+    # rate (started vs completed). We fire this AFTER provider.get_device_code
+    # succeeds so failed code requests don't pollute the numerator — those
+    # already propagate as 501/502 and show up on HTTP API dashboards.
+    analytics.track(
+        "device_auth_started",
+        properties={
+            "org_hint": body.org or "",
+            "has_org_resolved": bool(organization_id),
+            "expires_in": device_code_resp.expires_in,
+        },
+    )
+
     return JSONResponse(
         content={
             "device_code": device_code_resp.device_code,
@@ -152,13 +167,37 @@ async def poll_device_token(request: Request, body: DeviceTokenRequest):
     except RuntimeError as exc:
         error_str = str(exc)
         if "expired_token" in error_str:
+            analytics.track(
+                "device_auth_completed",
+                properties={"status": "expired", "success": False},
+            )
             return JSONResponse(content={"status": "expired"})
         if "access_denied" in error_str:
+            analytics.track(
+                "device_auth_completed",
+                properties={"status": "denied", "success": False},
+            )
             return JSONResponse(content={"status": "denied"})
         logger.warning("Provider device/token error: %s", exc)
+        analytics.track(
+            "device_auth_completed",
+            properties={
+                "status": "error",
+                "success": False,
+                "error_message": error_str[:500],
+            },
+        )
         return JSONResponse(content={"status": "error", "detail": error_str})
-    except Exception:
+    except Exception as exc:
         logger.warning("Provider device/token failed", exc_info=True)
+        analytics.track(
+            "device_auth_completed",
+            properties={
+                "status": "error",
+                "success": False,
+                "error_message": str(exc)[:500],
+            },
+        )
         return JSONResponse(
             content={"status": "error", "detail": "Token exchange failed"},
             status_code=502,
@@ -176,16 +215,36 @@ async def poll_device_token(request: Request, body: DeviceTokenRequest):
     refresh_token = result.refresh_token
     expires_in = result.expires_in
 
-    # Validate access token and extract claims
+    # Validate access token and extract claims. Both error branches are
+    # post-token-exchange terminal failures — the provider already gave us a
+    # token, we just can't trust it. A ``device_auth_started`` event was
+    # already emitted for this session, so we MUST emit ``device_auth_completed``
+    # here too or the dashboard's started-vs-completed ratio drifts.
     try:
         jwks_uri = await provider.get_jwks_uri()
         claims = await validate_access_token(access_token, settings, jwks_uri=jwks_uri)
     except ValueError as exc:
         # Missing configuration (e.g. AUTH0_AUDIENCE)
         logger.error("Device auth: server misconfiguration: %s", exc)
+        analytics.track(
+            "device_auth_completed",
+            properties={
+                "status": "error",
+                "success": False,
+                "error_message": f"server_misconfigured: {str(exc)[:450]}",
+            },
+        )
         raise HTTPException(status_code=503, detail="Auth service misconfigured") from exc
     except Exception as exc:
         logger.warning("Device auth: access token validation failed", exc_info=True)
+        analytics.track(
+            "device_auth_completed",
+            properties={
+                "status": "error",
+                "success": False,
+                "error_message": f"token_validation_failed: {str(exc)[:450]}",
+            },
+        )
         raise HTTPException(status_code=500, detail="Access token validation failed") from exc
 
     # Identity (``sub``) comes exclusively from the JWKS-validated access
@@ -211,6 +270,12 @@ async def poll_device_token(request: Request, body: DeviceTokenRequest):
     # Refuse to mint a session when we can't identify the user. Returning a
     # "successful" response with empty sub/email would upsert a blank user
     # and silently corrupt the user table — much worse than a loud 500.
+    #
+    # This is still a terminal outcome for the device auth flow — the
+    # provider gave us a token, we just can't extract identity from it —
+    # so we emit ``device_auth_completed`` before raising, for the same
+    # started-vs-completed ratio reason as the validate_access_token
+    # branches above.
     if not sub or not email:
         logger.error(
             "Device auth: could not extract identity from token response "
@@ -218,6 +283,17 @@ async def poll_device_token(request: Request, body: DeviceTokenRequest):
             sub,
             bool(email),
             bool(id_token),
+        )
+        analytics.track(
+            "device_auth_completed",
+            properties={
+                "status": "error",
+                "success": False,
+                "error_message": (
+                    f"identity_extraction_failed: sub_present={bool(sub)} "
+                    f"email_present={bool(email)} id_token_present={bool(id_token)}"
+                ),
+            },
         )
         raise HTTPException(
             status_code=500,
@@ -272,6 +348,16 @@ async def poll_device_token(request: Request, body: DeviceTokenRequest):
             session_created = True
         except Exception:
             logger.warning("Device auth: failed to create session", exc_info=True)
+
+    analytics.track(
+        "device_auth_completed",
+        properties={
+            "status": "approved",
+            "success": True,
+            "session_created": session_created,
+            "has_org": bool(org_login),
+        },
+    )
 
     return JSONResponse(
         content={

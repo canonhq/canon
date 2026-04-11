@@ -115,6 +115,7 @@ All `analytics.track()` calls must include `groups={"organization": org}` to ena
 
 - [x] `ticket_created` event emitted on every individual ticket creation in forward sync
 <!-- canon:realized-in:audit file:src/canon/sync/engine.py:304 -->
+<!-- canon:realized-in:PR#503 file:src/canon/github/handlers/on_push.py -->
 - [x] `ticket_deduped` event emitted when dedup finds existing ticket (with method: fingerprint or title)
 <!-- canon:realized-in:audit file:src/canon/sync/engine.py:261 -->
 - [x] `ticket_closed` event emitted when lifecycle sync closes a ticket
@@ -123,6 +124,7 @@ All `analytics.track()` calls must include `groups={"organization": org}` to ena
 <!-- canon:realized-in:audit file:src/canon/sync/engine.py:399 -->
 - [x] `ticket_status_synced` event emitted on every reverse sync status change
 <!-- canon:realized-in:audit file:src/canon/sync/engine.py:594 -->
+<!-- canon:realized-in:PR#503 file:src/canon/cron/sync_status.py -->
 - [ ] `ticket_routing_matched` event emitted when routing rules resolve a section to a target system
 - [x] `spec_detected` event emitted when a new spec file is first seen on push
 <!-- canon:realized-in:audit file:src/canon/github/handlers/on_push.py:330 -->

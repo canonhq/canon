@@ -11,7 +11,8 @@ import asyncio
 import logging
 import sys
 
-from .. import otel_logging
+from .. import analytics, otel_logging
+from ..alerts.cron_utils import tracked_cron
 from ..github.client import GitHubClient
 from ..parser.models import ParseOptions
 from ..parser.parse import parse_spec
@@ -25,6 +26,7 @@ from ..sync.router import resolve_target
 logger = logging.getLogger(__name__)
 
 
+@tracked_cron("reverse_sync_status")
 async def run_reverse_sync() -> list[dict]:
     """Run reverse sync across all installed repos.
 
@@ -158,6 +160,26 @@ async def run_reverse_sync() -> list[dict]:
                             "changed": len(sync_result.status_changed),
                             "errors": len(sync_result.errors),
                         }
+                    )
+
+                    # Per-file reverse sync event — matches the shape of
+                    # ``spec_sync_completed`` (per-file, with adapter tag) so
+                    # Canon · Ticket Sync can correlate forward and reverse
+                    # health per repo/file/adapter. The existing
+                    # ``reverse_sync_cron_summary`` event (emitted once per
+                    # cron run at the bottom of main()) stays in place for
+                    # run-level monitoring.
+                    analytics.track(
+                        "reverse_sync_completed",
+                        properties={
+                            "repo": f"{owner}/{repo_name}",
+                            "file_path": file_path,
+                            "adapter": getattr(adapter, "system_name", "unknown"),
+                            "status_changed_count": len(sync_result.status_changed),
+                            "error_count": len(sync_result.errors),
+                            "success": not sync_result.errors,
+                        },
+                        groups={"organization": owner},
                     )
                 except Exception:
                     logger.exception("Error syncing %s/%s/%s", owner, repo_name, file_path)

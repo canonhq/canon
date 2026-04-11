@@ -13,6 +13,7 @@ import sys
 from datetime import date
 
 from .. import otel_logging
+from ..alerts.cron_utils import tracked_cron
 from ..db import create_pool
 from ..db.agent_store import AgentStore
 from ..db.schema import ensure_schema
@@ -24,6 +25,7 @@ from ..web.services import _summarize_spec
 logger = logging.getLogger(__name__)
 
 
+@tracked_cron("coverage_snapshot")
 async def run_coverage_snapshot() -> list[dict]:
     """Capture coverage snapshots for all specs across installed repos.
 

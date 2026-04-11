@@ -13,6 +13,7 @@ import logging
 import sys
 
 from .. import analytics, otel_logging
+from ..alerts.cron_utils import tracked_cron
 from ..db import create_pool
 from ..db.schema import ensure_schema
 from ..github.client import GitHubClient
@@ -24,6 +25,7 @@ from ..stale.issue_reporter import upsert_stale_issue
 logger = logging.getLogger(__name__)
 
 
+@tracked_cron("stale_doc_check")
 async def run_stale_check() -> list[dict]:
     """Run stale check across all installed repos.
 

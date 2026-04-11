@@ -12,12 +12,14 @@ import logging
 
 from .. import otel_logging
 from ..admin.audit import AuditStore
+from ..alerts.cron_utils import tracked_cron
 from ..db import close_pool, create_pool
 from ..settings import Settings
 
 logger = logging.getLogger(__name__)
 
 
+@tracked_cron("audit_retention")
 async def run_audit_retention() -> int:
     """Delete audit events older than the configured retention period.
 

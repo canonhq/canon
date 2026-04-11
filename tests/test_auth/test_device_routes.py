@@ -404,6 +404,248 @@ class TestRegistryErrorPropagation:
         app.state.oidc_provider.get_device_code.assert_not_awaited()
 
 
+class TestDeviceAuthAnalytics:
+    """Instrumentation contract for device auth reliability dashboards.
+
+    These tests pin the behavior that the Canon · Auth service dashboard
+    depends on — ``device_auth_started`` on every issued code and
+    ``device_auth_completed`` on every terminal outcome (approved, expired,
+    denied, error). Without these events, the device-auth completion-rate
+    tile and the Auth endpoint health signal would be blind.
+    """
+
+    async def test_request_device_code_emits_started(self, client: AsyncClient):
+        app.state.oidc_provider.get_device_code = AsyncMock(
+            return_value=DeviceCodeResponse(
+                device_code="dev-code-123",
+                user_code="ABCD-1234",
+                verification_uri="https://idp.example.com/activate",
+                verification_uri_complete="https://idp.example.com/activate?user_code=ABCD-1234",
+                interval=5,
+                expires_in=900,
+            )
+        )
+
+        with patch("canon.auth.device_routes.analytics.track") as mock_track:
+            resp = await client.post("/auth/device/code", json={})
+
+        assert resp.status_code == 200
+        started_calls = [c for c in mock_track.call_args_list if c.args[0] == "device_auth_started"]
+        assert len(started_calls) == 1, (
+            f"expected exactly one device_auth_started event, got {mock_track.call_args_list}"
+        )
+        props = started_calls[0].kwargs["properties"]
+        assert props["org_hint"] == ""
+        assert props["has_org_resolved"] is False
+        assert props["expires_in"] == 900
+
+    async def test_request_device_code_does_not_emit_started_on_provider_failure(
+        self, client: AsyncClient
+    ):
+        """If get_device_code raises, the HTTP layer returns 502 and no
+        started event should fire — otherwise the denominator for completion
+        rate is inflated by requests that never actually produced a code."""
+        app.state.oidc_provider.get_device_code = AsyncMock(side_effect=Exception("provider down"))
+
+        with patch("canon.auth.device_routes.analytics.track") as mock_track:
+            resp = await client.post("/auth/device/code", json={})
+
+        assert resp.status_code == 502
+        assert not any(c.args[0] == "device_auth_started" for c in mock_track.call_args_list)
+
+    async def test_poll_device_token_emits_expired_completion(self, client: AsyncClient):
+        app.state.oidc_provider.poll_device_token = AsyncMock(
+            side_effect=RuntimeError("Device auth error: expired_token")
+        )
+
+        with patch("canon.auth.device_routes.analytics.track") as mock_track:
+            resp = await client.post("/auth/device/token", json={"device_code": "dev-code"})
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "expired"
+        completed_calls = [
+            c for c in mock_track.call_args_list if c.args[0] == "device_auth_completed"
+        ]
+        assert len(completed_calls) == 1
+        props = completed_calls[0].kwargs["properties"]
+        assert props["status"] == "expired"
+        assert props["success"] is False
+
+    async def test_poll_device_token_emits_denied_completion(self, client: AsyncClient):
+        app.state.oidc_provider.poll_device_token = AsyncMock(
+            side_effect=RuntimeError("Device auth error: access_denied")
+        )
+
+        with patch("canon.auth.device_routes.analytics.track") as mock_track:
+            resp = await client.post("/auth/device/token", json={"device_code": "dev-code"})
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "denied"
+        completed_calls = [
+            c for c in mock_track.call_args_list if c.args[0] == "device_auth_completed"
+        ]
+        assert len(completed_calls) == 1
+        props = completed_calls[0].kwargs["properties"]
+        assert props["status"] == "denied"
+        assert props["success"] is False
+
+    async def test_poll_device_token_does_not_emit_completion_while_pending(
+        self, client: AsyncClient
+    ):
+        """Pending responses fire during the polling loop and should NOT
+        count as completions — otherwise the completion count explodes
+        relative to the started count."""
+        app.state.oidc_provider.poll_device_token = AsyncMock(return_value=Pending())
+
+        with patch("canon.auth.device_routes.analytics.track") as mock_track:
+            resp = await client.post("/auth/device/token", json={"device_code": "dev-code"})
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "pending"
+        assert not any(c.args[0] == "device_auth_completed" for c in mock_track.call_args_list)
+
+    async def test_poll_device_token_emits_approved_completion(self, client: AsyncClient):
+        id_token = _fake_id_token(
+            {"sub": "auth0|123", "email": "test@example.com", "name": "Test User"}
+        )
+        app.state.oidc_provider.poll_device_token = AsyncMock(
+            return_value=TokenSet(
+                access_token="at-123",
+                id_token=id_token,
+                refresh_token="rt-456",
+                expires_in=86400,
+            )
+        )
+        mock_user_store = AsyncMock()
+        mock_user_store.upsert_user = AsyncMock(return_value={"id": 1})
+        app.state.user_store = mock_user_store
+        mock_session_store = AsyncMock()
+        mock_session_store.create_session = AsyncMock(return_value={"id": "sess-1"})
+        app.state.session_store = mock_session_store
+
+        with (
+            patch("canon.auth.device_routes.validate_access_token") as mock_validate,
+            patch("canon.auth.device_routes.analytics.track") as mock_track,
+        ):
+            mock_validate.return_value = {"sub": "auth0|123"}
+            resp = await client.post("/auth/device/token", json={"device_code": "dev-code"})
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "approved"
+        completed_calls = [
+            c for c in mock_track.call_args_list if c.args[0] == "device_auth_completed"
+        ]
+        assert len(completed_calls) == 1
+        props = completed_calls[0].kwargs["properties"]
+        assert props["status"] == "approved"
+        assert props["success"] is True
+        assert props["session_created"] is True
+
+    async def test_emits_completed_when_validate_access_token_raises_value_error(
+        self, client: AsyncClient
+    ):
+        """Regression for the post-token-exchange completion-rate bug
+        flagged on PR #499. When ``validate_access_token`` raises
+        ``ValueError`` (server misconfigured, e.g. missing AUTH0_AUDIENCE),
+        the handler returns 503 — but a ``device_auth_started`` event was
+        already fired during the matching code request, so we MUST also
+        emit ``device_auth_completed`` here or the completion rate tile
+        on Canon · Auth will silently drift (started count > completed
+        count forever)."""
+        app.state.oidc_provider.poll_device_token = AsyncMock(
+            return_value=TokenSet(
+                access_token="at-123",
+                id_token="",
+                refresh_token="rt-456",
+                expires_in=86400,
+            )
+        )
+
+        with (
+            patch("canon.auth.device_routes.validate_access_token") as mock_validate,
+            patch("canon.auth.device_routes.analytics.track") as mock_track,
+        ):
+            mock_validate.side_effect = ValueError("AUTH0_AUDIENCE missing")
+            resp = await client.post("/auth/device/token", json={"device_code": "dev-code"})
+
+        assert resp.status_code == 503
+        completed_calls = [
+            c for c in mock_track.call_args_list if c.args[0] == "device_auth_completed"
+        ]
+        assert len(completed_calls) == 1
+        props = completed_calls[0].kwargs["properties"]
+        assert props["status"] == "error"
+        assert props["success"] is False
+        assert "server_misconfigured" in props["error_message"]
+
+    async def test_emits_completed_when_validate_access_token_raises_exception(
+        self, client: AsyncClient
+    ):
+        """Regression for PR #499 bug: the generic-Exception path also
+        raises HTTPException and must emit the completion event."""
+        app.state.oidc_provider.poll_device_token = AsyncMock(
+            return_value=TokenSet(
+                access_token="at-123",
+                id_token="",
+                refresh_token="rt-456",
+                expires_in=86400,
+            )
+        )
+
+        with (
+            patch("canon.auth.device_routes.validate_access_token") as mock_validate,
+            patch("canon.auth.device_routes.analytics.track") as mock_track,
+        ):
+            mock_validate.side_effect = RuntimeError("jwks fetch failed")
+            resp = await client.post("/auth/device/token", json={"device_code": "dev-code"})
+
+        assert resp.status_code == 500
+        completed_calls = [
+            c for c in mock_track.call_args_list if c.args[0] == "device_auth_completed"
+        ]
+        assert len(completed_calls) == 1
+        props = completed_calls[0].kwargs["properties"]
+        assert props["status"] == "error"
+        assert props["success"] is False
+        assert "token_validation_failed" in props["error_message"]
+
+    async def test_emits_completed_when_identity_extraction_fails(self, client: AsyncClient):
+        """Regression for PR #499 bug: the 'missing sub/email' rejection
+        path raises HTTPException 500 and must also emit the completion
+        event. This happens when a provider returns tokens with no
+        identifying claims — the handler refuses to upsert a blank user
+        (correct), but the dashboard-side ratio still drifts unless we
+        emit ``device_auth_completed``."""
+        # Empty id_token AND access-token claims without sub/email forces
+        # the identity-extraction rejection branch.
+        app.state.oidc_provider.poll_device_token = AsyncMock(
+            return_value=TokenSet(
+                access_token="at-123",
+                id_token="",
+                refresh_token="rt-456",
+                expires_in=86400,
+            )
+        )
+
+        with (
+            patch("canon.auth.device_routes.validate_access_token") as mock_validate,
+            patch("canon.auth.device_routes.analytics.track") as mock_track,
+        ):
+            # Validate succeeds but the claims object is empty (no sub, no email).
+            mock_validate.return_value = {}
+            resp = await client.post("/auth/device/token", json={"device_code": "dev-code"})
+
+        assert resp.status_code == 500
+        completed_calls = [
+            c for c in mock_track.call_args_list if c.args[0] == "device_auth_completed"
+        ]
+        assert len(completed_calls) == 1
+        props = completed_calls[0].kwargs["properties"]
+        assert props["status"] == "error"
+        assert props["success"] is False
+        assert "identity_extraction_failed" in props["error_message"]
+
+
 class TestDecodeIdTokenClaims:
     """Direct unit tests for _decode_id_token_claims defensive branches."""
 
