@@ -218,6 +218,47 @@ class UserStore:
             )
         return result == "UPDATE 1"
 
+    async def list_api_keys_for_admin(self, *, user_id: int) -> list[dict]:
+        """List a user's active API keys across all orgs.
+
+        Distinct from ``list_api_keys`` which scopes to a single org_login.
+        Excludes the raw key (only the hash exists in the DB anyway).
+        """
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, label, user_id, org_login, scopes,
+                       created_at, expires_at, revoked_at, last_used_at
+                FROM api_keys
+                WHERE user_id = $1
+                  AND revoked_at IS NULL
+                  AND (expires_at IS NULL OR expires_at > now())
+                ORDER BY created_at DESC
+                """,
+                user_id,
+            )
+        return [dict(r) for r in rows]
+
+    async def revoke_api_key_for_admin(self, *, key_id: int, user_id: int) -> bool:
+        """Revoke an API key without scoping by org_login.
+
+        The org-scoped variant ``revoke_api_key`` is used by the user-facing
+        flow where the request is already tenant-bound. Admin endpoints
+        operate cross-org and only need the user_id check to keep the
+        action targeted at the right user.
+        """
+        async with self._pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE api_keys
+                SET revoked_at = now()
+                WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
+                """,
+                key_id,
+                user_id,
+            )
+        return result == "UPDATE 1"
+
     async def revoke_all_api_keys(self, *, user_id: int) -> int:
         """Revoke all active API keys for a user.  Returns count revoked."""
         async with self._pool.acquire() as conn:

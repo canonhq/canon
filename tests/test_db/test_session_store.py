@@ -211,6 +211,51 @@ class TestListSessions:
         assert sessions == []
 
 
+class TestListSessionsForAdmin:
+    async def test_returns_cross_org_sessions(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": "sess-1",
+                    "user_id": 1,
+                    "org_login": "acme",
+                    "device_label": "cli",
+                    "created_at": datetime.now(UTC),
+                    "last_used_at": datetime.now(UTC),
+                    "expires_at": datetime.now(UTC),
+                },
+                {
+                    "id": "sess-2",
+                    "user_id": 1,
+                    "org_login": "personal",
+                    "device_label": "browser",
+                    "created_at": datetime.now(UTC),
+                    "last_used_at": datetime.now(UTC),
+                    "expires_at": datetime.now(UTC),
+                },
+            ]
+        )
+        pool = _mock_pool_with_conn(mock_conn)
+        store = SessionStore(pool)
+
+        sessions = await store.list_sessions_for_admin(user_id=1)
+
+        assert len(sessions) == 2
+        # Org filter is absent (admin sees all orgs)
+        sql = mock_conn.fetch.call_args[0][0]
+        assert "org_login" not in sql.split("WHERE")[1].split("ORDER BY")[0]
+        assert "expires_at > now()" in sql
+
+    async def test_empty(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(return_value=[])
+        pool = _mock_pool_with_conn(mock_conn)
+        store = SessionStore(pool)
+
+        assert await store.list_sessions_for_admin(user_id=1) == []
+
+
 class TestDeleteExpiredSessions:
     async def test_deletes_expired(self):
         mock_conn = AsyncMock()

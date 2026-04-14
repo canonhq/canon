@@ -286,6 +286,24 @@ class GenericOIDCProvider:
         """Generic OIDC has no management API — always returns empty."""
         return []
 
+    async def update_organization(
+        self,
+        org_id: str,
+        *,
+        display_name: str | None = None,
+        metadata: dict | None = None,
+    ) -> dict:
+        """Generic OIDC has no management API — raises to surface the gap."""
+        raise RuntimeError("Generic OIDC provider does not support update_organization")
+
+    async def add_org_member(self, *, org_id: str, user_id: str) -> None:
+        """Generic OIDC has no management API — raises to surface the gap."""
+        raise RuntimeError("Generic OIDC provider does not support add_org_member")
+
+    async def remove_org_member(self, *, org_id: str, user_id: str) -> None:
+        """Generic OIDC has no management API — raises to surface the gap."""
+        raise RuntimeError("Generic OIDC provider does not support remove_org_member")
+
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self._http.aclose()

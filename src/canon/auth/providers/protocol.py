@@ -84,4 +84,19 @@ class OIDCProvider(Protocol):
     async def get_org_members(self, org_id: str) -> list[dict]:
         return []
 
+    async def update_organization(
+        self,
+        org_id: str,
+        *,
+        display_name: str | None = None,
+        metadata: dict | None = None,
+    ) -> dict:
+        return {}
+
+    async def add_org_member(self, *, org_id: str, user_id: str) -> None:
+        return None
+
+    async def remove_org_member(self, *, org_id: str, user_id: str) -> None:
+        return None
+
     async def aclose(self) -> None: ...

@@ -139,6 +139,26 @@ class SessionStore:
             )
         return [dict(r) for r in rows]
 
+    async def list_sessions_for_admin(self, *, user_id: int) -> list[dict]:
+        """List a user's active sessions across all orgs.
+
+        Distinct from ``list_sessions`` which scopes to a single org_login —
+        the admin UI surfaces every session a user has so individual ones
+        can be revoked without nuking the whole account via deactivate.
+        """
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, user_id, org_login, device_label,
+                       created_at, last_used_at, expires_at
+                FROM sessions
+                WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now()
+                ORDER BY last_used_at DESC
+                """,
+                user_id,
+            )
+        return [dict(r) for r in rows]
+
     async def delete_expired_sessions(self) -> int:
         """Delete sessions that expired more than 30 days ago.
 
