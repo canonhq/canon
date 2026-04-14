@@ -1,0 +1,316 @@
+name: "Canon Coverage Report"
+description: >
+  Publish a Canon spec coverage snapshot. Supports three output modes:
+  `file` (commits a markdown summary to the repo), `issue` (updates a
+  rolling tracking issue), and `webhook` (POSTs a Slack-compatible
+  payload). Designed for scheduled runs but works on any trigger.
+branding:
+  icon: "bar-chart-2"
+  color: "orange"
+
+inputs:
+  output:
+    description: "file | issue | webhook"
+    required: false
+    default: "file"
+  path:
+    description: "Output path for `file` mode"
+    required: false
+    default: "docs/coverage.md"
+  issue-title:
+    description: "Title for the rolling tracking issue (`issue` mode)"
+    required: false
+    default: "Canon coverage report"
+  issue-labels:
+    description: "Comma-separated labels to apply to the rolling issue"
+    required: false
+    default: "canon,coverage"
+  webhook-url:
+    description: "Destination URL for `webhook` mode (Slack-compatible)"
+    required: false
+    default: ""
+  commit-mode:
+    description: "For `file` mode: `pr` (open a PR) or `direct` (push to default branch)"
+    required: false
+    default: "pr"
+  branch-name:
+    description: "Branch name for `file` + `commit-mode: pr` flow"
+    required: false
+    default: "canon/coverage-report"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  coverage-pct:
+    description: "Overall coverage percentage (0-100)"
+    value: ${{ steps.report.outputs.coverage-pct }}
+  spec-count:
+    description: "Total number of specs scanned"
+    value: ${{ steps.report.outputs.spec-count }}
+  ac-done:
+    description: "Total ACs marked as realized"
+    value: ${{ steps.report.outputs.ac-done }}
+  ac-total:
+    description: "Total ACs across all specs"
+    value: ${{ steps.report.outputs.ac-total }}
+  report-path:
+    description: "Path to the JSON report on the runner"
+    value: ${{ steps.report.outputs.report-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Run canon status --json
+      id: report
+      shell: bash
+      env:
+        INPUT_OUTPUT: ${{ inputs.output }}
+      run: |
+        set -e
+        REPORT="$RUNNER_TEMP/canon-coverage-report.json"
+        export REPORT
+
+        canon status --json > "$REPORT"
+
+        SPECS=$(python -c "import json,os; print(json.load(open(os.environ['REPORT']))['summary']['specs'])")
+        AC_TOTAL=$(python -c "import json,os; print(json.load(open(os.environ['REPORT']))['summary']['ac_total'])")
+        AC_DONE=$(python -c "import json,os; print(json.load(open(os.environ['REPORT']))['summary']['ac_done'])")
+        PCT=$(python -c "import json,os; print(json.load(open(os.environ['REPORT']))['summary']['coverage_pct'])")
+
+        {
+          echo "coverage-pct=$PCT"
+          echo "spec-count=$SPECS"
+          echo "ac-done=$AC_DONE"
+          echo "ac-total=$AC_TOTAL"
+          echo "report-path=$REPORT"
+        } >> "$GITHUB_OUTPUT"
+
+        # Step summary always shows the snapshot.
+        {
+          echo "## Canon Coverage Report"
+          echo ""
+          echo "**Overall**: $AC_DONE / $AC_TOTAL ACs realized (${PCT}%) across $SPECS spec(s)"
+          echo ""
+          echo "| Spec | Status | Owner | ACs | Coverage |"
+          echo "|------|--------|-------|-----|----------|"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        python <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import json, os
+        with open(os.environ["REPORT"]) as f:
+            data = json.load(f)
+        for s in data["specs"]:
+            title = s["title"].replace("|", "\\|")
+            status = s["status"]
+            owner = s["owner"] or "—"
+            print(f"| `{s['file']}` — {title} | {status} | {owner} | {s['ac_done']}/{s['ac_total']} | {s['coverage_pct']}% |")
+        PY
+
+    - name: Render markdown report
+      id: render
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        REPORT: ${{ steps.report.outputs.report-path }}
+      run: |
+        set -e
+        # Always render the markdown body — used by file mode and as the
+        # body of issue / webhook mode.
+        BODY="$RUNNER_TEMP/canon-coverage-body.md"
+        export BODY
+
+        python <<'PY'
+        import json, os
+        from datetime import datetime, timezone
+
+        with open(os.environ["REPORT"]) as f:
+            data = json.load(f)
+
+        summary = data["summary"]
+        specs = data["specs"]
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+        lines = []
+        lines.append("# Canon Coverage Report")
+        lines.append("")
+        lines.append(f"_Last updated: {now}_")
+        lines.append("")
+        lines.append(f"**Overall**: {summary['ac_done']} / {summary['ac_total']} ACs realized ({summary['coverage_pct']}%) across {summary['specs']} spec(s)")
+        lines.append("")
+        lines.append("<!-- canon:action:coverage-report:rolling -->")
+        lines.append("")
+        lines.append("| Spec | Status | Owner | Sections | ACs | Coverage |")
+        lines.append("|------|--------|-------|----------|-----|----------|")
+        for s in specs:
+            title = s["title"].replace("|", "\\|")
+            owner = s["owner"] or "—"
+            lines.append(
+                f"| [`{s['file']}`]({s['file']}) — {title} | {s['status']} | {owner} | "
+                f"{s['section_done']}/{s['section_total']} | {s['ac_done']}/{s['ac_total']} | "
+                f"{s['coverage_pct']}% |"
+            )
+
+        with open(os.environ["BODY"], "w") as out:
+            out.write("\n".join(lines) + "\n")
+        PY
+
+        echo "body-path=$BODY" >> "$GITHUB_OUTPUT"
+
+    - name: File mode — write and commit
+      if: inputs.output == 'file'
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_COMMIT_MODE: ${{ inputs.commit-mode }}
+        INPUT_BRANCH_NAME: ${{ inputs.branch-name }}
+        BODY: ${{ steps.render.outputs.body-path }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        mkdir -p "$(dirname "$INPUT_PATH")"
+        cp "$BODY" "$INPUT_PATH"
+
+        if git diff --quiet -- "$INPUT_PATH"; then
+          echo "Coverage report unchanged — nothing to commit." >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+
+        case "$INPUT_COMMIT_MODE" in
+          direct)
+            git add "$INPUT_PATH"
+            git commit -m "chore(canon): update coverage report"
+            git push
+            ;;
+          pr)
+            git checkout -B "$INPUT_BRANCH_NAME"
+            git add "$INPUT_PATH"
+            git commit -m "chore(canon): update coverage report"
+            git push -u origin "$INPUT_BRANCH_NAME" --force-with-lease
+
+            # Open or update the PR.
+            EXISTING=$(gh pr list --head "$INPUT_BRANCH_NAME" --json number --jq '.[0].number' 2>/dev/null || true)
+            if [ -z "$EXISTING" ]; then
+              gh pr create \
+                --title "chore(canon): update coverage report" \
+                --body "Automated coverage snapshot from \`canon status\`. Generated by canonhq/canon coverage-report action." \
+                --head "$INPUT_BRANCH_NAME"
+            else
+              echo "Existing PR #$EXISTING updated." >> "$GITHUB_STEP_SUMMARY"
+            fi
+            ;;
+          *)
+            echo "::error::Invalid commit-mode: $INPUT_COMMIT_MODE" >&2
+            exit 2 ;;
+        esac
+
+    - name: Issue mode — update rolling issue
+      if: inputs.output == 'issue'
+      shell: bash
+      env:
+        INPUT_TITLE: ${{ inputs.issue-title }}
+        INPUT_LABELS: ${{ inputs.issue-labels }}
+        BODY: ${{ steps.render.outputs.body-path }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        # Find an existing open issue with the configured title (rolling
+        # idempotency). If found, update its body; otherwise create a new
+        # issue with the canon:action:coverage-report:rolling marker.
+        EXISTING=$(gh issue list \
+          --search "in:title \"$INPUT_TITLE\"" \
+          --state open \
+          --json number,title \
+          --jq ".[] | select(.title == \"$INPUT_TITLE\") | .number" \
+          | head -1)
+
+        if [ -n "$EXISTING" ]; then
+          gh issue edit "$EXISTING" --body-file "$BODY"
+          echo "Updated rolling issue #$EXISTING." >> "$GITHUB_STEP_SUMMARY"
+        else
+          ARGS=(--title "$INPUT_TITLE" --body-file "$BODY")
+          if [ -n "$INPUT_LABELS" ]; then
+            ARGS+=(--label "$INPUT_LABELS")
+          fi
+          gh issue create "${ARGS[@]}"
+          echo "Created new rolling issue." >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Webhook mode — POST to URL
+      if: inputs.output == 'webhook'
+      shell: bash
+      env:
+        INPUT_WEBHOOK_URL: ${{ inputs.webhook-url }}
+        REPORT: ${{ steps.report.outputs.report-path }}
+      run: |
+        set -e
+        if [ -z "$INPUT_WEBHOOK_URL" ]; then
+          echo "::error::webhook-url input is required when output: webhook" >&2
+          exit 2
+        fi
+
+        # Build a Slack-compatible payload from the structured report.
+        PAYLOAD=$(python <<'PY'
+        import json, os
+
+        with open(os.environ["REPORT"]) as f:
+            data = json.load(f)
+
+        summary = data["summary"]
+        specs = data["specs"][:10]  # limit to top 10 to keep messages small
+
+        text = (
+            f"*Canon Coverage Report*\n"
+            f"{summary['ac_done']} / {summary['ac_total']} ACs realized "
+            f"({summary['coverage_pct']}%) across {summary['specs']} spec(s)"
+        )
+
+        fields = []
+        for s in specs:
+            owner = s["owner"] or "—"
+            fields.append({
+                "title": f"{s['title']} ({s['status']})",
+                "value": f"{s['ac_done']}/{s['ac_total']} ACs ({s['coverage_pct']}%) — {owner}",
+                "short": False,
+            })
+
+        payload = {
+            "text": text,
+            "attachments": [
+                {
+                    "color": "#5ec070" if summary["coverage_pct"] >= 70 else "#f0b429",
+                    "fields": fields,
+                }
+            ],
+        }
+        print(json.dumps(payload))
+        PY
+        )
+
+        curl -fsS \
+          -X POST \
+          -H 'Content-Type: application/json' \
+          --data "$PAYLOAD" \
+          "$INPUT_WEBHOOK_URL"
+        echo "Webhook delivered." >> "$GITHUB_STEP_SUMMARY"

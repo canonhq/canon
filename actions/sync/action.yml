@@ -1,0 +1,224 @@
+name: "Canon Sync"
+description: >
+  Sync spec sections with the configured ticket system (GitHub Issues,
+  Jira, or Linear). On pull requests, runs in dry-run mode and posts
+  a sticky PR comment with the sync plan. On main, runs the real sync
+  and writes a step summary of created/updated tickets.
+
+  Useful when your org wants ticket-system credentials to live as
+  GitHub secrets rather than being held server-side by the Canon
+  managed cloud.
+branding:
+  icon: "refresh-cw"
+  color: "orange"
+
+inputs:
+  direction:
+    description: "forward (specs → tickets) | reverse (tickets → specs) | both"
+    required: false
+    default: "both"
+  specs:
+    description: "Filter to a single spec file (substring match)"
+    required: false
+    default: ""
+  dry-run:
+    description: >
+      Force dry-run mode regardless of the trigger. By default, sync
+      runs in dry-run mode on pull-request triggers and applies real
+      changes on push triggers (the recommended workflow).
+    required: false
+    default: ""
+  comment:
+    description: "Post a sticky PR comment with the sync plan when running on a PR"
+    required: false
+    default: "true"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  exit-code:
+    description: "Exit code from canon sync (0 = success)"
+    value: ${{ steps.sync.outputs.exit-code }}
+  dry-run-used:
+    description: "Whether the run was a dry-run (true | false)"
+    value: ${{ steps.sync.outputs.dry-run-used }}
+  log-path:
+    description: "Path to the captured sync log on the runner"
+    value: ${{ steps.sync.outputs.log-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Run canon sync
+      id: sync
+      shell: bash
+      env:
+        INPUT_DIRECTION: ${{ inputs.direction }}
+        INPUT_SPECS: ${{ inputs.specs }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -eo pipefail
+        # pipefail is critical: run_one ends with `canon sync … | tee` so
+        # without pipefail the pipeline always reports tee's exit code (0)
+        # and a real sync failure is silently swallowed.
+        LOG="$RUNNER_TEMP/canon-sync.log"
+        export LOG
+
+        # Decide dry-run mode:
+        # - explicit input wins
+        # - else default: dry-run on PRs, real sync on push to main
+        if [ -n "$INPUT_DRY_RUN" ]; then
+          DRY_RUN="$INPUT_DRY_RUN"
+        elif [ "${{ github.event_name }}" = "pull_request" ]; then
+          DRY_RUN="true"
+        else
+          DRY_RUN="false"
+        fi
+
+        # Validate direction
+        case "$INPUT_DIRECTION" in
+          forward|reverse|both) ;;
+          *)
+            echo "::error::Invalid direction: $INPUT_DIRECTION (expected forward|reverse|both)" >&2
+            exit 2 ;;
+        esac
+
+        run_one() {
+          local args=("$@")
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          if [ -n "$INPUT_SPECS" ]; then
+            args+=(--spec "$INPUT_SPECS")
+          fi
+          # --local: bypass server proxy and talk to the ticket system directly
+          # using the credentials passed in as env vars (GITHUB_TOKEN /
+          # JIRA_TOKEN / LINEAR_API_KEY). The action surface deliberately
+          # forces --local because that's the model where ticket creds live
+          # as GitHub secrets in the consumer's workflow.
+          args+=(--local)
+
+          echo "+ canon sync ${args[*]}" | tee -a "$LOG"
+          canon sync "${args[@]}" 2>&1 | tee -a "$LOG"
+        }
+
+        set +e
+        FAILED=0
+        case "$INPUT_DIRECTION" in
+          forward)
+            run_one
+            FAILED=$?
+            ;;
+          reverse)
+            run_one --reverse
+            FAILED=$?
+            ;;
+          both)
+            run_one
+            FW=$?
+            run_one --reverse
+            REV=$?
+            FAILED=$(( FW || REV ))
+            ;;
+        esac
+        set -e
+
+        {
+          echo "exit-code=$FAILED"
+          echo "dry-run-used=$DRY_RUN"
+          echo "log-path=$LOG"
+        } >> "$GITHUB_OUTPUT"
+
+        # Step summary
+        {
+          echo "## Canon Sync"
+          echo ""
+          echo "- **Direction**: \`$INPUT_DIRECTION\`"
+          echo "- **Mode**: \`$([ "$DRY_RUN" = "true" ] && echo dry-run || echo apply)\`"
+          if [ -n "$INPUT_SPECS" ]; then
+            echo "- **Spec filter**: \`$INPUT_SPECS\`"
+          fi
+          echo ""
+          echo "### Output"
+          echo ""
+          echo '```'
+          tail -200 "$LOG"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "$FAILED" -ne 0 ]; then
+          echo "::error::canon sync exited with code $FAILED"
+          exit "$FAILED"
+        fi
+
+    - name: Post or update sticky PR comment
+      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        LOG: ${{ steps.sync.outputs.log-path }}
+        DRY_RUN: ${{ steps.sync.outputs.dry-run-used }}
+        DIRECTION: ${{ inputs.direction }}
+        SPECS_FILTER: ${{ inputs.specs }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        SENTINEL="<!-- canon:action:sync:rolling -->"
+        BODY_FILE="$RUNNER_TEMP/canon-sync-body.md"
+
+        {
+          echo "$SENTINEL"
+          echo "## Canon sync plan"
+          echo ""
+          echo "- **Direction**: \`$DIRECTION\`"
+          echo "- **Mode**: \`$([ "$DRY_RUN" = "true" ] && echo dry-run || echo apply)\`"
+          if [ -n "$SPECS_FILTER" ]; then
+            echo "- **Spec filter**: \`$SPECS_FILTER\`"
+          fi
+          echo ""
+          echo "<details><summary>Sync output</summary>"
+          echo ""
+          echo '```'
+          # Cap the comment body to ~3000 lines to stay well under GitHub's
+          # 65K-character comment limit.
+          tail -3000 "$LOG"
+          echo '```'
+          echo ""
+          echo "</details>"
+        } > "$BODY_FILE"
+
+        COMMENT_ID=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+          --paginate --jq ".[] | select(.body | startswith(\"${SENTINEL}\")) | .id" \
+          | head -1)
+
+        if [ -n "$COMMENT_ID" ]; then
+          gh api "repos/${REPO}/issues/comments/${COMMENT_ID}" \
+            --method PATCH \
+            --field body=@"$BODY_FILE"
+          echo "Updated existing sync comment #$COMMENT_ID." >> "$GITHUB_STEP_SUMMARY"
+        else
+          gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --method POST \
+            --field body=@"$BODY_FILE"
+          echo "Posted new sync comment." >> "$GITHUB_STEP_SUMMARY"
+        fi

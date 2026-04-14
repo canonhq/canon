@@ -483,3 +483,173 @@ class TestACUpdates:
         assert "<!-- canon:realized-in:audit file:src/auth.py:10 -->" in updated
         # Status should remain in_progress (unchanged)
         assert "status:in_progress" in updated
+
+
+class TestAuditJson:
+    def test_json_emits_structured_payload(self, tmp_path: Path, capsys):
+        _setup(tmp_path)
+
+        with patch("canon.cli.audit.ClaudeClient", return_value=_make_mock_client()):
+            run_audit(root=tmp_path, json_output=True)
+
+        payload = json.loads(capsys.readouterr().out)
+        assert "recommendations" in payload
+        assert "summary" in payload
+        assert payload["summary"]["schema_version"] == 1
+        assert payload["summary"]["mode"] == "claude"
+        assert payload["summary"]["specs_scanned"] == 1
+        assert payload["summary"]["recommendations"] >= 1
+
+        # Mock response had two sections; both should appear with required fields.
+        section_ids = {r["section_id"] for r in payload["recommendations"]}
+        assert "1-login-flow" in section_ids
+        assert "2-session-management" in section_ids
+
+        for r in payload["recommendations"]:
+            assert "spec" in r
+            assert "spec_title" in r
+            assert "current_status" in r
+            assert "recommended_status" in r
+            assert "confidence" in r
+            assert "ac_evaluations" in r
+            for ae in r["ac_evaluations"]:
+                assert "ac_text" in ae
+                assert "status" in ae
+
+    def test_json_does_not_apply_changes(self, tmp_path: Path, capsys):
+        _setup(tmp_path)
+        spec_path = tmp_path / "docs" / "specs" / "auth.md"
+        original = spec_path.read_text()
+
+        with patch("canon.cli.audit.ClaudeClient", return_value=_make_mock_client()):
+            run_audit(root=tmp_path, json_output=True)
+
+        # JSON mode is read-only — file must be untouched.
+        assert spec_path.read_text() == original
+
+    def test_json_no_specs(self, tmp_path: Path, capsys):
+        run_audit(root=tmp_path, json_output=True)
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["recommendations"] == []
+        assert payload["summary"]["specs_scanned"] == 0
+        assert payload["summary"]["mode"] == "none"
+
+    def test_json_heuristic_mode(self, tmp_path: Path, capsys):
+        _setup(tmp_path)
+        # Create some grep-able evidence so heuristic produces a recommendation.
+        (tmp_path / "src" / "auth.py").write_text(
+            "def jwt_token_generation(): pass\ndef token_refresh_endpoint(): pass\n"
+        )
+
+        with patch("canon.cli.audit.ClaudeClient", return_value=_make_mock_client(available=False)):
+            run_audit(root=tmp_path, json_output=True)
+
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["summary"]["mode"] == "heuristic"
+        # Should not have crashed and the payload should be well-formed
+        assert isinstance(payload["recommendations"], list)
+
+    def test_json_suppresses_human_output(self, tmp_path: Path, capsys):
+        _setup(tmp_path)
+
+        with patch("canon.cli.audit.ClaudeClient", return_value=_make_mock_client()):
+            run_audit(root=tmp_path, json_output=True)
+
+        out = capsys.readouterr().out
+        # Output should be exactly one JSON document — no "Audit complete" line,
+        # no "Tokens:" footer, no per-section headers.
+        assert "Audit complete" not in out
+        assert "Tokens:" not in out
+        # Validate it parses as a single JSON document
+        payload = json.loads(out)
+        assert "recommendations" in payload
+
+
+class TestAuditBackendRouting:
+    """Cover the backend routing switch in run_audit JSON mode."""
+
+    def test_routes_to_backend_when_token_set(self, tmp_path: Path, capsys, monkeypatch):
+        """When CANON_TOKEN is set, audit POSTs to the backend instead of running Claude locally."""
+        _setup(tmp_path)
+        monkeypatch.setenv("CANON_TOKEN", "ci_token")
+        monkeypatch.setenv("CANON_API_URL", "https://canon.example")
+
+        backend_response = {
+            "recommendations": [
+                {
+                    "spec": "docs/specs/auth.md",
+                    "spec_title": "Auth Spec",
+                    "section_id": "1-login-flow",
+                    "section_number": "1",
+                    "current_status": "in_progress",
+                    "recommended_status": "done",
+                    "confidence": "high",
+                    "reasoning": "from backend",
+                    "ac_evaluations": [],
+                }
+            ],
+            "summary": {
+                "schema_version": 1,
+                "mode": "claude",
+                "specs_scanned": 1,
+                "recommendations": 1,
+                "status_changes": 1,
+                "ac_evaluations": 0,
+                "input_tokens": 999,
+                "output_tokens": 111,
+            },
+        }
+
+        with patch(
+            "canon.cli._backend_audit.call_audit_endpoint",
+            return_value=backend_response,
+        ) as mock_call:
+            run_audit(root=tmp_path, json_output=True)
+
+        # Endpoint was actually called
+        assert mock_call.called
+
+        # Output is the backend response, not the local one
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["recommendations"][0]["reasoning"] == "from backend"
+        assert payload["summary"]["input_tokens"] == 999
+
+    def test_falls_back_on_backend_error(self, tmp_path: Path, capsys, monkeypatch):
+        """A failing backend call falls through to the local Claude path with a stderr warning."""
+        from canon.cli._backend_audit import BackendAuditError
+
+        _setup(tmp_path)
+        monkeypatch.setenv("CANON_TOKEN", "ci_token")
+        monkeypatch.setenv("CANON_API_URL", "https://canon.example")
+
+        with (
+            patch(
+                "canon.cli._backend_audit.call_audit_endpoint",
+                side_effect=BackendAuditError("simulated outage"),
+            ),
+            patch("canon.cli.audit.ClaudeClient", return_value=_make_mock_client()),
+        ):
+            run_audit(root=tmp_path, json_output=True)
+
+        captured = capsys.readouterr()
+        assert "Canon backend audit failed" in captured.err
+        # Fallback path produced a real JSON payload
+        payload = json.loads(captured.out)
+        assert "recommendations" in payload
+        assert payload["summary"]["mode"] == "claude"
+
+    def test_local_path_unchanged_without_token(self, tmp_path: Path, capsys, monkeypatch):
+        """Without CANON_TOKEN, the existing local path runs unchanged."""
+        _setup(tmp_path)
+        monkeypatch.delenv("CANON_TOKEN", raising=False)
+
+        with (
+            patch("canon.cli._backend_audit.call_audit_endpoint") as mock_call,
+            patch("canon.cli.audit.ClaudeClient", return_value=_make_mock_client()),
+        ):
+            run_audit(root=tmp_path, json_output=True)
+
+        # Backend endpoint was never invoked
+        assert not mock_call.called
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["summary"]["mode"] == "claude"

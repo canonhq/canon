@@ -80,3 +80,57 @@ class TestRunStatus:
         run_status(root=tmp_path)
         output = capsys.readouterr().out
         assert "50%" in output  # 2/4 ACs = 50%
+
+
+class TestRunStatusJson:
+    def test_json_aggregate_payload(self, tmp_path: Path, capsys):
+        import json as _json
+
+        _setup(tmp_path)
+        exit_code = run_status(root=tmp_path, json_output=True)
+        assert exit_code == 0
+
+        payload = _json.loads(capsys.readouterr().out)
+        assert payload["schema_version"] == 1
+        assert payload["summary"]["specs"] == 1
+        assert payload["summary"]["ac_total"] == 4
+        assert payload["summary"]["ac_done"] == 2
+        assert payload["summary"]["coverage_pct"] == 50.0
+        assert len(payload["specs"]) == 1
+        spec = payload["specs"][0]
+        assert spec["title"] == "Auth Spec"
+        assert spec["ac_total"] == 4
+        assert spec["ac_done"] == 2
+        assert spec["coverage_pct"] == 50.0
+        assert spec["section_total"] >= 2
+        assert spec["section_done"] >= 1
+
+    def test_json_no_specs(self, tmp_path: Path, capsys):
+        import json as _json
+
+        exit_code = run_status(root=tmp_path, json_output=True)
+        assert exit_code == 0
+        payload = _json.loads(capsys.readouterr().out)
+        assert payload["summary"]["specs"] == 0
+        assert payload["summary"]["ac_total"] == 0
+        assert payload["specs"] == []
+
+    def test_json_spec_filter(self, tmp_path: Path, capsys):
+        import json as _json
+
+        _setup(tmp_path)
+        exit_code = run_status(spec="auth", root=tmp_path, json_output=True)
+        assert exit_code == 0
+        payload = _json.loads(capsys.readouterr().out)
+        assert len(payload["specs"]) == 1
+        assert payload["specs"][0]["title"] == "Auth Spec"
+
+    def test_json_spec_filter_unresolved(self, tmp_path: Path, capsys):
+        import json as _json
+
+        _setup(tmp_path)
+        exit_code = run_status(spec="nonexistent", root=tmp_path, json_output=True)
+        assert exit_code == 2
+        payload = _json.loads(capsys.readouterr().out)
+        assert "error" in payload
+        assert payload["specs"] == []

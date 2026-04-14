@@ -20,10 +20,15 @@ def main(argv: list[str] | None = None) -> None:
     from .db import register as db_register
     from .dedup import register as dedup_register
     from .done import register as done_register
+    from .export import register as export_register
+    from .lint import register as lint_register
     from .login import register as login_register
     from .logout import register as logout_register
+    from .new_spec import register as new_register
     from .plan import register as plan_register
+    from .release_notes import register as release_notes_register
     from .setup_cmd import register as setup_register_cmd
+    from .stale import register as stale_register
     from .start import register as start_register
     from .status_cmd import register as status_register
     from .sync_cmd import register as sync_register
@@ -41,9 +46,14 @@ def main(argv: list[str] | None = None) -> None:
     done_register(subparsers)
     sync_register(subparsers)
     dedup_register(subparsers)
+    lint_register(subparsers)
     verify_register(subparsers)
     audit_register(subparsers)
     plan_register(subparsers)
+    new_register(subparsers)
+    release_notes_register(subparsers)
+    stale_register(subparsers)
+    export_register(subparsers)
 
     args = parser.parse_args(argv)
 
@@ -68,7 +78,13 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "login":
         from .login import run_login
 
-        run_login(api_key=args.api_key, server=args.server, org=args.org)
+        run_login(
+            api_key=args.api_key,
+            token=args.token,
+            api_url=args.api_url,
+            server=args.server,
+            org=args.org,
+        )
     elif args.command == "logout":
         from .logout import run_logout
 
@@ -88,7 +104,9 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "status":
         from .status_cmd import run_status
 
-        run_status(spec=args.spec)
+        exit_code = run_status(spec=args.spec, json_output=args.json)
+        if exit_code:
+            sys.exit(exit_code)
     elif args.command == "start":
         from .start import run_start
 
@@ -113,10 +131,21 @@ def main(argv: list[str] | None = None) -> None:
         from .dedup import run_dedup
 
         run_dedup(dry_run=args.dry_run, spec=args.spec)
+    elif args.command == "lint":
+        from .lint import run_lint
+
+        exit_code = run_lint(
+            spec=args.spec,
+            json_output=args.json,
+            warnings_as_errors=args.warnings_as_errors,
+        )
+        sys.exit(exit_code)
     elif args.command == "verify":
         from .verify import run_verify
 
-        run_verify(section=args.section)
+        exit_code = run_verify(section=args.section, json_output=args.json)
+        if exit_code:
+            sys.exit(exit_code)
     elif args.command == "audit":
         from .audit import run_audit
 
@@ -125,11 +154,56 @@ def main(argv: list[str] | None = None) -> None:
             do_sync=args.sync,
             spec=args.spec,
             no_ac_updates=args.no_ac_updates,
+            json_output=args.json,
         )
     elif args.command == "plan":
         from .plan import run_plan
 
         run_plan(spec_file=args.spec_file, output=args.output)
+    elif args.command == "new":
+        from .new_spec import run_new
+
+        exit_code = run_new(
+            title=args.title,
+            doc_type=args.doc_type,
+            owner=args.owner,
+            team=args.team,
+            output=args.output,
+            force=args.force,
+        )
+        if exit_code:
+            sys.exit(exit_code)
+    elif args.command == "release-notes":
+        from .release_notes import run_release_notes
+
+        exit_code = run_release_notes(
+            from_ref=args.from_ref,
+            to_ref=args.to_ref,
+            json_output=args.json,
+            output=args.output,
+        )
+        if exit_code:
+            sys.exit(exit_code)
+    elif args.command == "stale":
+        from .stale import run_stale
+
+        exit_code = run_stale(
+            stale_days=args.stale_days,
+            code_churn_threshold=args.code_churn_threshold,
+            json_output=args.json,
+        )
+        if exit_code:
+            sys.exit(exit_code)
+    elif args.command == "export":
+        from .export import run_export
+
+        exit_code = run_export(
+            export_format=args.export_format,
+            output=args.output,
+            spec=args.spec,
+        )
+        if exit_code:
+            sys.exit(exit_code)
     else:
         parser.print_help()
         sys.exit(1)

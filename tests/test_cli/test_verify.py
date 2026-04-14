@@ -121,3 +121,57 @@ team: t
             run_verify(section="1", root=tmp_path)
         output = capsys.readouterr().out
         assert "Login Flow" in output
+
+
+class TestRunVerifyJson:
+    def test_json_emits_structured_payload(self, tmp_path: Path, capsys):
+        import json as _json
+
+        _setup(tmp_path)
+        with patch("canon.cli.verify._grep_codebase", return_value=False):
+            exit_code = run_verify(root=tmp_path, json_output=True)
+
+        assert exit_code == 0
+        payload = _json.loads(capsys.readouterr().out)
+        assert "unchecked" in payload
+        assert "summary" in payload
+        # One unchecked AC ("Username validation with regex")
+        assert payload["summary"]["total"] == 1
+        assert payload["summary"]["not_started"] == 1
+        record = payload["unchecked"][0]
+        assert record["status"] == "not_started"
+        assert "Username validation" in record["ac_text"]
+        assert record["ac_line"]
+        assert record["section_id"]
+
+    def test_json_with_no_specs(self, tmp_path: Path, capsys):
+        import json as _json
+
+        exit_code = run_verify(root=tmp_path, json_output=True)
+        assert exit_code == 0
+        payload = _json.loads(capsys.readouterr().out)
+        assert payload["summary"]["total"] == 0
+        assert payload["unchecked"] == []
+
+    def test_json_section_filter_unresolved(self, tmp_path: Path, capsys):
+        import json as _json
+
+        _setup(tmp_path)
+        exit_code = run_verify(section="nonexistent", root=tmp_path, json_output=True)
+        assert exit_code == 2
+        payload = _json.loads(capsys.readouterr().out)
+        assert "error" in payload
+
+    def test_json_section_filter_includes_checked(self, tmp_path: Path, capsys):
+        import json as _json
+
+        _setup(tmp_path)
+        with patch("canon.cli.verify._grep_codebase", return_value=False):
+            exit_code = run_verify(section="1", root=tmp_path, json_output=True)
+        assert exit_code == 0
+        payload = _json.loads(capsys.readouterr().out)
+        # Section 1 has 2 ACs: one unchecked (Username), one checked (Password)
+        assert payload["summary"]["total"] == 2
+        assert payload["summary"]["checked"] == 1
+        statuses = {r["status"] for r in payload["unchecked"]}
+        assert "checked" in statuses

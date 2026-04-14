@@ -1,0 +1,289 @@
+name: "Canon Coverage Delta"
+description: >
+  Compute the delta in spec coverage between a PR's base and head refs
+  and post (or update) a sticky PR comment showing per-spec changes.
+  Cheap, deterministic, no Claude spend, no token needed.
+branding:
+  icon: "trending-up"
+  color: "orange"
+
+inputs:
+  base-ref:
+    description: >
+      Base ref to compare against. Defaults to the pull-request base
+      branch when run in a PR context, or the previous commit on the
+      same branch otherwise. Override to compare against an arbitrary
+      tag, branch, or SHA.
+    required: false
+    default: ""
+  comment:
+    description: >
+      Whether to post (or update) a sticky PR comment with the diff.
+      Set to `false` to suppress commenting and rely solely on the
+      step summary.
+    required: false
+    default: "true"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  base-coverage:
+    description: "Overall coverage percentage on the base ref (0-100)"
+    value: ${{ steps.delta.outputs.base-coverage }}
+  head-coverage:
+    description: "Overall coverage percentage on the head ref (0-100)"
+    value: ${{ steps.delta.outputs.head-coverage }}
+  delta-pct:
+    description: "Coverage delta (head minus base, can be negative)"
+    value: ${{ steps.delta.outputs.delta-pct }}
+  changed-spec-count:
+    description: "Number of specs whose coverage changed"
+    value: ${{ steps.delta.outputs.changed-spec-count }}
+  base-report-path:
+    description: "Path to the JSON status report for the base ref"
+    value: ${{ steps.delta.outputs.base-report-path }}
+  head-report-path:
+    description: "Path to the JSON status report for the head ref"
+    value: ${{ steps.delta.outputs.head-report-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Resolve base ref
+      id: resolve-base
+      shell: bash
+      env:
+        INPUT_BASE_REF: ${{ inputs.base-ref }}
+      run: |
+        set -e
+        if [ -n "$INPUT_BASE_REF" ]; then
+          echo "base=$INPUT_BASE_REF" >> "$GITHUB_OUTPUT"
+        elif [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+        else
+          # Fallback: previous commit on the same branch
+          echo "base=HEAD~1" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Run canon status on head ref
+      id: head-status
+      shell: bash
+      run: |
+        set -e
+        HEAD_REPORT="$RUNNER_TEMP/canon-status-head.json"
+        canon status --json > "$HEAD_REPORT"
+        echo "report=$HEAD_REPORT" >> "$GITHUB_OUTPUT"
+
+    - name: Run canon status on base ref
+      id: base-status
+      shell: bash
+      env:
+        BASE_REF: ${{ steps.resolve-base.outputs.base }}
+      run: |
+        set -e
+        BASE_REPORT="$RUNNER_TEMP/canon-status-base.json"
+
+        # Stash any working-tree changes the previous step might have left
+        # behind, then check out the base ref. We use a detached HEAD so we
+        # can return cleanly without affecting whatever branch the runner
+        # was on.
+        ORIGINAL_HEAD=$(git rev-parse HEAD)
+
+        # Make sure we have the base ref locally — checkout@v4 in PR mode
+        # only fetches the head, so we may need to fetch the base.
+        git fetch --no-tags --depth=1 origin "$BASE_REF" 2>/dev/null || true
+
+        if ! git rev-parse --verify --quiet "$BASE_REF" >/dev/null; then
+          # SHA may not be locally available even after the fetch. Try
+          # fetching the SHA explicitly.
+          git fetch --no-tags origin "+$BASE_REF:refs/remotes/origin/_canon_base" 2>/dev/null || true
+        fi
+
+        if ! git checkout --quiet --detach "$BASE_REF" 2>/dev/null; then
+          echo "::warning::Could not check out base ref '$BASE_REF' — emitting empty base report"
+          echo '{"schema_version":1,"summary":{"specs":0,"sections":0,"ac_total":0,"ac_done":0,"coverage_pct":0.0},"specs":[]}' > "$BASE_REPORT"
+        else
+          # canon status may legitimately fail on the base if specs were
+          # malformed before this PR fixed them. Treat that as an empty
+          # base report so the diff still works.
+          if ! canon status --json > "$BASE_REPORT" 2>/dev/null; then
+            echo "::warning::canon status failed on base ref — emitting empty base report"
+            echo '{"schema_version":1,"summary":{"specs":0,"sections":0,"ac_total":0,"ac_done":0,"coverage_pct":0.0},"specs":[]}' > "$BASE_REPORT"
+          fi
+          git checkout --quiet "$ORIGINAL_HEAD"
+        fi
+
+        echo "report=$BASE_REPORT" >> "$GITHUB_OUTPUT"
+
+    - name: Compute delta
+      id: delta
+      shell: bash
+      env:
+        BASE_REPORT: ${{ steps.base-status.outputs.report }}
+        HEAD_REPORT: ${{ steps.head-status.outputs.report }}
+      run: |
+        set -e
+        DELTA_BODY="$RUNNER_TEMP/canon-coverage-delta.md"
+        export DELTA_BODY
+
+        python3 <<'PY'
+        import json, os
+        from datetime import datetime, timezone
+
+        with open(os.environ["BASE_REPORT"]) as f:
+            base = json.load(f)
+        with open(os.environ["HEAD_REPORT"]) as f:
+            head = json.load(f)
+
+        base_specs = {s["file"]: s for s in base.get("specs", [])}
+        head_specs = {s["file"]: s for s in head.get("specs", [])}
+
+        # Build per-spec deltas (added, removed, changed, unchanged).
+        deltas = []
+        for path in sorted(set(base_specs) | set(head_specs)):
+            b = base_specs.get(path)
+            h = head_specs.get(path)
+            if b and h:
+                if (
+                    b["ac_done"] != h["ac_done"]
+                    or b["ac_total"] != h["ac_total"]
+                    or b["coverage_pct"] != h["coverage_pct"]
+                ):
+                    deltas.append({
+                        "file": path,
+                        "title": h.get("title") or b.get("title", ""),
+                        "kind": "changed",
+                        "base": b,
+                        "head": h,
+                    })
+            elif h and not b:
+                deltas.append({
+                    "file": path,
+                    "title": h.get("title", ""),
+                    "kind": "added",
+                    "base": None,
+                    "head": h,
+                })
+            elif b and not h:
+                deltas.append({
+                    "file": path,
+                    "title": b.get("title", ""),
+                    "kind": "removed",
+                    "base": b,
+                    "head": None,
+                })
+
+        base_pct = base["summary"]["coverage_pct"]
+        head_pct = head["summary"]["coverage_pct"]
+        delta_pct = round(head_pct - base_pct, 1)
+
+        # Render markdown body.
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        lines = [
+            "<!-- canon:action:coverage-delta:rolling -->",
+            "## Canon coverage delta",
+            "",
+            f"_Last updated: {now}_",
+            "",
+            f"**Overall**: `{base_pct}%` → `{head_pct}%` ({'+' if delta_pct >= 0 else ''}{delta_pct} pts)",
+            "",
+        ]
+
+        if not deltas:
+            lines.append("No spec coverage changes in this PR.")
+        else:
+            lines.append("| Status | Spec | Base ACs | Head ACs | Coverage |")
+            lines.append("|--------|------|----------|----------|----------|")
+            for d in deltas:
+                title = d["title"].replace("|", "\\|")
+                file_path = d["file"]
+                if d["kind"] == "added":
+                    h = d["head"]
+                    badge = "added"
+                    base_str = "—"
+                    head_str = f"{h['ac_done']}/{h['ac_total']}"
+                    cov = f"{h['coverage_pct']}%"
+                elif d["kind"] == "removed":
+                    b = d["base"]
+                    badge = "removed"
+                    base_str = f"{b['ac_done']}/{b['ac_total']}"
+                    head_str = "—"
+                    cov = f"~~{b['coverage_pct']}%~~"
+                else:
+                    b = d["base"]
+                    h = d["head"]
+                    badge = "changed"
+                    base_str = f"{b['ac_done']}/{b['ac_total']}"
+                    head_str = f"{h['ac_done']}/{h['ac_total']}"
+                    diff = round(h["coverage_pct"] - b["coverage_pct"], 1)
+                    sign = "+" if diff >= 0 else ""
+                    cov = f"{b['coverage_pct']}% → {h['coverage_pct']}% ({sign}{diff})"
+                lines.append(f"| {badge} | `{file_path}` — {title} | {base_str} | {head_str} | {cov} |")
+
+        body = "\n".join(lines) + "\n"
+        with open(os.environ["DELTA_BODY"], "w") as out:
+            out.write(body)
+
+        # Emit step outputs and step summary.
+        step_outputs = os.environ.get("GITHUB_OUTPUT", "/dev/null")
+        with open(step_outputs, "a") as f:
+            f.write(f"base-coverage={base_pct}\n")
+            f.write(f"head-coverage={head_pct}\n")
+            f.write(f"delta-pct={delta_pct}\n")
+            f.write(f"changed-spec-count={len(deltas)}\n")
+            f.write(f"base-report-path={os.environ['BASE_REPORT']}\n")
+            f.write(f"head-report-path={os.environ['HEAD_REPORT']}\n")
+
+        step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if step_summary:
+            with open(step_summary, "a") as f:
+                f.write(body)
+        PY
+
+    - name: Post or update sticky PR comment
+      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        BODY_FILE: ${{ runner.temp }}/canon-coverage-delta.md
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        SENTINEL="<!-- canon:action:coverage-delta:rolling -->"
+
+        # Find an existing comment with our magic marker.
+        COMMENT_ID=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+          --paginate --jq ".[] | select(.body | startswith(\"${SENTINEL}\")) | .id" \
+          | head -1)
+
+        if [ -n "$COMMENT_ID" ]; then
+          gh api "repos/${REPO}/issues/comments/${COMMENT_ID}" \
+            --method PATCH \
+            --field body=@"$BODY_FILE"
+          echo "Updated existing coverage-delta comment #$COMMENT_ID." >> "$GITHUB_STEP_SUMMARY"
+        else
+          gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            --method POST \
+            --field body=@"$BODY_FILE"
+          echo "Posted new coverage-delta comment." >> "$GITHUB_STEP_SUMMARY"
+        fi

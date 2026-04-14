@@ -1,0 +1,164 @@
+name: "Canon Compliance Export"
+description: >
+  Export a compliance-grade audit trail of every acceptance criterion
+  across every spec, with realization evidence and last-modified
+  timestamps. Output uploads as a workflow artifact and (optionally)
+  commits to a long-lived compliance/ branch for retention. Pure
+  parser, no Claude spend, no token required.
+branding:
+  icon: "file-text"
+  color: "orange"
+
+inputs:
+  format:
+    description: "json | csv (default: json)"
+    required: false
+    default: "json"
+  output-path:
+    description: "Path on the runner where the report is written"
+    required: false
+    default: "compliance-report"
+  artifact-name:
+    description: "Name of the workflow artifact uploaded with the report"
+    required: false
+    default: "canon-compliance-report"
+  spec:
+    description: "Filter to a single spec file (substring match)"
+    required: false
+    default: ""
+  commit-to-branch:
+    description: >
+      When non-empty, commit the report to this branch (created or
+      reset) for long-term retention. Useful for an immutable
+      compliance/ history. Empty by default — most users only need
+      the artifact.
+    required: false
+    default: ""
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  report-path:
+    description: "Absolute path to the rendered report on the runner"
+    value: ${{ steps.export.outputs.report-path }}
+  row-count:
+    description: "Number of AC rows in the report"
+    value: ${{ steps.export.outputs.row-count }}
+  spec-count:
+    description: "Number of specs scanned"
+    value: ${{ steps.export.outputs.spec-count }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Run canon export
+      id: export
+      shell: bash
+      env:
+        INPUT_FORMAT: ${{ inputs.format }}
+        INPUT_OUTPUT_PATH: ${{ inputs.output-path }}
+        INPUT_SPEC: ${{ inputs.spec }}
+      run: |
+        set -e
+
+        # Pick the file extension from the format so artifact + commit
+        # paths are sensible regardless of what the user passed.
+        case "$INPUT_FORMAT" in
+          json) EXT="json" ;;
+          csv)  EXT="csv" ;;
+          *)
+            echo "::error::format must be json or csv (got $INPUT_FORMAT)" >&2
+            exit 2 ;;
+        esac
+
+        # output-path may or may not include the extension; normalize.
+        case "$INPUT_OUTPUT_PATH" in
+          *.json|*.csv) REPORT_PATH="$INPUT_OUTPUT_PATH" ;;
+          *)            REPORT_PATH="${INPUT_OUTPUT_PATH}.${EXT}" ;;
+        esac
+
+        ARGS=(export --format "$INPUT_FORMAT" --output "$REPORT_PATH")
+        if [ -n "$INPUT_SPEC" ]; then
+          ARGS+=(--spec "$INPUT_SPEC")
+        fi
+
+        canon "${ARGS[@]}"
+
+        # The CLI prints to stderr; capture metadata for outputs by
+        # re-reading the file. JSON has a summary block; CSV requires a
+        # row count. Use os.environ for the path so a value with quotes
+        # or other shell-meta characters can't break out of the Python
+        # string and execute arbitrary code.
+        export REPORT_PATH
+        if [ "$EXT" = "json" ]; then
+          ROW_COUNT=$(python3 -c "import json,os; d=json.load(open(os.environ['REPORT_PATH'])); print(d['summary']['rows'])")
+          SPEC_COUNT=$(python3 -c "import json,os; d=json.load(open(os.environ['REPORT_PATH'])); print(d['summary']['specs'])")
+        else
+          # csv: header + rows
+          ROW_COUNT=$(($(wc -l < "$REPORT_PATH") - 1))
+          SPEC_COUNT="(unknown — re-run with format: json for spec count)"
+        fi
+
+        {
+          echo "report-path=$REPORT_PATH"
+          echo "row-count=$ROW_COUNT"
+          echo "spec-count=$SPEC_COUNT"
+        } >> "$GITHUB_OUTPUT"
+
+        {
+          echo "## Canon Compliance Export"
+          echo ""
+          echo "- **Format**: \`$INPUT_FORMAT\`"
+          echo "- **Path**: \`$REPORT_PATH\`"
+          echo "- **Rows**: $ROW_COUNT"
+          echo "- **Specs**: $SPEC_COUNT"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload as workflow artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.export.outputs.report-path }}
+        if-no-files-found: error
+        retention-days: 90
+
+    - name: Commit report to compliance branch
+      if: inputs.commit-to-branch != ''
+      shell: bash
+      env:
+        REPORT: ${{ steps.export.outputs.report-path }}
+        BRANCH: ${{ inputs.commit-to-branch }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        # The compliance branch is intended to be append-only, but we
+        # use force-with-lease so the latest report always reflects the
+        # most recent run rather than accumulating cruft. Adopters who
+        # want a true append-only history should configure GitHub branch
+        # protection on this branch and use a different action.
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git checkout -B "$BRANCH"
+        git add "$REPORT"
+        git commit -m "compliance: update audit trail ($(date -u +%Y-%m-%d))"
+        git push -u origin "$BRANCH" --force-with-lease
+        echo "Pushed compliance report to branch \`$BRANCH\`." >> "$GITHUB_STEP_SUMMARY"

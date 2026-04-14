@@ -17,6 +17,25 @@ def register(subparsers) -> None:
     p = subparsers.add_parser("login", help="Authenticate with the Canon platform")
     p.add_argument("--api-key", default="", help="Authenticate with an API key instead of OAuth")
     p.add_argument(
+        "--token",
+        default="",
+        help=(
+            "Non-interactive: store the given token without round-tripping "
+            "the platform. Intended for CI environments where the Canon "
+            "backend may not be reachable at login time. Use --api-key "
+            "instead when you want immediate validation."
+        ),
+    )
+    p.add_argument(
+        "--api-url",
+        default="",
+        help=(
+            "Canon backend URL to record alongside the credential. "
+            "Defaults to the platform URL configured by --server or "
+            "https://api.canonhq.co. Used by the audit routing switch."
+        ),
+    )
+    p.add_argument(
         "--server",
         default="",
         help="Platform URL (default: $CANON_URL or https://canonhq.co)",
@@ -32,7 +51,20 @@ def register(subparsers) -> None:
     )
 
 
-def run_login(*, api_key: str = "", server: str = "", org: str = "") -> None:
+def run_login(
+    *,
+    api_key: str = "",
+    token: str = "",
+    api_url: str = "",
+    server: str = "",
+    org: str = "",
+) -> None:
+    if token:
+        # Non-interactive token storage path — used by CI environments where
+        # we want a credential on disk without contacting the backend.
+        _login_token(token=token, api_url=api_url, server=server, org=org)
+        return
+
     from ._platform import PlatformClient
 
     base_url = server or None
@@ -45,6 +77,27 @@ def run_login(*, api_key: str = "", server: str = "", org: str = "") -> None:
         _login_device(client, org=resolved_org)
 
     client.close()
+
+
+def _login_token(*, token: str, api_url: str, server: str, org: str) -> None:
+    """Store a token non-interactively without validating against the backend.
+
+    The audit routing switch reads the saved credential and uses it to
+    POST to ``${api_url}/v1/actions/audit``. The token is treated as
+    opaque — validation happens on the first real call.
+    """
+    from ._credentials import save_credentials
+
+    resolved_url = api_url or server or "https://api.canonhq.co"
+    save_credentials(
+        {
+            "method": "token",
+            "token": token,
+            "api_url": resolved_url,
+            "org": org,
+        }
+    )
+    print(f"Stored token credential (api_url: {resolved_url})")
 
 
 def _detect_org_from_git() -> str:

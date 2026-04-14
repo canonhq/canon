@@ -14,4 +14,4 @@ Practical how-to guides for working with Canon.
 ## Integration
 
 - [Ticket Sync](./ticket-sync) — Connect specs to Jira, Linear, or GitHub Issues
-- [CI Integration](./ci-integration) — Add spec validation to your CI/CD pipeline
+- [GitHub Actions](./github-actions/) — Drop Canon checks into your CI/CD pipeline with the official action suite

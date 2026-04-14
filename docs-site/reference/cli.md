@@ -1,12 +1,12 @@
 ---
 # This file is auto-generated. Do not edit manually.
-# Generated: 2026-03-18 18:07 UTC
+# Generated: 2026-04-11 21:34 UTC
 ---
 
 # CLI Reference
 
 ::: tip Auto-Generated
-This page was auto-generated from `canon --help` on 2026-03-18 18:07 UTC.
+This page was auto-generated from `canon --help` on 2026-04-11 21:34 UTC.
 See [source script](https://github.com/canonhq/canon/blob/main/docs-site/.vitepress/scripts/gen-cli-ref.py).
 :::
 
@@ -36,7 +36,7 @@ usage: canon [-h]
 Initialize a repository for Canon. Creates `CANON.yaml`, the spec directory, and a starter template.
 
 ```bash
-usage: canon setup [-h] [--team TEAM] [--ticket-system {github,jira,linear}] [--non-interactive]
+usage: canon setup [-h] [--team TEAM] [--ticket-system {github,jira,linear}] [--non-interactive] [--agent AGENT] [--force]
 ```
 
 **Options:**
@@ -47,6 +47,8 @@ usage: canon setup [-h] [--team TEAM] [--ticket-system {github,jira,linear}] [--
 | `--team TEAM` | Team name for CANON.yaml |
 | `--ticket-system {github,jira,linear}` | Ticket system (default: github) |
 | `--non-interactive` | Skip prompts (for CI/Actions) |
+| `--agent AGENT` | Generate agent config file (claude, cursor, copilot, codex, gemini, or all) |
+| `--force` | Overwrite existing non-Canon agent config files |
 
 
 ---
@@ -56,7 +58,7 @@ usage: canon setup [-h] [--team TEAM] [--ticket-system {github,jira,linear}] [--
 Authenticate with the Canon platform using device authorization flow or API key.
 
 ```bash
-usage: canon login [-h] [--api-key API_KEY] [--server SERVER]
+usage: canon login [-h] [--api-key API_KEY] [--server SERVER] [--org ORG]
 ```
 
 **Options:**
@@ -66,6 +68,7 @@ usage: canon login [-h] [--api-key API_KEY] [--server SERVER]
 | `-h, --help` | show this help message and exit |
 | `--api-key API_KEY` | Authenticate with an API key instead of OAuth |
 | `--server SERVER` | Platform URL (default: $CANON_URL or https://canonhq.co) |
+| `--org ORG` | Target organization slug (e.g. 'canonhq'). Used to scope the device-flow token to a specific Auth0 Organization. If omitted, auto-detected from the current git remote when run inside a repo. |
 
 
 ---
@@ -146,10 +149,10 @@ usage: canon tasks [-h] [--status STATUS] [--spec SPEC] [--all]
 
 ### `canon status`
 
-Show spec coverage dashboard. Displays per-spec and aggregate coverage metrics.
+Show spec coverage dashboard. Displays per-spec and aggregate coverage metrics. Supports `--json` for machine-readable output consumed by the coverage-report GitHub Action.
 
 ```bash
-usage: canon status [-h] [--spec SPEC]
+usage: canon status [-h] [--spec SPEC] [--json]
 ```
 
 **Options:**
@@ -158,6 +161,7 @@ usage: canon status [-h] [--spec SPEC]
 |--------|-------------|
 | `-h, --help` | show this help message and exit |
 | `--spec SPEC` | Show detail for a single spec file |
+| `--json` | Emit machine-readable JSON instead of human-friendly output |
 
 
 ---
@@ -217,7 +221,7 @@ usage: canon done [-h] [--issue] section_id
 Sync spec sections with the configured ticket system (GitHub Issues, Jira, or Linear). Supports forward sync (spec → tickets) and reverse sync (tickets → spec).
 
 ```bash
-usage: canon sync [-h] [--reverse] [--spec SPEC] [--dry-run] [--local]
+usage: canon sync [-h] [--reverse] [--spec SPEC] [--dry-run] [--local] [--backfill-fingerprints] [--close-stale] [--remote]
 ```
 
 **Options:**
@@ -229,16 +233,39 @@ usage: canon sync [-h] [--reverse] [--spec SPEC] [--dry-run] [--local]
 | `--spec SPEC` | Filter to a single spec file |
 | `--dry-run` | Preview changes without executing |
 | `--local` | Bypass server proxy and use GITHUB_TOKEN / gh CLI directly |
+| `--backfill-fingerprints` | Add section fingerprints to existing issue bodies (one-time migration) |
+| `--close-stale` | Close tickets for all done/deprecated sections (one- shot cleanup) |
+| `--remote` | Force server proxy mode (overrides auto-detection) |
+
+
+---
+
+### `canon lint`
+
+Static structural validation of spec files — frontmatter schema, section numbering, AC format, status comment syntax, and `depends_on` resolvability. Pure parser, no Claude spend, no network. The cheapest layer of the lint → verify → audit ladder; safe to run on every PR.
+
+```bash
+usage: canon lint [-h] [--spec SPEC] [--json] [--warnings-as-errors]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--spec SPEC` | Lint a single spec by partial path match (default: all discovered specs) |
+| `--json` | Emit machine-readable JSON instead of human-friendly output |
+| `--warnings-as-errors` | Treat warnings as errors (affects exit code) |
 
 
 ---
 
 ### `canon verify`
 
-Verify acceptance criteria against the codebase using Claude. Reports which ACs are realized, partial, or not found.
+Static verification of acceptance criteria against the codebase. Greps source paths for keywords from each unchecked AC and classifies it as likely realized, not started, or unknown. No Claude spend. Supports `--json` for the verify GitHub Action.
 
 ```bash
-usage: canon verify [-h] [--section SECTION]
+usage: canon verify [-h] [--section SECTION] [--json]
 ```
 
 **Options:**
@@ -247,6 +274,7 @@ usage: canon verify [-h] [--section SECTION]
 |--------|-------------|
 | `-h, --help` | show this help message and exit |
 | `--section SECTION` | Filter to a single section ID |
+| `--json` | Emit machine-readable JSON instead of human-friendly output |
 
 
 ---

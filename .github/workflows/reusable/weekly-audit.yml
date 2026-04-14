@@ -1,0 +1,106 @@
+# Reusable workflow: bundles Canon's scheduled drift + coverage jobs
+# into a single `uses:` line. Designed to run on a cron schedule.
+#
+# Example consumer (in their own .github/workflows/canon-weekly.yml):
+#
+#   name: Canon Weekly
+#   on:
+#     schedule:
+#       - cron: "0 9 * * 1"  # Mondays at 09:00 UTC
+#     workflow_dispatch:
+#   jobs:
+#     canon:
+#       uses: canonhq/canon/.github/workflows/reusable/weekly-audit.yml@v1
+#       with:
+#         audit-mode: issue
+#         coverage-output: issue
+#       secrets:
+#         CANON_TOKEN: ${{ secrets.CANON_TOKEN }}
+
+name: Canon Weekly Audit (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      audit-mode:
+        description: "audit action mode (issue|pr|summary)"
+        required: false
+        type: string
+        default: "issue"
+      audit-rolling-issue-title:
+        description: "Title of the rolling issue when audit-mode == issue"
+        required: false
+        type: string
+        default: "Canon weekly audit"
+      coverage-output:
+        description: "coverage-report output mode (file|issue|webhook)"
+        required: false
+        type: string
+        default: "issue"
+      coverage-issue-title:
+        description: "Title of the rolling coverage issue when coverage-output == issue"
+        required: false
+        type: string
+        default: "Canon coverage report"
+      coverage-webhook-url:
+        description: "Webhook URL when coverage-output == webhook"
+        required: false
+        type: string
+        default: ""
+      python-version:
+        description: "Python version for both jobs"
+        required: false
+        type: string
+        default: "3.12"
+      canon-version:
+        description: "Canon CLI version constraint (pip spec)"
+        required: false
+        type: string
+        default: ">=1.0.0,<2.0.0"
+    secrets:
+      CANON_TOKEN:
+        description: "Canon platform token (preferred — routes audit via backend)"
+        required: false
+      ANTHROPIC_API_KEY:
+        description: "Direct Anthropic API key (fallback when CANON_TOKEN not set)"
+        required: false
+
+jobs:
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Canon audit
+        uses: canonhq/canon/actions/audit@v1
+        with:
+          canon-token: ${{ secrets.CANON_TOKEN }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          mode: ${{ inputs.audit-mode }}
+          rolling-issue-title: ${{ inputs.audit-rolling-issue-title }}
+          python-version: ${{ inputs.python-version }}
+          canon-version: ${{ inputs.canon-version }}
+
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Canon coverage-report
+        uses: canonhq/canon/actions/coverage-report@v1
+        with:
+          output: ${{ inputs.coverage-output }}
+          issue-title: ${{ inputs.coverage-issue-title }}
+          webhook-url: ${{ inputs.coverage-webhook-url }}
+          python-version: ${{ inputs.python-version }}
+          canon-version: ${{ inputs.canon-version }}

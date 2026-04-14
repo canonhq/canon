@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +18,8 @@ from ._local import (
     parse_all_local_specs,
 )
 
+logger = logging.getLogger(__name__)
+
 VALID_STATES = {"done", "in_progress", "todo", "blocked", "deprecated"}
 
 
@@ -29,6 +32,11 @@ def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[ty
     parser.add_argument("--spec", help="Filter to a single spec file")
     parser.add_argument(
         "--no-ac-updates", action="store_true", help="Skip checking off ACs and inserting evidence"
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON instead of human-friendly output",
     )
 
 
@@ -63,6 +71,7 @@ def run_audit(
     spec: str | None = None,
     root: Path | None = None,
     no_ac_updates: bool = False,
+    json_output: bool = False,
 ) -> None:
     root = root or Path.cwd()
     config = load_local_config(root)
@@ -72,20 +81,64 @@ def run_audit(
         docs = [d for d in docs if spec in d.file_path]
 
     if not docs:
-        print("No spec files found.")
+        if json_output:
+            _emit_audit_json(
+                recommendations=[],
+                summary=_audit_summary(0, 0, 0, 0, 0, 0, mode="none"),
+            )
+        else:
+            print("No spec files found.")
         return
+
+    # Backend routing — JSON mode only, transparent fallback on failure.
+    # When the user has a CANON_TOKEN set (env var or stored credential),
+    # POST to the Canon backend instead of calling Claude locally. JSON
+    # mode is the only path that backend routing covers today; the
+    # interactive CLI flow continues to use the local Claude path with
+    # filesystem-based AC checkoff.
+    if json_output:
+        from ._backend_audit import (
+            BackendAuditError,
+            call_audit_endpoint,
+            should_use_backend,
+        )
+
+        if should_use_backend():
+            try:
+                evidence_by_path = _gather_evidence_by_path(root, docs)
+                payload = call_audit_endpoint(
+                    docs=docs,
+                    evidence_by_path=evidence_by_path,
+                )
+                # Backend response is already in the JSON wire format.
+                print(json.dumps(payload, indent=2))
+                return
+            except BackendAuditError as exc:
+                # Fall through to local path with a stderr warning. The
+                # action layer should treat the response as
+                # authoritative regardless of which path produced it.
+                import sys
+
+                print(
+                    f"warning: Canon backend audit failed ({exc}); falling back to local audit",
+                    file=sys.stderr,
+                )
 
     # Try to create Claude client
     client = ClaudeClient()
     use_claude = client.is_available
 
-    if not use_claude:
+    if not use_claude and not json_output:
         print("ANTHROPIC_API_KEY not set — using heuristic mode (grep-only).")
         print("Heuristic mode can suggest in_progress but cannot confirm done.\n")
 
     total_changes = 0
     total_input_tokens = 0
     total_output_tokens = 0
+
+    # Collected for JSON output mode.
+    json_recs: list[dict] = []
+    json_specs_scanned = 0
 
     for doc in docs:
         all_sections = _flatten_sections(doc.sections)
@@ -95,11 +148,15 @@ def run_audit(
         sections_to_audit = [s for s in all_sections if s.status.state not in skip_states]
 
         if not sections_to_audit:
-            print(f"{doc.frontmatter.title}: all sections done/deprecated, skipping.")
+            if not json_output:
+                print(f"{doc.frontmatter.title}: all sections done/deprecated, skipping.")
             continue
 
-        print(f"\n{doc.frontmatter.title} ({doc.file_path})")
-        print("-" * 50)
+        json_specs_scanned += 1
+
+        if not json_output:
+            print(f"\n{doc.frontmatter.title} ({doc.file_path})")
+            print("-" * 50)
 
         # Gather grep evidence
         evidence = _gather_evidence(root, sections_to_audit)
@@ -113,7 +170,8 @@ def run_audit(
                     client, doc, sections_to_audit, evidence
                 )
             except AgentAPIError as e:
-                print(f"  Claude API error: {e} — skipping this spec.")
+                if not json_output:
+                    print(f"  Claude API error: {e} — skipping this spec.")
                 continue
             total_input_tokens += in_tok
             total_output_tokens += out_tok
@@ -129,6 +187,12 @@ def run_audit(
 
         # Collect all medium/high confidence recs for AC updates (includes unchanged-status sections)
         ac_eligible = [r for r in recommendations if r.confidence in ("high", "medium")]
+
+        # In JSON mode, accumulate per-spec records and skip the human-print path.
+        if json_output:
+            for rec in ac_eligible:
+                json_recs.append(_recommendation_to_dict(doc, rec))
+            continue
 
         if not changes and not ac_eligible:
             print("  No status changes recommended.")
@@ -180,6 +244,25 @@ def run_audit(
         )
         total_changes += num_applied
 
+    if json_output:
+        # JSON mode is read-only and never applies edits — the action layer
+        # decides what to do with the recommendations.
+        status_changes = sum(1 for r in json_recs if r["recommended_status"] != r["current_status"])
+        ac_evaluations = sum(len(r["ac_evaluations"]) for r in json_recs)
+        _emit_audit_json(
+            recommendations=json_recs,
+            summary=_audit_summary(
+                json_specs_scanned,
+                len(json_recs),
+                status_changes,
+                ac_evaluations,
+                total_input_tokens,
+                total_output_tokens,
+                mode="claude" if use_claude else "heuristic",
+            ),
+        )
+        return
+
     # Summary
     print(f"\nAudit complete: {total_changes} status change(s){' (dry run)' if dry_run else ''}.")
     if use_claude:
@@ -195,7 +278,80 @@ def run_audit(
         run_sync(local=True, root=root, spec=spec)
 
 
+# ─── JSON Output Helpers ──────────────────────────────────
+
+
+def _recommendation_to_dict(doc: SpecDocument, rec: AuditRecommendation) -> dict:
+    """Convert a recommendation into the JSON wire format."""
+    return {
+        "spec": doc.file_path,
+        "spec_title": doc.frontmatter.title,
+        "section_id": rec.section_id,
+        "section_number": rec.section_number,
+        "current_status": rec.current_status,
+        "recommended_status": rec.recommended_status,
+        "confidence": rec.confidence,
+        "reasoning": rec.reasoning,
+        "ac_evaluations": [
+            {
+                "ac_text": ae.ac_text,
+                "status": ae.status,
+                "evidence": ae.evidence,
+            }
+            for ae in rec.ac_evaluations
+        ],
+    }
+
+
+def _audit_summary(
+    specs_scanned: int,
+    recommendations: int,
+    status_changes: int,
+    ac_evaluations: int,
+    input_tokens: int,
+    output_tokens: int,
+    mode: str,
+) -> dict:
+    return {
+        "schema_version": 1,
+        "mode": mode,
+        "specs_scanned": specs_scanned,
+        "recommendations": recommendations,
+        "status_changes": status_changes,
+        "ac_evaluations": ac_evaluations,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+    }
+
+
+def _emit_audit_json(*, recommendations: list[dict], summary: dict) -> None:
+    print(json.dumps({"recommendations": recommendations, "summary": summary}, indent=2))
+
+
 # ─── Evidence Gathering ──────────────────────────────────
+
+
+def _gather_evidence_by_path(
+    root: Path,
+    docs: list[SpecDocument],
+) -> dict[str, dict[str, list[str]]]:
+    """Gather grep evidence for every audit-eligible section across docs.
+
+    Returns ``{spec_path: {section_id: [snippets]}}`` — the shape the
+    backend ``/v1/actions/audit`` endpoint expects in its ``evidence``
+    field. Used by the backend routing path so the CLI does the
+    grepping (which needs filesystem access) and the backend just
+    runs Claude on the prepared inputs.
+    """
+    skip_states = {"done", "deprecated", "blocked"}
+    out: dict[str, dict[str, list[str]]] = {}
+    for doc in docs:
+        all_sections = _flatten_sections(doc.sections)
+        sections_to_audit = [s for s in all_sections if s.status.state not in skip_states]
+        if not sections_to_audit:
+            continue
+        out[doc.file_path] = _gather_evidence(root, sections_to_audit)
+    return out
 
 
 def _gather_evidence(
@@ -270,9 +426,48 @@ def _grep_with_context(root: Path, keyword: str) -> list[str]:
                 for line in result.stdout.strip().split("\n")[:20]:
                     line = line.replace(str(root) + "/", "")
                     results.append(line)
-        except (subprocess.SubprocessError, FileNotFoundError, OSError):
-            pass
+        except (subprocess.SubprocessError, FileNotFoundError, OSError) as exc:
+            logger.debug("grep failed for keyword %r in %s: %s", keyword, subdir, exc)
     return results
+
+
+# ─── Reusable Core ────────────────────────────────────────
+
+
+def audit_document(
+    client: ClaudeClient,
+    doc: SpecDocument,
+    evidence: dict[str, list[str]],
+    *,
+    use_claude: bool,
+) -> tuple[list[AuditRecommendation], int, int]:
+    """Audit a single parsed spec document. Pure-ish: takes a parsed
+    document plus pre-gathered evidence and returns recommendations.
+
+    Used by both the CLI (which gathers evidence via filesystem grep)
+    and the HTTP endpoint (which receives pre-gathered evidence in
+    the request body).
+
+    Skips sections with status `done`, `deprecated`, or `blocked`.
+    Returns ``([], 0, 0)`` on Claude API errors so callers can keep
+    progressing through other documents in a batch.
+    """
+    from canon.agent.client import AgentAPIError
+
+    all_sections = _flatten_sections(doc.sections)
+    skip_states = {"done", "deprecated", "blocked"}
+    sections_to_audit = [s for s in all_sections if s.status.state not in skip_states]
+    if not sections_to_audit:
+        return [], 0, 0
+
+    if use_claude:
+        try:
+            return _audit_with_claude(client, doc, sections_to_audit, evidence)
+        except AgentAPIError as exc:
+            logger.warning("Claude API error auditing %s: %s", doc.file_path, exc)
+            return [], 0, 0
+
+    return _audit_heuristic(sections_to_audit, evidence), 0, 0
 
 
 # ─── Claude Audit ─────────────────────────────────────────
@@ -314,7 +509,7 @@ def _parse_audit_response(
             try:
                 data = json.loads(match.group(1))
             except json.JSONDecodeError:
-                print("  Warning: Could not parse Claude response as JSON.")
+                logger.warning("Could not parse Claude response as JSON for %s", "spec")
                 return []
         else:
             print("  Warning: Could not parse Claude response as JSON.")

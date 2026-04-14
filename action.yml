@@ -17,6 +17,14 @@ inputs:
     description: "Create a PR with setup files (vs committing directly)"
     required: false
     default: "true"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
 
 runs:
   using: "composite"
@@ -25,11 +33,16 @@ runs:
 
     - uses: actions/setup-python@v5
       with:
-        python-version: "3.12"
+        python-version: ${{ inputs.python-version }}
 
-    - name: Install Canon
+    - name: Install Canon CLI
       shell: bash
-      run: pip install "canonhq>=1.0.0,<2.0.0"
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
 
     - name: Run canon setup
       shell: bash

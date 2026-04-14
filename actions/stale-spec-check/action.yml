@@ -1,0 +1,193 @@
+name: "Canon Stale Spec Check"
+description: >
+  Find specs whose realization-evidence files have churned but the
+  spec itself hasn't been touched. Pure git heuristic, no Claude
+  spend, no token required. Pairs with the audit action: audit asks
+  "did the code drift from the spec?" via Claude; stale-spec-check
+  asks the cheaper "is the spec older than its evidence?" question
+  via git timestamps.
+
+  Designed for scheduled runs — opens a rolling tracking issue with
+  stale specs and their owners @-mentioned.
+branding:
+  icon: "clock"
+  color: "orange"
+
+inputs:
+  stale-days:
+    description: "Spec untouched for at least this many days (default: 90)"
+    required: false
+    default: "90"
+  code-churn-threshold:
+    description: "Combined changed lines across realization files required to flag (default: 50)"
+    required: false
+    default: "50"
+  mode:
+    description: "issue (default) | summary"
+    required: false
+    default: "issue"
+  rolling-issue-title:
+    description: "Title of the rolling tracking issue"
+    required: false
+    default: "Canon stale spec check"
+  rolling-issue-labels:
+    description: "Comma-separated labels for the rolling issue"
+    required: false
+    default: "canon,stale"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  stale-count:
+    description: "Number of stale specs found"
+    value: ${{ steps.stale.outputs.stale-count }}
+  report-path:
+    description: "Path to the JSON stale report on the runner"
+    value: ${{ steps.stale.outputs.report-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        # Need full git history so canon stale can read commit
+        # timestamps and numstat data for both specs and code paths.
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Run canon stale
+      id: stale
+      shell: bash
+      env:
+        INPUT_STALE_DAYS: ${{ inputs.stale-days }}
+        INPUT_CODE_CHURN_THRESHOLD: ${{ inputs.code-churn-threshold }}
+      run: |
+        set -e
+        REPORT="$RUNNER_TEMP/canon-stale-report.json"
+        export REPORT
+
+        canon stale \
+          --stale-days "$INPUT_STALE_DAYS" \
+          --code-churn-threshold "$INPUT_CODE_CHURN_THRESHOLD" \
+          --json > "$REPORT"
+
+        STALE_COUNT=$(python -c "import json,os; print(json.load(open(os.environ['REPORT']))['summary']['stale_count'])")
+        echo "stale-count=$STALE_COUNT" >> "$GITHUB_OUTPUT"
+        echo "report-path=$REPORT" >> "$GITHUB_OUTPUT"
+
+        # Step summary
+        {
+          echo "## Canon Stale Spec Check"
+          echo ""
+          echo "- **Threshold**: spec untouched ≥${INPUT_STALE_DAYS} days, realization churn ≥${INPUT_CODE_CHURN_THRESHOLD} lines"
+          echo "- **Stale specs**: $STALE_COUNT"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "$STALE_COUNT" -gt 0 ]; then
+          {
+            echo "| Spec | Owner | Days untouched | Churn (lines) | Last code change |"
+            echo "|------|-------|----------------|---------------|------------------|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          python <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import json, os
+        data = json.load(open(os.environ["REPORT"]))
+        for f in data["findings"]:
+            owner = f["owner"] or "—"
+            print(f"| `{f['spec']}` — {f['title']} | {owner} | {f['spec_age_days']} | {f['realization_churn_lines']} | {f['most_recent_realization_age_days']} days ago |")
+        PY
+        else
+          echo "_No stale specs detected._" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Issue mode — open or update rolling issue
+      if: inputs.mode == 'issue' && steps.stale.outputs.stale-count != '0'
+      shell: bash
+      env:
+        REPORT: ${{ steps.stale.outputs.report-path }}
+        TITLE: ${{ inputs.rolling-issue-title }}
+        LABELS: ${{ inputs.rolling-issue-labels }}
+        STALE_DAYS: ${{ inputs.stale-days }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        BODY_FILE="$RUNNER_TEMP/canon-stale-body.md"
+        export BODY_FILE
+
+        python <<'PY'
+        import json, os
+        from datetime import datetime, timezone
+
+        with open(os.environ["REPORT"]) as f:
+            data = json.load(f)
+
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        lines = [
+            "<!-- canon:action:stale-spec-check:rolling -->",
+            "## Canon stale spec check",
+            "",
+            f"_Last updated: {now}_",
+            "",
+            f"**{len(data['findings'])} stale spec(s)** — spec untouched ≥{data['thresholds']['stale_days']} days while realization files churned ≥{data['thresholds']['code_churn_threshold']} lines.",
+            "",
+        ]
+
+        for f in data["findings"]:
+            owner = f"@{f['owner']}" if f["owner"] else "_(no owner)_"
+            lines.append(f"### `{f['spec']}` — {f['title']}")
+            lines.append("")
+            lines.append(f"**Owner:** {owner}")
+            lines.append("")
+            lines.append(f"- Spec untouched for **{f['spec_age_days']} days**")
+            lines.append(
+                f"- Realization files churned **{f['realization_churn_lines']} lines** "
+                f"(most recent: {f['most_recent_realization_age_days']} days ago)"
+            )
+            if f["realization_files"]:
+                lines.append("- Files:")
+                for rel in f["realization_files"][:8]:
+                    lines.append(f"  - `{rel}`")
+                if len(f["realization_files"]) > 8:
+                    lines.append(f"  - …and {len(f['realization_files']) - 8} more")
+            lines.append("")
+
+        with open(os.environ["BODY_FILE"], "w") as out:
+            out.write("\n".join(lines) + "\n")
+        PY
+
+        EXISTING=$(gh issue list \
+          --search "in:title \"$TITLE\"" \
+          --state open \
+          --json number,title \
+          --jq ".[] | select(.title == \"$TITLE\") | .number" \
+          | head -1)
+
+        if [ -n "$EXISTING" ]; then
+          gh issue edit "$EXISTING" --body-file "$BODY_FILE"
+          echo "Updated rolling stale-spec issue #$EXISTING." >> "$GITHUB_STEP_SUMMARY"
+        else
+          ARGS=(--title "$TITLE" --body-file "$BODY_FILE")
+          if [ -n "$LABELS" ]; then
+            ARGS+=(--label "$LABELS")
+          fi
+          gh issue create "${ARGS[@]}"
+          echo "Created new rolling stale-spec issue." >> "$GITHUB_STEP_SUMMARY"
+        fi

@@ -1,0 +1,106 @@
+# Reusable workflow: bundles Canon's static PR checks into a single
+# `uses:` line. Consumers call it via `workflow_call`.
+#
+# Example consumer (in their own .github/workflows/canon.yml):
+#
+#   name: Canon PR Checks
+#   on:
+#     pull_request:
+#       branches: [main]
+#   jobs:
+#     canon:
+#       uses: canonhq/canon/.github/workflows/reusable/pr-checks.yml@v1
+#       with:
+#         fail-on-lint: error
+#         fail-on-verify: never
+#
+# Both jobs run in parallel. They are independent so a verify failure
+# does not block lint reporting and vice versa.
+
+name: Canon PR Checks (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      fail-on-lint:
+        description: "spec-lint fail-on threshold (error|warning|never)"
+        required: false
+        type: string
+        default: "error"
+      fail-on-verify:
+        description: "verify fail-on threshold (error|warning|never)"
+        required: false
+        type: string
+        default: "never"
+      warnings-as-errors:
+        description: "Treat lint warnings as errors"
+        required: false
+        type: boolean
+        default: false
+      coverage-delta:
+        description: "Run the coverage-delta action and post a sticky PR comment"
+        required: false
+        type: boolean
+        default: true
+      python-version:
+        description: "Python version used by the install-canon helper"
+        required: false
+        type: string
+        default: "3.12"
+      canon-version:
+        description: "Canon CLI version constraint (pip spec)"
+        required: false
+        type: string
+        default: ">=1.0.0,<2.0.0"
+
+jobs:
+  spec-lint:
+    name: Spec Lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Canon spec-lint
+        uses: canonhq/canon/actions/spec-lint@v1
+        with:
+          fail-on: ${{ inputs.fail-on-lint }}
+          warnings-as-errors: ${{ inputs.warnings-as-errors }}
+          python-version: ${{ inputs.python-version }}
+          canon-version: ${{ inputs.canon-version }}
+
+  verify:
+    name: Verify ACs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Canon verify
+        uses: canonhq/canon/actions/verify@v1
+        with:
+          fail-on: ${{ inputs.fail-on-verify }}
+          python-version: ${{ inputs.python-version }}
+          canon-version: ${{ inputs.canon-version }}
+
+  coverage-delta:
+    name: Coverage Delta
+    if: inputs.coverage-delta && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need at least the base ref to compare against — full history is
+          # the safest default and is fast for typical PR-sized repos.
+          fetch-depth: 0
+
+      - name: Run Canon coverage-delta
+        uses: canonhq/canon/actions/coverage-delta@v1
+        with:
+          python-version: ${{ inputs.python-version }}
+          canon-version: ${{ inputs.canon-version }}

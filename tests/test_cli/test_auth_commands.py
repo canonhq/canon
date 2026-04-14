@@ -19,22 +19,57 @@ class TestLoginSubcommand:
             patch("canon.cli.login.run_login") as mock_run,
         ):
             main(["login"])
-            mock_run.assert_called_once_with(api_key="", server="", org="")
+            mock_run.assert_called_once_with(api_key="", token="", api_url="", server="", org="")
 
     def test_login_with_api_key(self):
         with patch("canon.cli.login.run_login") as mock_run:
             main(["login", "--api-key", "sw_test123"])
-            mock_run.assert_called_once_with(api_key="sw_test123", server="", org="")
+            mock_run.assert_called_once_with(
+                api_key="sw_test123", token="", api_url="", server="", org=""
+            )
 
     def test_login_with_server(self):
         with patch("canon.cli.login.run_login") as mock_run:
             main(["login", "--server", "http://localhost:3000"])
-            mock_run.assert_called_once_with(api_key="", server="http://localhost:3000", org="")
+            mock_run.assert_called_once_with(
+                api_key="", token="", api_url="", server="http://localhost:3000", org=""
+            )
 
     def test_login_with_org(self):
         with patch("canon.cli.login.run_login") as mock_run:
             main(["login", "--org", "canonhq"])
-            mock_run.assert_called_once_with(api_key="", server="", org="canonhq")
+            mock_run.assert_called_once_with(
+                api_key="", token="", api_url="", server="", org="canonhq"
+            )
+
+    def test_login_with_token_non_interactive(self, tmp_path: Path):
+        """--token writes credentials directly without contacting the backend."""
+        from canon.cli import _credentials
+
+        cred_file = tmp_path / "credentials.json"
+        with (
+            patch.object(_credentials, "_NEW_CONFIG_DIR", tmp_path),
+            patch.object(_credentials, "_NEW_CRED_FILE", cred_file),
+        ):
+            main(["login", "--token", "ci_test_token", "--api-url", "https://canon.example/"])
+
+        saved = json.loads(cred_file.read_text())
+        assert saved["method"] == "token"
+        assert saved["token"] == "ci_test_token"
+        assert saved["api_url"] == "https://canon.example/"
+
+    def test_login_token_defaults_api_url(self, tmp_path: Path):
+        from canon.cli import _credentials
+
+        cred_file = tmp_path / "credentials.json"
+        with (
+            patch.object(_credentials, "_NEW_CONFIG_DIR", tmp_path),
+            patch.object(_credentials, "_NEW_CRED_FILE", cred_file),
+        ):
+            main(["login", "--token", "ci_test_token"])
+
+        saved = json.loads(cred_file.read_text())
+        assert saved["api_url"] == "https://api.canonhq.co"
 
     def test_login_device_flow_sends_org_in_body(self):
         """When --org is set, it's forwarded in the POST body to /auth/device/code."""

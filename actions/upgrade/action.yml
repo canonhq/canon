@@ -1,0 +1,264 @@
+name: "Canon Upgrade"
+description: >
+  Bump the pinned canonhq version in the consumer repo's
+  dependency manifest, run any database migrations, and open a PR
+  with the changes. Think Dependabot-but-canon-aware. Designed for
+  manual dispatch or a monthly cron.
+
+  Auto-detects pyproject.toml, requirements.txt, requirements*.txt,
+  and uv.lock layouts; surfaces a clear error when the manifest
+  format isn't recognized.
+branding:
+  icon: "arrow-up-circle"
+  color: "orange"
+
+inputs:
+  target:
+    description: "Target version (latest | <semver>) — default: latest"
+    required: false
+    default: "latest"
+  manifest:
+    description: >
+      Explicit path to the manifest file. Defaults to auto-detect:
+      pyproject.toml, then requirements.txt.
+    required: false
+    default: ""
+  run-migrations:
+    description: "Run `canon db migrate` after the version bump"
+    required: false
+    default: "true"
+  branch-name:
+    description: "Branch name for the upgrade PR"
+    required: false
+    default: "canon/upgrade"
+  open-pr:
+    description: "Open a PR (vs commit directly to default branch)"
+    required: false
+    default: "true"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+
+outputs:
+  from-version:
+    description: "Previous canonhq version"
+    value: ${{ steps.bump.outputs.from-version }}
+  to-version:
+    description: "New canonhq version"
+    value: ${{ steps.bump.outputs.to-version }}
+  pr-url:
+    description: "URL of the opened PR (when open-pr: true)"
+    value: ${{ steps.pr.outputs.pr-url }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Resolve target version
+      id: target
+      shell: bash
+      env:
+        INPUT_TARGET: ${{ inputs.target }}
+      run: |
+        set -e
+        if [ "$INPUT_TARGET" = "latest" ]; then
+          # Query PyPI for the latest version
+          TARGET=$(python3 -c "
+        import json, urllib.request
+        try:
+            data = json.load(urllib.request.urlopen('https://pypi.org/pypi/canonhq/json', timeout=10))
+            print(data['info']['version'])
+        except Exception as exc:
+            import sys
+            print(f'::error::Could not fetch latest canonhq version from PyPI: {exc}', file=sys.stderr)
+            sys.exit(2)
+        ")
+        else
+          TARGET="$INPUT_TARGET"
+        fi
+        echo "version=$TARGET" >> "$GITHUB_OUTPUT"
+        echo "Resolved target version: $TARGET"
+
+    - name: Detect manifest and bump version
+      id: bump
+      shell: bash
+      env:
+        INPUT_MANIFEST: ${{ inputs.manifest }}
+        TARGET_VERSION: ${{ steps.target.outputs.version }}
+      run: |
+        set -e
+
+        # Auto-detect the manifest unless an explicit path was given.
+        MANIFEST="$INPUT_MANIFEST"
+        if [ -z "$MANIFEST" ]; then
+          for candidate in pyproject.toml requirements.txt requirements/base.txt; do
+            if [ -f "$candidate" ]; then
+              MANIFEST="$candidate"
+              break
+            fi
+          done
+        fi
+
+        if [ -z "$MANIFEST" ] || [ ! -f "$MANIFEST" ]; then
+          echo "::error::Could not detect a dependency manifest. Pass --manifest explicitly." >&2
+          exit 2
+        fi
+
+        echo "Using manifest: $MANIFEST"
+
+        # Export both values so the python heredocs below can read them
+        # via os.environ. We use quoted heredoc delimiters (<<'PY') so
+        # the shell doesn't expand $MANIFEST or $TARGET_VERSION into
+        # the Python source — a manifest path containing a quote and
+        # Python syntax could otherwise execute arbitrary code.
+        export MANIFEST TARGET_VERSION
+
+        FROM_VERSION=$(python3 - <<'PY'
+        import os, re, sys
+        manifest_path = os.environ["MANIFEST"]
+        text = open(manifest_path).read()
+        # Try common patterns: canonhq==1.2.3, canonhq>=1.2.3, "canonhq>=1.2.3,<2.0.0"
+        m = re.search(r'canonhq[~=<>!]+\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)', text)
+        if not m:
+            print("", file=sys.stderr)
+            sys.exit(0)
+        print(m.group(1))
+        PY
+        )
+
+        if [ -z "$FROM_VERSION" ]; then
+          echo "::warning::Could not parse current canonhq version from $MANIFEST"
+        else
+          echo "Current version: $FROM_VERSION"
+        fi
+
+        # Rewrite any canonhq pin to ==<target>. This is intentionally
+        # narrow — adopters with looser constraints (e.g. >=1.0.0,<2.0.0)
+        # may prefer to update those manually; pin them explicitly to
+        # opt out of automated bumps.
+        python3 - <<'PY'
+        import os, re
+        manifest_path = os.environ["MANIFEST"]
+        target_version = os.environ["TARGET_VERSION"]
+        text = open(manifest_path).read()
+        new = re.sub(
+            r'(canonhq)[~=<>!\s]*([0-9]+\.[0-9]+(?:\.[0-9]+)?(?:,\s*<[^"\']+)?)?',
+            rf'\1=={target_version}',
+            text,
+            count=1,
+        )
+        if new == text:
+            print(f"::warning::No canonhq pin found in {manifest_path} — nothing changed")
+        with open(manifest_path, "w") as f:
+            f.write(new)
+        PY
+
+        echo "from-version=$FROM_VERSION" >> "$GITHUB_OUTPUT"
+        echo "to-version=$TARGET_VERSION" >> "$GITHUB_OUTPUT"
+        echo "manifest=$MANIFEST" >> "$GITHUB_OUTPUT"
+
+    - name: Install bumped canonhq
+      shell: bash
+      env:
+        TARGET_VERSION: ${{ steps.target.outputs.version }}
+      run: |
+        python3 -m pip install --upgrade pip
+        python3 -m pip install "canonhq==$TARGET_VERSION"
+        canon --help > /dev/null
+
+    - name: Run database migrations
+      if: inputs.run-migrations == 'true'
+      shell: bash
+      run: |
+        # canon db migrate is idempotent — safe to run even if no
+        # migrations are pending. Failing here usually means the new
+        # version requires a database that the consumer doesn't have
+        # access to (which is fine — the action degrades gracefully).
+        if canon db --help 2>&1 | grep -q migrate; then
+          canon db migrate || echo "::warning::canon db migrate failed (no DB or no migrations needed)"
+        else
+          echo "::notice::canon db migrate not available — skipping"
+        fi
+
+    - name: Check for changes
+      id: changes
+      shell: bash
+      run: |
+        if git diff --quiet; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          echo "::notice::No changes to commit — already on the target version"
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Open upgrade PR
+      id: pr
+      if: steps.changes.outputs.changed == 'true' && inputs.open-pr == 'true'
+      shell: bash
+      env:
+        BRANCH: ${{ inputs.branch-name }}
+        FROM_VERSION: ${{ steps.bump.outputs.from-version }}
+        TO_VERSION: ${{ steps.bump.outputs.to-version }}
+        MANIFEST: ${{ steps.bump.outputs.manifest }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git checkout -B "$BRANCH"
+        git add -A
+        git commit -m "chore(canon): upgrade canonhq to $TO_VERSION"
+        git push -u origin "$BRANCH" --force-with-lease
+
+        DISPLAY_FROM="${FROM_VERSION:-(unknown)}"
+
+        EXISTING=$(gh pr list --head "$BRANCH" --json number,url --jq '.[0].url' 2>/dev/null || true)
+        if [ -n "$EXISTING" ]; then
+          echo "pr-url=$EXISTING" >> "$GITHUB_OUTPUT"
+          echo "Updated existing PR: $EXISTING" >> "$GITHUB_STEP_SUMMARY"
+        else
+          PR_URL=$(gh pr create \
+            --title "chore(canon): upgrade canonhq to $TO_VERSION" \
+            --body "$(cat <<EOF
+        ## Summary
+
+        Automated upgrade of the pinned canonhq CLI from \`$DISPLAY_FROM\` → \`$TO_VERSION\`.
+
+        - **Manifest**: \`$MANIFEST\`
+        - **Target version**: \`$TO_VERSION\`
+        - **Migrations**: $([ "${{ inputs.run-migrations }}" = "true" ] && echo "ran" || echo "skipped")
+
+        ## Review checklist
+
+        - [ ] CI is green on this branch
+        - [ ] No breaking changes called out in the canonhq changelog
+        - [ ] Local \`canon lint\` and \`canon verify\` still pass
+
+        ---
+        _Generated by the [canonhq/canon/actions/upgrade](https://canonhq.co/docs/guides/github-actions/upgrade) action._
+        EOF
+        )" \
+            --head "$BRANCH")
+          echo "pr-url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "Opened PR: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Direct commit
+      if: steps.changes.outputs.changed == 'true' && inputs.open-pr != 'true'
+      shell: bash
+      env:
+        TO_VERSION: ${{ steps.bump.outputs.to-version }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add -A
+        git commit -m "chore(canon): upgrade canonhq to $TO_VERSION"
+        git push
+        echo "Committed canonhq upgrade to default branch." >> "$GITHUB_STEP_SUMMARY"

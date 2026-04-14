@@ -1,0 +1,133 @@
+name: "Canon Spec Lint"
+description: >
+  Validate spec file structure — frontmatter schema, section numbering,
+  acceptance criteria format, status comment syntax, and depends_on
+  resolvability. Fast, network-free, no Claude spend, no CANON_TOKEN needed.
+branding:
+  icon: "check-square"
+  color: "orange"
+
+inputs:
+  specs:
+    description: "Glob for spec files (reads CANON.yaml by default)"
+    required: false
+    default: ""
+  warnings-as-errors:
+    description: "Treat lint warnings as errors (affects exit code)"
+    required: false
+    default: "false"
+  fail-on:
+    description: "error | warning | never — controls whether lint failures fail the action"
+    required: false
+    default: "error"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  error-count:
+    description: "Number of lint errors found"
+    value: ${{ steps.lint.outputs.error-count }}
+  warning-count:
+    description: "Number of lint warnings found"
+    value: ${{ steps.lint.outputs.warning-count }}
+  report-path:
+    description: "Path to the JSON lint report on the runner"
+    value: ${{ steps.lint.outputs.report-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Run canon lint
+      id: lint
+      shell: bash
+      env:
+        INPUT_SPECS: ${{ inputs.specs }}
+        INPUT_WARNINGS_AS_ERRORS: ${{ inputs.warnings-as-errors }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        set -e
+        REPORT="$RUNNER_TEMP/canon-lint-report.json"
+        export REPORT
+
+        ARGS=(--json)
+        if [ "$INPUT_WARNINGS_AS_ERRORS" = "true" ]; then
+          ARGS+=(--warnings-as-errors)
+        fi
+        if [ -n "$INPUT_SPECS" ]; then
+          ARGS+=(--spec "$INPUT_SPECS")
+        fi
+
+        # canon lint may exit non-zero when issues are found; capture but
+        # don't abort — we compute our own exit code below based on fail-on.
+        set +e
+        canon lint "${ARGS[@]}" > "$REPORT"
+        set -e
+
+        ERRORS=$(python -c "import json,os; print(json.load(open(os.environ['REPORT']))['summary']['errors'])")
+        WARNINGS=$(python -c "import json,os; print(json.load(open(os.environ['REPORT']))['summary']['warnings'])")
+
+        echo "error-count=$ERRORS" >> "$GITHUB_OUTPUT"
+        echo "warning-count=$WARNINGS" >> "$GITHUB_OUTPUT"
+        echo "report-path=$REPORT" >> "$GITHUB_OUTPUT"
+
+        # Build human-readable step summary.
+        {
+          echo "## Canon Spec Lint"
+          echo ""
+          echo "- **Errors**: $ERRORS"
+          echo "- **Warnings**: $WARNINGS"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "$ERRORS" -gt 0 ] || [ "$WARNINGS" -gt 0 ]; then
+          {
+            echo "### Issues"
+            echo ""
+            echo "| Severity | Rule | File | Line | Message |"
+            echo "|----------|------|------|------|---------|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          python <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import json, os
+        with open(os.environ["REPORT"]) as f:
+            data = json.load(f)
+        for issue in data["issues"]:
+            line = issue.get("line") or ""
+            msg = issue["message"].replace("|", "\\|")
+            print(f"| {issue['severity']} | {issue['rule']} | {issue['file']} | {line} | {msg} |")
+        PY
+        else
+          echo "No issues found." >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        # Decide exit code based on fail-on input.
+        case "$INPUT_FAIL_ON" in
+          error)
+            if [ "$ERRORS" -gt 0 ]; then exit 1; fi ;;
+          warning)
+            if [ "$ERRORS" -gt 0 ] || [ "$WARNINGS" -gt 0 ]; then exit 1; fi ;;
+          never)
+            ;;
+          *)
+            echo "Invalid fail-on value: $INPUT_FAIL_ON" >&2
+            exit 2 ;;
+        esac

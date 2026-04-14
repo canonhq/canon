@@ -1,0 +1,154 @@
+name: "Canon Verify"
+description: >
+  Static verification of acceptance criteria against the codebase. Runs
+  `canon verify` over discovered specs, emits a step summary listing
+  unchecked ACs and their realization signal (likely / not_started /
+  unknown), and (optionally) posts a check-run that branch protection can
+  mark required. No Claude spend, no CANON_TOKEN needed.
+branding:
+  icon: "check-circle"
+  color: "orange"
+
+inputs:
+  section:
+    description: "Filter to a single section ID (default: all unchecked ACs)"
+    required: false
+    default: ""
+  fail-on:
+    description: >
+      error | warning | never — `error` fails the action when any AC is
+      `not_started`; `warning` fails on `not_started` or `unknown`;
+      `never` always succeeds (informational only).
+    required: false
+    default: "never"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  total:
+    description: "Total unchecked ACs evaluated"
+    value: ${{ steps.verify.outputs.total }}
+  likely-count:
+    description: "Number of ACs with code evidence"
+    value: ${{ steps.verify.outputs.likely }}
+  not-started-count:
+    description: "Number of ACs with no detectable evidence"
+    value: ${{ steps.verify.outputs.not-started }}
+  unknown-count:
+    description: "Number of ACs whose status couldn't be determined"
+    value: ${{ steps.verify.outputs.unknown }}
+  report-path:
+    description: "Path to the JSON verify report on the runner"
+    value: ${{ steps.verify.outputs.report-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Run canon verify
+      id: verify
+      shell: bash
+      env:
+        INPUT_SECTION: ${{ inputs.section }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        set -e
+        REPORT="$RUNNER_TEMP/canon-verify-report.json"
+        export REPORT
+
+        ARGS=(--json)
+        if [ -n "$INPUT_SECTION" ]; then
+          ARGS+=(--section "$INPUT_SECTION")
+        fi
+
+        set +e
+        canon verify "${ARGS[@]}" > "$REPORT"
+        VERIFY_EXIT=$?
+        set -e
+
+        if [ "$VERIFY_EXIT" -eq 2 ]; then
+          echo "::error::canon verify failed: section filter did not resolve" >&2
+          cat "$REPORT" >&2 || true
+          exit 2
+        fi
+
+        TOTAL=$(python -c "import json,os; d=json.load(open(os.environ['REPORT'])); print(d['summary'].get('total',0))")
+        LIKELY=$(python -c "import json,os; d=json.load(open(os.environ['REPORT'])); print(d['summary'].get('likely',0))")
+        NOT_STARTED=$(python -c "import json,os; d=json.load(open(os.environ['REPORT'])); print(d['summary'].get('not_started',0))")
+        UNKNOWN=$(python -c "import json,os; d=json.load(open(os.environ['REPORT'])); print(d['summary'].get('unknown',0))")
+
+        {
+          echo "total=$TOTAL"
+          echo "likely=$LIKELY"
+          echo "not-started=$NOT_STARTED"
+          echo "unknown=$UNKNOWN"
+          echo "report-path=$REPORT"
+        } >> "$GITHUB_OUTPUT"
+
+        # Step summary.
+        {
+          echo "## Canon Verify"
+          echo ""
+          echo "| Status | Count |"
+          echo "|--------|-------|"
+          echo "| Total unchecked | $TOTAL |"
+          echo "| Likely realized | $LIKELY |"
+          echo "| Not started | $NOT_STARTED |"
+          echo "| Unknown | $UNKNOWN |"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "$TOTAL" -gt 0 ]; then
+          {
+            echo "### Unchecked acceptance criteria"
+            echo ""
+            echo "| Status | Spec | Section | AC |"
+            echo "|--------|------|---------|----|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          python <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import json, os
+        with open(os.environ["REPORT"]) as f:
+            data = json.load(f)
+        for rec in data["unchecked"]:
+            spec = rec["spec"] or ""
+            line = rec.get("ac_line") or ""
+            spec_link = f"`{spec}:{line}`" if line else f"`{spec}`"
+            text = rec["ac_text"].replace("|", "\\|")
+            section = rec.get("section_title", "").replace("|", "\\|")
+            print(f"| {rec['status']} | {spec_link} | {section} | {text} |")
+        PY
+        else
+          echo "All acceptance criteria are checked." >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        # Decide exit code based on fail-on.
+        case "$INPUT_FAIL_ON" in
+          error)
+            if [ "$NOT_STARTED" -gt 0 ]; then exit 1; fi ;;
+          warning)
+            if [ "$NOT_STARTED" -gt 0 ] || [ "$UNKNOWN" -gt 0 ]; then exit 1; fi ;;
+          never)
+            ;;
+          *)
+            echo "::error::Invalid fail-on value: $INPUT_FAIL_ON" >&2
+            exit 2 ;;
+        esac

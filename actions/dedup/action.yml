@@ -1,0 +1,162 @@
+name: "Canon Dedup"
+description: >
+  Find and report duplicate tickets created by spec sync. Designed for
+  scheduled runs — opens a PR (or issue) listing proposed cleanups when
+  duplicates are detected. Reuses the existing `canon dedup` CLI which
+  has its own auto-detection logic for the configured ticket system.
+branding:
+  icon: "copy"
+  color: "orange"
+
+inputs:
+  apply:
+    description: "Apply the cleanup automatically (vs. dry-run + report)"
+    required: false
+    default: "false"
+  spec:
+    description: "Filter to a single spec file"
+    required: false
+    default: ""
+  mode:
+    description: "issue (default) | summary — how to surface findings"
+    required: false
+    default: "issue"
+  rolling-issue-title:
+    description: "Title of the rolling tracking issue"
+    required: false
+    default: "Canon dedup report"
+  rolling-issue-labels:
+    description: "Comma-separated labels for the rolling issue"
+    required: false
+    default: "canon,dedup"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  log-path:
+    description: "Path to the captured dedup log on the runner"
+    value: ${{ steps.dedup.outputs.log-path }}
+  applied:
+    description: "Whether the action ran in apply mode (true | false)"
+    value: ${{ steps.dedup.outputs.applied }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Run canon dedup
+      id: dedup
+      shell: bash
+      env:
+        INPUT_APPLY: ${{ inputs.apply }}
+        INPUT_SPEC: ${{ inputs.spec }}
+      run: |
+        set -e
+        LOG="$RUNNER_TEMP/canon-dedup.log"
+        export LOG
+
+        ARGS=()
+        if [ "$INPUT_APPLY" != "true" ]; then
+          ARGS+=(--dry-run)
+        fi
+        if [ -n "$INPUT_SPEC" ]; then
+          ARGS+=(--spec "$INPUT_SPEC")
+        fi
+
+        canon dedup "${ARGS[@]}" 2>&1 | tee "$LOG"
+
+        {
+          echo "log-path=$LOG"
+          echo "applied=$([ "$INPUT_APPLY" = "true" ] && echo true || echo false)"
+        } >> "$GITHUB_OUTPUT"
+
+        # Step summary
+        {
+          echo "## Canon Dedup"
+          echo ""
+          echo "- **Mode**: \`$([ "$INPUT_APPLY" = "true" ] && echo apply || echo dry-run)\`"
+          if [ -n "$INPUT_SPEC" ]; then
+            echo "- **Spec filter**: \`$INPUT_SPEC\`"
+          fi
+          echo ""
+          echo "<details><summary>Output</summary>"
+          echo ""
+          echo '```'
+          cat "$LOG"
+          echo '```'
+          echo ""
+          echo "</details>"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Issue mode — open or update rolling issue
+      if: inputs.mode == 'issue'
+      shell: bash
+      env:
+        LOG: ${{ steps.dedup.outputs.log-path }}
+        TITLE: ${{ inputs.rolling-issue-title }}
+        LABELS: ${{ inputs.rolling-issue-labels }}
+        APPLIED: ${{ steps.dedup.outputs.applied }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+
+        # Skip if dedup found nothing actionable. Heuristic: log shows the
+        # word "duplicate" or "dedup'd" — refine later if it false-fires.
+        if ! grep -qiE 'duplicate|dedup' "$LOG"; then
+          echo "::notice::No duplicates detected — skipping rolling-issue update"
+          exit 0
+        fi
+
+        BODY_FILE="$RUNNER_TEMP/canon-dedup-body.md"
+        {
+          echo "<!-- canon:action:dedup:rolling -->"
+          echo "## Canon dedup report"
+          echo ""
+          if [ "$APPLIED" = "true" ]; then
+            echo "_Mode: apply (changes were applied automatically)_"
+          else
+            echo "_Mode: dry-run (no changes applied — review before applying)_"
+          fi
+          echo ""
+          echo '```'
+          cat "$LOG"
+          echo '```'
+        } > "$BODY_FILE"
+
+        # Rolling issue search
+        EXISTING=$(gh issue list \
+          --search "in:title \"$TITLE\"" \
+          --state open \
+          --json number,title \
+          --jq ".[] | select(.title == \"$TITLE\") | .number" \
+          | head -1)
+
+        if [ -n "$EXISTING" ]; then
+          gh issue edit "$EXISTING" --body-file "$BODY_FILE"
+          echo "Updated rolling issue #$EXISTING." >> "$GITHUB_STEP_SUMMARY"
+        else
+          ARGS=(--title "$TITLE" --body-file "$BODY_FILE")
+          if [ -n "$LABELS" ]; then
+            ARGS+=(--label "$LABELS")
+          fi
+          gh issue create "${ARGS[@]}"
+          echo "Created new rolling issue." >> "$GITHUB_STEP_SUMMARY"
+        fi

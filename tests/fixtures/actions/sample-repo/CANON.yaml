@@ -1,0 +1,4 @@
+team: sample-team
+specs:
+  doc_paths:
+    - "docs/specs/*.md"

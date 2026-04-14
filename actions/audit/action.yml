@@ -1,0 +1,369 @@
+name: "Canon Audit"
+description: >
+  Detect drift between code reality and spec statuses. Runs `canon audit`
+  in JSON mode and reports recommendations as a rolling tracking issue,
+  a proposed-changes PR, or a step summary. Designed for cron-driven
+  scheduled runs but works on any trigger.
+
+  Routes through the Canon backend by default (`canon-token`); falls
+  back to a direct Anthropic API key when no token is set; falls back
+  to grep heuristics when neither is set.
+branding:
+  icon: "alert-triangle"
+  color: "orange"
+
+inputs:
+  canon-token:
+    description: >
+      Canon platform token (preferred). When set, the action calls the
+      Canon backend so Claude spend stays on your Canon org bill. Get one
+      from https://canonhq.co/settings/tokens or via `canon auth tokens
+      create`. Backend routing currently requires Canon backend v1.47+
+      (delivered in slice 5).
+    required: false
+    default: ""
+  canon-api-url:
+    description: "Canon backend URL (override for self-hosted deployments)"
+    required: false
+    default: "https://api.canonhq.co"
+  anthropic-api-key:
+    description: >
+      Anthropic API key (fallback when no canon-token is provided). Use
+      this for self-hosted Canon or when you want to bring your own key.
+      The action stores it only for the duration of the run.
+    required: false
+    default: ""
+  specs:
+    description: "Filter to a single spec (substring match against file path)"
+    required: false
+    default: ""
+  mode:
+    description: "issue | pr | summary — how to surface drift"
+    required: false
+    default: "issue"
+  rolling-issue-title:
+    description: "Title for the rolling tracking issue (`mode: issue`)"
+    required: false
+    default: "Canon weekly audit"
+  rolling-issue-labels:
+    description: "Comma-separated labels applied to the rolling issue"
+    required: false
+    default: "canon,audit"
+  pr-branch-name:
+    description: "Branch name for `mode: pr`"
+    required: false
+    default: "canon/audit"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  drift-count:
+    description: "Number of recommendations with a status change"
+    value: ${{ steps.audit.outputs.drift-count }}
+  recommendation-count:
+    description: "Total recommendations (status changes + AC-only updates)"
+    value: ${{ steps.audit.outputs.recommendation-count }}
+  mode-used:
+    description: "Audit mode the CLI ran in (claude | heuristic | none)"
+    value: ${{ steps.audit.outputs.mode-used }}
+  report-path:
+    description: "Path to the JSON audit report on the runner"
+    value: ${{ steps.audit.outputs.report-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Configure auth
+      shell: bash
+      env:
+        INPUT_CANON_TOKEN: ${{ inputs.canon-token }}
+        INPUT_CANON_API_URL: ${{ inputs.canon-api-url }}
+        INPUT_ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+      run: |
+        set -e
+        # Prefer canon-token; fall back to anthropic-api-key. The CLI's
+        # backend routing switch (slice 5) reads CANON_TOKEN and
+        # CANON_API_URL automatically when present.
+        #
+        # SECURITY: GitHub parses $GITHUB_ENV line-by-line. A value
+        # containing a newline would inject arbitrary additional env
+        # vars into every subsequent step in the job. Reject any value
+        # with a newline up front — these are tokens and URLs that
+        # legitimately don't contain them.
+        reject_newline() {
+          local name="$1" value="$2"
+          case "$value" in
+            *$'\n'*)
+              echo "::error::$name contains a newline — refusing to write to GITHUB_ENV"
+              exit 2 ;;
+          esac
+        }
+
+        if [ -n "$INPUT_CANON_TOKEN" ]; then
+          reject_newline canon-token "$INPUT_CANON_TOKEN"
+          reject_newline canon-api-url "$INPUT_CANON_API_URL"
+          echo "CANON_TOKEN=$INPUT_CANON_TOKEN" >> "$GITHUB_ENV"
+          echo "CANON_API_URL=$INPUT_CANON_API_URL" >> "$GITHUB_ENV"
+          echo "::notice::Using Canon backend at $INPUT_CANON_API_URL"
+        elif [ -n "$INPUT_ANTHROPIC_API_KEY" ]; then
+          reject_newline anthropic-api-key "$INPUT_ANTHROPIC_API_KEY"
+          echo "ANTHROPIC_API_KEY=$INPUT_ANTHROPIC_API_KEY" >> "$GITHUB_ENV"
+          echo "::notice::Using direct Anthropic API key (fallback)"
+        else
+          echo "::warning::Neither canon-token nor anthropic-api-key set — running in heuristic mode (grep-only)"
+        fi
+
+    - name: Run canon audit --json
+      id: audit
+      shell: bash
+      env:
+        INPUT_SPECS: ${{ inputs.specs }}
+      run: |
+        set -e
+        REPORT="$RUNNER_TEMP/canon-audit-report.json"
+        export REPORT
+
+        ARGS=(audit --dry-run --json)
+        if [ -n "$INPUT_SPECS" ]; then
+          ARGS+=(--spec "$INPUT_SPECS")
+        fi
+
+        # canon audit may print warnings to stderr — capture stdout only.
+        canon "${ARGS[@]}" > "$REPORT"
+
+        REC_COUNT=$(python -c "import json,os; print(json.load(open(os.environ['REPORT']))['summary']['recommendations'])")
+        DRIFT_COUNT=$(python -c "import json,os; print(json.load(open(os.environ['REPORT']))['summary']['status_changes'])")
+        AC_EVALS=$(python -c "import json,os; print(json.load(open(os.environ['REPORT']))['summary']['ac_evaluations'])")
+        MODE=$(python -c "import json,os; print(json.load(open(os.environ['REPORT']))['summary']['mode'])")
+
+        {
+          echo "recommendation-count=$REC_COUNT"
+          echo "drift-count=$DRIFT_COUNT"
+          echo "ac-evaluations=$AC_EVALS"
+          echo "mode-used=$MODE"
+          echo "report-path=$REPORT"
+        } >> "$GITHUB_OUTPUT"
+
+        # Warn when a token was set but the audit fell back to heuristic mode.
+        if [ "$MODE" = "heuristic" ] && [ -n "${CANON_TOKEN:-}" ]; then
+          echo "::warning::Canon backend was configured but audit ran in heuristic mode — check backend availability"
+        fi
+
+        # Always write a step summary so the GitHub UI shows the snapshot.
+        {
+          echo "## Canon Audit"
+          echo ""
+          echo "**Mode**: \`$MODE\`"
+          echo ""
+          echo "| Metric | Value |"
+          echo "|--------|-------|"
+          echo "| Status changes | $DRIFT_COUNT |"
+          echo "| Total recommendations | $REC_COUNT |"
+          echo "| AC evaluations | $AC_EVALS |"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "$REC_COUNT" -gt 0 ]; then
+          {
+            echo "### Recommendations"
+            echo ""
+            echo "| Spec | Section | Current | Recommended | Confidence | Reasoning |"
+            echo "|------|---------|---------|-------------|------------|-----------|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          python <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import json, os
+        with open(os.environ["REPORT"]) as f:
+            data = json.load(f)
+        for r in data["recommendations"]:
+            spec = r.get("spec", "")
+            section = f"{r.get('section_number', '')} {r.get('section_id', '')}".strip()
+            cur = r.get("current_status", "")
+            rec = r.get("recommended_status", "")
+            conf = r.get("confidence", "")
+            reason = (r.get("reasoning") or "").replace("|", "\\|").replace("\n", " ")[:120]
+            print(f"| `{spec}` | {section} | {cur} | {rec} | {conf} | {reason} |")
+        PY
+        else
+          echo "No drift detected." >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Render markdown body
+      id: render
+      shell: bash
+      env:
+        REPORT: ${{ steps.audit.outputs.report-path }}
+      run: |
+        set -e
+        BODY="$RUNNER_TEMP/canon-audit-body.md"
+        export BODY
+
+        python <<'PY'
+        import json, os
+        from datetime import datetime, timezone
+
+        with open(os.environ["REPORT"]) as f:
+            data = json.load(f)
+
+        summary = data["summary"]
+        recs = data["recommendations"]
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+        lines = []
+        lines.append("# Canon Audit Report")
+        lines.append("")
+        lines.append(f"_Last updated: {now} — mode: `{summary['mode']}`_")
+        lines.append("")
+        lines.append("<!-- canon:action:audit:rolling -->")
+        lines.append("")
+        lines.append(f"**{summary['status_changes']} status change(s)** out of {summary['recommendations']} recommendation(s) across {summary['specs_scanned']} spec(s).")
+        lines.append("")
+
+        if not recs:
+            lines.append("No drift detected.")
+        else:
+            # Group by spec.
+            by_spec = {}
+            for r in recs:
+                by_spec.setdefault(r["spec"], []).append(r)
+
+            for spec, items in sorted(by_spec.items()):
+                lines.append(f"## `{spec}`")
+                lines.append("")
+                for r in items:
+                    section = f"{r.get('section_number', '')} {r.get('section_id', '')}".strip()
+                    cur = r.get("current_status", "")
+                    rec = r.get("recommended_status", "")
+                    conf = r.get("confidence", "")
+                    arrow = "→" if cur != rec else "="
+                    lines.append(f"### {section}: {cur} {arrow} {rec} _(confidence: {conf})_")
+                    lines.append("")
+                    if r.get("reasoning"):
+                        lines.append(f"_{r['reasoning']}_")
+                        lines.append("")
+                    if r.get("ac_evaluations"):
+                        for ae in r["ac_evaluations"]:
+                            symbol = {"realized": "+", "partially_realized": "~", "not_realized": "-"}.get(ae.get("status", ""), "?")
+                            ev = f" — `{ae['evidence']}`" if ae.get("evidence") else ""
+                            lines.append(f"- [{symbol}] {ae.get('ac_text', '')}{ev}")
+                        lines.append("")
+
+        with open(os.environ["BODY"], "w") as out:
+            out.write("\n".join(lines) + "\n")
+        PY
+        echo "body-path=$BODY" >> "$GITHUB_OUTPUT"
+
+    - name: Issue mode — update rolling issue
+      if: inputs.mode == 'issue'
+      shell: bash
+      env:
+        INPUT_TITLE: ${{ inputs.rolling-issue-title }}
+        INPUT_LABELS: ${{ inputs.rolling-issue-labels }}
+        BODY: ${{ steps.render.outputs.body-path }}
+        REC_COUNT: ${{ steps.audit.outputs.recommendation-count }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        if [ "$REC_COUNT" = "0" ]; then
+          echo "::notice::No drift detected — skipping rolling-issue update"
+          exit 0
+        fi
+
+        EXISTING=$(gh issue list \
+          --search "in:title \"$INPUT_TITLE\"" \
+          --state open \
+          --json number,title \
+          --jq ".[] | select(.title == \"$INPUT_TITLE\") | .number" \
+          | head -1)
+
+        if [ -n "$EXISTING" ]; then
+          gh issue edit "$EXISTING" --body-file "$BODY"
+          echo "Updated rolling issue #$EXISTING." >> "$GITHUB_STEP_SUMMARY"
+        else
+          ARGS=(--title "$INPUT_TITLE" --body-file "$BODY")
+          if [ -n "$INPUT_LABELS" ]; then
+            ARGS+=(--label "$INPUT_LABELS")
+          fi
+          gh issue create "${ARGS[@]}"
+          echo "Created new rolling issue." >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: PR mode — open changes PR
+      if: inputs.mode == 'pr'
+      shell: bash
+      env:
+        INPUT_BRANCH: ${{ inputs.pr-branch-name }}
+        # IMPORTANT: keep INPUT_SPECS in sync with the dry-run step's
+        # spec filter — without it, the apply phase mutates every spec
+        # in the repo even when the user scoped the audit to one file.
+        INPUT_SPECS: ${{ inputs.specs }}
+        BODY: ${{ steps.render.outputs.body-path }}
+        REC_COUNT: ${{ steps.audit.outputs.recommendation-count }}
+        DRIFT_COUNT: ${{ steps.audit.outputs.drift-count }}
+        REPORT: ${{ steps.audit.outputs.report-path }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        if [ "$DRIFT_COUNT" = "0" ]; then
+          echo "::notice::No status drift detected — skipping PR creation"
+          exit 0
+        fi
+
+        # Apply the recommendations by re-running canon audit without --dry-run.
+        # We re-run because mode: pr is the only path that mutates files; the
+        # initial dry-run gave us the report for the PR body. Honor the same
+        # spec filter the dry-run used so we don't accidentally mutate specs
+        # the user explicitly excluded.
+        APPLY_ARGS=(audit)
+        if [ -n "$INPUT_SPECS" ]; then
+          APPLY_ARGS+=(--spec "$INPUT_SPECS")
+        fi
+        canon "${APPLY_ARGS[@]}" > /dev/null
+
+        if git diff --quiet; then
+          echo "::notice::canon audit produced no file changes despite drift count > 0"
+          exit 0
+        fi
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git checkout -B "$INPUT_BRANCH"
+        git add -A
+        git commit -m "chore(canon): apply audit recommendations"
+        git push -u origin "$INPUT_BRANCH" --force-with-lease
+
+        EXISTING=$(gh pr list --head "$INPUT_BRANCH" --json number --jq '.[0].number' 2>/dev/null || true)
+        if [ -z "$EXISTING" ]; then
+          gh pr create \
+            --title "chore(canon): apply audit recommendations" \
+            --body-file "$BODY" \
+            --head "$INPUT_BRANCH"
+        else
+          gh pr edit "$EXISTING" --body-file "$BODY"
+          echo "Updated existing PR #$EXISTING." >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Summary mode — step summary only
+      if: inputs.mode == 'summary'
+      shell: bash
+      run: |
+        echo "::notice::Audit ran in summary mode — see step summary above"

@@ -46,6 +46,7 @@ from .github.client import GitHubClient, InstallationNotFound
 from .github.verify import verify_signature
 from .settings import Settings
 from .web.analytics_routes import analytics_router
+from .web.api_v1_actions import api_v1_actions_router
 from .web.cache import TTLCache
 from .web.editor_routes import editor_router
 from .web.integration_routes import integration_router
@@ -562,6 +563,9 @@ app.include_router(analytics_router)
 app.include_router(editor_router)
 app.include_router(profile_router)
 app.include_router(integration_router)
+
+# Mount public v1 API routes consumed by GitHub Actions
+app.include_router(api_v1_actions_router)
 app.include_router(ticket_router)
 # Admin API router must come before the SPA catch-all
 app.include_router(admin_router)

@@ -1,0 +1,177 @@
+name: "Canon Release Notes"
+description: >
+  Generate spec-driven release notes from git history. On `release`
+  events, updates the GitHub Release body with a markdown summary of
+  every spec section that transitioned to `done` between the previous
+  tag and the new one. Also runnable on workflow_dispatch for manual
+  release prep, in which case it can write to a file or step summary
+  instead of mutating the release.
+branding:
+  icon: "tag"
+  color: "orange"
+
+inputs:
+  from-ref:
+    description: >
+      Git ref (tag, branch, or SHA) to compare from. Defaults to the
+      previous tag detected via `git describe --tags --abbrev=0 HEAD^`.
+      For `release` triggers, you usually don't need to set this — the
+      previous tag is the right default.
+    required: false
+    default: ""
+  to-ref:
+    description: "Git ref to compare to (default: HEAD or release tag)"
+    required: false
+    default: ""
+  output:
+    description: >
+      release-body | file | summary —
+      release-body: update the GitHub Release body via the API
+      (only valid on `release` triggers).
+      file: write the markdown to `output-path` and exit.
+      summary: write to GITHUB_STEP_SUMMARY only.
+    required: false
+    default: "release-body"
+  output-path:
+    description: "Path to write when output: file"
+    required: false
+    default: "RELEASE_NOTES.md"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  completed-count:
+    description: "Number of spec sections that completed in this release window"
+    value: ${{ steps.notes.outputs.completed-count }}
+  new-specs-count:
+    description: "Number of new spec files added in this release window"
+    value: ${{ steps.notes.outputs.new-specs-count }}
+  notes-path:
+    description: "Path to the generated markdown release notes on the runner"
+    value: ${{ steps.notes.outputs.notes-path }}
+  json-path:
+    description: "Path to the JSON release-notes payload on the runner"
+    value: ${{ steps.notes.outputs.json-path }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Resolve refs
+      id: refs
+      shell: bash
+      env:
+        INPUT_FROM: ${{ inputs.from-ref }}
+        INPUT_TO: ${{ inputs.to-ref }}
+      run: |
+        set -e
+        # `to-ref` defaults: release event tag, then HEAD
+        if [ -n "$INPUT_TO" ]; then
+          TO="$INPUT_TO"
+        elif [ "${{ github.event_name }}" = "release" ]; then
+          TO="${{ github.event.release.tag_name }}"
+        else
+          TO="HEAD"
+        fi
+
+        # `from-ref`: pass through the raw value (or empty). The
+        # downstream step expands it as `${FROM_REF:+--from "$FROM_REF"}`
+        # so a ref containing whitespace stays a single argument and
+        # the entire flag is omitted when no ref is set.
+        echo "to=$TO" >> "$GITHUB_OUTPUT"
+        echo "from=$INPUT_FROM" >> "$GITHUB_OUTPUT"
+
+    - name: Run canon release-notes
+      id: notes
+      shell: bash
+      env:
+        TO_REF: ${{ steps.refs.outputs.to }}
+        FROM_REF: ${{ steps.refs.outputs.from }}
+      run: |
+        set -e
+        NOTES_MD="$RUNNER_TEMP/canon-release-notes.md"
+        NOTES_JSON="$RUNNER_TEMP/canon-release-notes.json"
+        export NOTES_MD NOTES_JSON
+
+        # Render markdown for the release body / file output. The
+        # ${FROM_REF:+--from "$FROM_REF"} expansion adds the flag and
+        # quoted value only when FROM_REF is non-empty, so a ref with
+        # whitespace stays a single argument and an empty value omits
+        # the flag entirely (letting canon release-notes auto-detect
+        # the previous tag via git describe).
+        canon release-notes ${FROM_REF:+--from "$FROM_REF"} --to "$TO_REF" --output "$NOTES_MD"
+
+        # Render JSON for the action outputs / downstream tooling
+        canon release-notes ${FROM_REF:+--from "$FROM_REF"} --to "$TO_REF" --json --output "$NOTES_JSON"
+
+        COMPLETED=$(python -c "import json,os; print(json.load(open(os.environ['NOTES_JSON']))['summary']['completed'])")
+        NEW_SPECS=$(python -c "import json,os; print(json.load(open(os.environ['NOTES_JSON']))['summary']['new_specs'])")
+
+        {
+          echo "completed-count=$COMPLETED"
+          echo "new-specs-count=$NEW_SPECS"
+          echo "notes-path=$NOTES_MD"
+          echo "json-path=$NOTES_JSON"
+        } >> "$GITHUB_OUTPUT"
+
+        # Always write the rendered notes to the step summary so they're
+        # visible in the workflow run UI regardless of output mode.
+        cat "$NOTES_MD" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Update GitHub Release body
+      if: inputs.output == 'release-body'
+      shell: bash
+      env:
+        NOTES_MD: ${{ steps.notes.outputs.notes-path }}
+        TO_REF: ${{ steps.refs.outputs.to }}
+        REPO: ${{ github.repository }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        # `release-body` mode only makes sense on release triggers — fail
+        # loudly if invoked elsewhere so users notice their misconfiguration.
+        if [ "${{ github.event_name }}" != "release" ]; then
+          echo "::error::output: release-body requires a release trigger; got ${{ github.event_name }}"
+          echo "::error::Use output: file or output: summary for non-release triggers"
+          exit 2
+        fi
+
+        # gh release edit takes the body via --notes (string) or --notes-file
+        gh release edit "$TO_REF" --repo "$REPO" --notes-file "$NOTES_MD"
+        echo "Updated GitHub Release $TO_REF body." >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Write release notes to file
+      if: inputs.output == 'file'
+      shell: bash
+      env:
+        NOTES_MD: ${{ steps.notes.outputs.notes-path }}
+        OUTPUT_PATH: ${{ inputs.output-path }}
+      run: |
+        set -e
+        mkdir -p "$(dirname "$OUTPUT_PATH")"
+        cp "$NOTES_MD" "$OUTPUT_PATH"
+        echo "Release notes written to \`$OUTPUT_PATH\`." >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Summary mode — step summary only
+      if: inputs.output == 'summary'
+      shell: bash
+      run: |
+        echo "::notice::release-notes ran in summary mode — see step summary"

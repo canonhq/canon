@@ -1,0 +1,157 @@
+name: "Canon Plan"
+description: >
+  Generate a task plan from a spec file and open a tracking issue
+  with one checkbox per acceptance criterion. Designed for
+  workflow_dispatch — pass a spec file path and an issue lands
+  with the full implementation breakdown.
+branding:
+  icon: "list"
+  color: "orange"
+
+inputs:
+  spec:
+    description: "Spec file path or substring match (e.g. 'auth-hardening')"
+    required: true
+  mode:
+    description: "issue (default) | summary | file"
+    required: false
+    default: "issue"
+  issue-title:
+    description: >
+      Title of the tracking issue. Defaults to "Canon plan: <spec title>"
+      derived from the spec file's frontmatter.
+    required: false
+    default: ""
+  issue-labels:
+    description: "Comma-separated labels applied to the tracking issue"
+    required: false
+    default: "canon,plan"
+  assignees:
+    description: "Comma-separated GitHub handles to assign the issue to"
+    required: false
+    default: ""
+  output-path:
+    description: "Path to write when mode: file"
+    required: false
+    default: "PLAN.md"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  plan-path:
+    description: "Path to the generated plan markdown on the runner"
+    value: ${{ steps.plan.outputs.plan-path }}
+  task-count:
+    description: "Number of tasks (sections) in the plan"
+    value: ${{ steps.plan.outputs.task-count }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Generate plan
+      id: plan
+      shell: bash
+      env:
+        INPUT_SPEC: ${{ inputs.spec }}
+      run: |
+        set -e
+        PLAN="$RUNNER_TEMP/canon-plan.md"
+        export PLAN
+
+        if ! canon plan "$INPUT_SPEC" --output "$PLAN"; then
+          echo "::error::canon plan failed for spec '$INPUT_SPEC'"
+          exit 2
+        fi
+
+        # Count top-level numbered list items as a rough task count
+        TASK_COUNT=$(grep -cE '^[0-9]+\. \[' "$PLAN" || echo 0)
+        echo "plan-path=$PLAN" >> "$GITHUB_OUTPUT"
+        echo "task-count=$TASK_COUNT" >> "$GITHUB_OUTPUT"
+
+        # Always echo to step summary
+        {
+          echo "## Canon Plan"
+          echo ""
+          echo "- **Spec**: \`$INPUT_SPEC\`"
+          echo "- **Tasks**: $TASK_COUNT"
+          echo ""
+          echo "<details><summary>Plan</summary>"
+          echo ""
+          cat "$PLAN"
+          echo ""
+          echo "</details>"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Issue mode — open tracking issue
+      if: inputs.mode == 'issue'
+      shell: bash
+      env:
+        PLAN: ${{ steps.plan.outputs.plan-path }}
+        SPEC: ${{ inputs.spec }}
+        TITLE_OVERRIDE: ${{ inputs.issue-title }}
+        LABELS: ${{ inputs.issue-labels }}
+        ASSIGNEES: ${{ inputs.assignees }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+
+        # Derive a default title from the plan's first heading.
+        if [ -n "$TITLE_OVERRIDE" ]; then
+          TITLE="$TITLE_OVERRIDE"
+        else
+          # First line of canon plan output is "# Task Plan: <Spec Title>"
+          DERIVED=$(head -1 "$PLAN" | sed -E 's/^# Task Plan: //')
+          if [ -n "$DERIVED" ] && [ "$DERIVED" != "$(head -1 "$PLAN")" ]; then
+            TITLE="Canon plan: $DERIVED"
+          else
+            TITLE="Canon plan: $SPEC"
+          fi
+        fi
+
+        ARGS=(--title "$TITLE" --body-file "$PLAN")
+        if [ -n "$LABELS" ]; then
+          ARGS+=(--label "$LABELS")
+        fi
+        if [ -n "$ASSIGNEES" ]; then
+          ARGS+=(--assignee "$ASSIGNEES")
+        fi
+
+        gh issue create "${ARGS[@]}"
+        echo "Created tracking issue with title: $TITLE" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: File mode — write plan to file
+      if: inputs.mode == 'file'
+      shell: bash
+      env:
+        PLAN: ${{ steps.plan.outputs.plan-path }}
+        OUTPUT_PATH: ${{ inputs.output-path }}
+      run: |
+        set -e
+        mkdir -p "$(dirname "$OUTPUT_PATH")"
+        cp "$PLAN" "$OUTPUT_PATH"
+        echo "Plan written to \`$OUTPUT_PATH\`." >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Summary mode — step summary only
+      if: inputs.mode == 'summary'
+      shell: bash
+      run: |
+        echo "::notice::plan ran in summary mode — see step summary"

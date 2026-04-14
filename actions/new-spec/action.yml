@@ -1,0 +1,179 @@
+name: "Canon New Spec"
+description: >
+  Scaffold a new spec file from a template and open a PR with it.
+  Designed for workflow_dispatch — pass a title (and optional owner,
+  team, type) and a fresh spec lands as a PR ready for review.
+  Lowers the barrier for non-technical authors to start a spec.
+branding:
+  icon: "file-plus"
+  color: "orange"
+
+inputs:
+  title:
+    description: 'Spec title (e.g. "Auth Hardening")'
+    required: true
+  type:
+    description: "Document type — spec | proposal | design | adr"
+    required: false
+    default: "spec"
+  owner:
+    description: "Owner GitHub handle or name"
+    required: false
+    default: ""
+  team:
+    description: "Owning team"
+    required: false
+    default: ""
+  output-path:
+    description: >
+      Explicit output path. Defaults to <doc_paths_directory>/<slug>.md
+      based on CANON.yaml's first doc_paths entry.
+    required: false
+    default: ""
+  branch-name:
+    description: "Branch name for the PR (default: canon/new-spec/<slug>)"
+    required: false
+    default: ""
+  open-pr:
+    description: "Open a PR with the new spec (vs. committing directly to default branch)"
+    required: false
+    default: "true"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  spec-path:
+    description: "Repo-relative path of the newly created spec file"
+    value: ${{ steps.create.outputs.spec-path }}
+  pr-url:
+    description: "URL of the opened PR (when open-pr: true)"
+    value: ${{ steps.pr.outputs.pr-url }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Run canon new
+      id: create
+      shell: bash
+      env:
+        INPUT_TITLE: ${{ inputs.title }}
+        INPUT_TYPE: ${{ inputs.type }}
+        INPUT_OWNER: ${{ inputs.owner }}
+        INPUT_TEAM: ${{ inputs.team }}
+        INPUT_OUTPUT_PATH: ${{ inputs.output-path }}
+      run: |
+        set -e
+
+        ARGS=(--title "$INPUT_TITLE" --type "$INPUT_TYPE")
+        if [ -n "$INPUT_OWNER" ]; then
+          ARGS+=(--owner "$INPUT_OWNER")
+        fi
+        if [ -n "$INPUT_TEAM" ]; then
+          ARGS+=(--team "$INPUT_TEAM")
+        fi
+        if [ -n "$INPUT_OUTPUT_PATH" ]; then
+          ARGS+=(--output "$INPUT_OUTPUT_PATH")
+        fi
+
+        # canon new prints the relative spec path on success
+        SPEC_PATH=$(canon new "${ARGS[@]}")
+        echo "spec-path=$SPEC_PATH" >> "$GITHUB_OUTPUT"
+
+        {
+          echo "## Canon New Spec"
+          echo ""
+          echo "- **Title**: $INPUT_TITLE"
+          echo "- **Type**: \`$INPUT_TYPE\`"
+          echo "- **Path**: \`$SPEC_PATH\`"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Open PR with new spec
+      id: pr
+      if: inputs.open-pr == 'true'
+      shell: bash
+      env:
+        SPEC_PATH: ${{ steps.create.outputs.spec-path }}
+        INPUT_TITLE: ${{ inputs.title }}
+        INPUT_BRANCH_NAME: ${{ inputs.branch-name }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+
+        # Slugify the title for the branch name if not provided.
+        # Read the title from the env var inside Python — don't shell-
+        # interpolate it, since a title containing a single quote would
+        # break out of the string and execute arbitrary Python.
+        if [ -n "$INPUT_BRANCH_NAME" ]; then
+          BRANCH="$INPUT_BRANCH_NAME"
+        else
+          SLUG=$(python -c "import os; from canon.cli.new_spec import slugify; print(slugify(os.environ['INPUT_TITLE']))")
+          BRANCH="canon/new-spec/$SLUG"
+        fi
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git checkout -B "$BRANCH"
+        git add "$SPEC_PATH"
+        git commit -m "docs: add spec '$INPUT_TITLE'"
+        git push -u origin "$BRANCH" --force-with-lease
+
+        PR_URL=$(gh pr create \
+          --title "docs: add spec '$INPUT_TITLE'" \
+          --body "$(cat <<EOF
+        ## Summary
+
+        New spec scaffolded by the \`canon new-spec\` action:
+
+        - **Title**: $INPUT_TITLE
+        - **Path**: \`$SPEC_PATH\`
+
+        ## Next steps
+
+        1. Fill in the \`Background\`, \`Requirements\`, \`Design\`, and \`Rollout\` sections
+        2. Add acceptance criteria under each requirement
+        3. Run \`canon lint\` locally (or rely on the spec-lint action) to validate structure
+        4. Merge when ready
+
+        ---
+        _Created by the [canonhq/canon/actions/new-spec](https://canonhq.co/docs/guides/github-actions/new-spec) action._
+        EOF
+        )" \
+          --head "$BRANCH")
+
+        echo "pr-url=$PR_URL" >> "$GITHUB_OUTPUT"
+        echo "Opened PR: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Direct commit
+      if: inputs.open-pr != 'true'
+      shell: bash
+      env:
+        SPEC_PATH: ${{ steps.create.outputs.spec-path }}
+        INPUT_TITLE: ${{ inputs.title }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -e
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add "$SPEC_PATH"
+        git commit -m "docs: add spec '$INPUT_TITLE'"
+        git push
+        echo "Committed \`$SPEC_PATH\` directly to the default branch." >> "$GITHUB_STEP_SUMMARY"

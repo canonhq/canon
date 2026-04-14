@@ -1,0 +1,129 @@
+name: Actions Smoke Test
+
+# Validates that every composite action in this repo still works against
+# the bundled fixture sample-repo. Runs on every push to main and on
+# every PR that touches the actions tree. Mirrors the
+# `actions-smoke-test` job in the canon-private CI so a regression
+# caught on the public repo means a regression in canon-private.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'action.yml'
+      - 'actions/**'
+      - '.github/workflows/reusable/**'
+      - 'src/canon/cli/**'
+      - 'tests/fixtures/actions/**'
+      - '.github/workflows/actions-smoke-test.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'action.yml'
+      - 'actions/**'
+      - '.github/workflows/reusable/**'
+      - 'src/canon/cli/**'
+      - 'tests/fixtures/actions/**'
+      - '.github/workflows/actions-smoke-test.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke-test:
+    name: Smoke test against fixture
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install canonhq from this repo
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -e .
+          canon --help > /dev/null
+
+      - name: canon lint against fixture
+        working-directory: tests/fixtures/actions/sample-repo
+        run: |
+          canon lint --json > /tmp/lint.json
+          ERRORS=$(python3 -c "import json; print(json.load(open('/tmp/lint.json'))['summary']['errors'])")
+          WARNINGS=$(python3 -c "import json; print(json.load(open('/tmp/lint.json'))['summary']['warnings'])")
+          echo "lint: errors=$ERRORS warnings=$WARNINGS"
+          if [ "$ERRORS" -ne 1 ]; then
+            echo "::error::Expected 1 error in fixture, got $ERRORS"
+            exit 1
+          fi
+
+      - name: canon verify --json against fixture
+        working-directory: tests/fixtures/actions/sample-repo
+        run: |
+          canon verify --json > /tmp/verify.json
+          TOTAL=$(python3 -c "import json; print(json.load(open('/tmp/verify.json'))['summary']['total'])")
+          echo "verify: total=$TOTAL"
+          if [ "$TOTAL" -lt 1 ]; then
+            echo "::error::Expected ≥1 unchecked AC in fixture, got $TOTAL"
+            exit 1
+          fi
+
+      - name: canon status --json against fixture
+        working-directory: tests/fixtures/actions/sample-repo
+        run: |
+          canon status --json > /tmp/status.json
+          SPECS=$(python3 -c "import json; print(json.load(open('/tmp/status.json'))['summary']['specs'])")
+          SCHEMA=$(python3 -c "import json; print(json.load(open('/tmp/status.json'))['schema_version'])")
+          echo "status: specs=$SPECS schema=$SCHEMA"
+          if [ "$SPECS" -ne 3 ]; then
+            echo "::error::Expected 3 specs in fixture, got $SPECS"
+            exit 1
+          fi
+          if [ "$SCHEMA" != "1" ]; then
+            echo "::error::Expected schema_version 1, got $SCHEMA"
+            exit 1
+          fi
+
+      - name: canon audit --dry-run --json against fixture
+        working-directory: tests/fixtures/actions/sample-repo
+        run: |
+          canon audit --dry-run --json > /tmp/audit.json
+          MODE=$(python3 -c "import json; print(json.load(open('/tmp/audit.json'))['summary']['mode'])")
+          echo "audit: mode=$MODE"
+          # No ANTHROPIC_API_KEY or CANON_TOKEN in this workflow, so we
+          # expect heuristic mode. The mode tag is the canary that the
+          # backend routing switch hasn't accidentally engaged.
+          if [ "$MODE" != "heuristic" ]; then
+            echo "::error::Expected heuristic mode, got $MODE"
+            exit 1
+          fi
+
+      - name: Validate every action.yml file parses
+        run: |
+          python3 - <<'PY'
+          import sys, yaml, pathlib
+          failures = []
+          for p in pathlib.Path("actions").glob("*/action.yml"):
+              try:
+                  yaml.safe_load(p.read_text())
+                  print(f"OK {p}")
+              except yaml.YAMLError as e:
+                  failures.append(f"{p}: {e}")
+          try:
+              yaml.safe_load(pathlib.Path("action.yml").read_text())
+              print("OK action.yml")
+          except yaml.YAMLError as e:
+              failures.append(f"action.yml: {e}")
+          for p in pathlib.Path(".github/workflows/reusable").glob("*.yml"):
+              try:
+                  yaml.safe_load(p.read_text())
+                  print(f"OK {p}")
+              except yaml.YAMLError as e:
+                  failures.append(f"{p}: {e}")
+          if failures:
+              print("FAILURES:")
+              for f in failures:
+                  print(f"  {f}")
+              sys.exit(1)
+          PY
