@@ -1,6 +1,6 @@
 ---
 title: "Admin UI: User & Organization Management"
-status: draft
+status: in-progress
 owner: ng
 team: canon
 ticket_project: canonhq/canon-private
@@ -8,7 +8,7 @@ review_status: draft
 tags: [admin, ui, auth0, platform, cloud]
 depends_on: [admin-actions, multi-org-personal-accounts, infra-enablement-billing-email]
 created: "2026-04-11"
-updated: "2026-04-11"
+updated: "2026-04-14"
 ---
 
 # Admin UI: User & Organization Management
@@ -51,7 +51,7 @@ extends it with the full CRUD set. `admin-actions.md` should be marked
 
 ## 2. P0 — Core Org & User CRUD
 
-<!-- canon:system:2 status:todo -->
+<!-- canon:system:2 status:done -->
 
 The P0 set unblocks routine cloud support without requiring P1/P2 scope.
 Everything in this section is `SUPER_ADMIN`-only, gated by the existing
@@ -59,7 +59,7 @@ Everything in this section is `SUPER_ADMIN`-only, gated by the existing
 the confirm-before-destructive pattern already used by suspend/deactivate.
 
 ### 2.1 Org Metadata Edit
-<!-- canon:section:org-metadata-edit status:todo -->
+<!-- canon:section:org-metadata-edit status:done -->
 
 The current `AdminOrgDetail.vue` shows `display_name` pulled from Auth0 but
 provides no way to fix it when it drifts or was never set. Add an edit flow
@@ -86,7 +86,7 @@ email/name).
 - [ ] Edit button is disabled for suspended orgs with a tooltip explaining why
 
 ### 2.2 Auth0 Provisioning Repair
-<!-- canon:section:auth0-provisioning-repair status:todo -->
+<!-- canon:section:auth0-provisioning-repair status:done -->
 
 `multi-org-personal-accounts.md` §2 describes the failure mode where an
 installation is registered but `_provision_auth0_org` failed, leaving
@@ -116,7 +116,7 @@ one-off Auth0 API call. Expose a "Repair Auth0 provisioning" action on
       `oidc_org_id`
 
 ### 2.3 User Invitation & Password Reset Tickets
-<!-- canon:section:user-tickets status:todo -->
+<!-- canon:section:user-tickets status:done -->
 
 Support most frequently asks: "please resend the invite" and "this user can't
 reset their password." Both are one-API-call operations against the Auth0
@@ -142,7 +142,7 @@ Management API that today require a backend engineer.
 - [ ] Cloud mode only — returns 404 in self-hosted mode
 
 ### 2.4 Per-User Session & API Key Management
-<!-- canon:section:user-sessions-keys status:todo -->
+<!-- canon:section:user-sessions-keys status:done -->
 
 `deactivate_user` nukes every session and API key atomically. Sometimes we
 need a finer knife — revoke one leaked API key, sign out one stolen session
@@ -167,7 +167,7 @@ need a finer knife — revoke one leaked API key, sign out one stolen session
 - [ ] Cannot revoke the admin's own current session (returns 400)
 
 ### 2.5 GDPR User Delete
-<!-- canon:section:user-gdpr-delete status:todo -->
+<!-- canon:section:user-gdpr-delete status:done -->
 
 Hard-delete that removes the user from Canon's database **and** Auth0.
 Non-reversible, typed-confirmation gated, audit-logged with the full user
@@ -198,10 +198,10 @@ deleted" in the audit trail even after the row is gone.
 
 ## 3. P1 — Membership, Profile, Impersonation
 
-<!-- canon:system:3 status:todo -->
+<!-- canon:system:3 status:in-progress -->
 
 ### 3.1 Org Member Add / Remove (Auth0)
-<!-- canon:section:org-membership status:todo -->
+<!-- canon:section:org-membership status:done -->
 
 Expose Auth0 organization membership management so sales-assisted onboarding
 can add a customer's founders to an org without the customer running through
