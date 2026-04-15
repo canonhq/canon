@@ -50,7 +50,12 @@ from .web.api_v1_actions import api_v1_actions_router
 from .web.cache import TTLCache
 from .web.editor_routes import editor_router
 from .web.integration_routes import integration_router
-from .web.middleware import CacheControlMiddleware, RateLimitMiddleware, RequestLoggingMiddleware
+from .web.middleware import (
+    CacheControlMiddleware,
+    RateLimitMiddleware,
+    RequestLoggingMiddleware,
+    SecurityBlockMiddleware,
+)
 from .web.profile_routes import profile_router
 from .web.routes import app_router, spa_router
 from .web.routes import router as web_router
@@ -509,6 +514,7 @@ async def _global_exception_handler(request: Request, exc: Exception) -> Respons
 app.add_middleware(CacheControlMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(RateLimitMiddleware, path_prefix="/api/search")
+app.add_middleware(SecurityBlockMiddleware)
 
 # Session + auth middleware (no-op when auth is not configured)
 app.add_middleware(AuthMiddleware)

@@ -138,8 +138,12 @@ class ClaudeClient:
             raise AgentAPIError(str(e), getattr(e, "status_code", None)) from e
         finally:
             duration_ms = round((time.monotonic() - start) * 1000, 1)
-            # TODO(Phase 2): Remove after SRE dashboards migrate to $ai_generation
-            # events. See llm-observability.md Section 6.
+            try:
+                input_cost, output_cost = analytics.estimate_cost(
+                    config.model, input_tokens, output_tokens
+                )
+            except Exception:
+                input_cost, output_cost = 0.0, 0.0
             analytics.track(
                 "agent_call_completed",
                 properties={
@@ -147,6 +151,9 @@ class ClaudeClient:
                     "duration_ms": duration_ms,
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
+                    "input_cost_usd": input_cost,
+                    "output_cost_usd": output_cost,
+                    "total_cost_usd": input_cost + output_cost,
                     "success": success,
                     "error_message": error_message,
                 },

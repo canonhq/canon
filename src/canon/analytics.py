@@ -94,6 +94,34 @@ def track(
         logger.debug("Failed to track event %s", event, exc_info=True)
 
 
+# Anthropic pricing per token (USD).  Updated 2026-04.
+# Keyed by model prefix — longest match wins.
+_MODEL_COSTS: dict[str, tuple[float, float]] = {
+    # (input_cost_per_token, output_cost_per_token)
+    "claude-opus-4": (15.0 / 1_000_000, 75.0 / 1_000_000),
+    "claude-sonnet-4": (3.0 / 1_000_000, 15.0 / 1_000_000),
+    "claude-haiku-3.5": (0.80 / 1_000_000, 4.0 / 1_000_000),
+    "claude-haiku": (0.25 / 1_000_000, 1.25 / 1_000_000),
+}
+
+
+def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> tuple[float, float]:
+    """Return (input_cost_usd, output_cost_usd) for *model*.
+
+    Uses longest-prefix match against ``_MODEL_COSTS``.  Returns (0, 0)
+    for unknown models rather than guessing.
+    """
+    best = ""
+    for prefix in _MODEL_COSTS:
+        if model.startswith(prefix) and len(prefix) > len(best):
+            best = prefix
+    if not best:
+        logger.warning("No cost data for model %r — reporting $0", model)
+        return 0.0, 0.0
+    cost_in, cost_out = _MODEL_COSTS[best]
+    return input_tokens * cost_in, output_tokens * cost_out
+
+
 def track_ai_generation(
     *,
     model: str,
@@ -113,11 +141,14 @@ def track_ai_generation(
     Anthropic wrapper.  The sync path in ClaudeClient emits these events
     automatically via the posthog.ai.anthropic wrapper instead.
     """
+    input_cost, output_cost = estimate_cost(model, input_tokens, output_tokens)
     props: dict[str, Any] = {
         "$ai_model": model,
         "$ai_provider": "anthropic",
         "$ai_input_tokens": input_tokens,
         "$ai_output_tokens": output_tokens,
+        "$ai_input_cost": input_cost,
+        "$ai_output_cost": output_cost,
         "$ai_latency": latency_seconds,
         "$ai_trace_id": str(uuid.uuid4()),
         "feature": feature,

@@ -70,33 +70,35 @@ async def validate_access_token(token: str, settings: Settings, *, jwks_uri: str
         audience = settings.auth0_audience
         issuer = f"https://{settings.auth0_domain}/"
 
-    jwks_client = _get_jwks_client(resolved_jwks_uri)
-    # JWKS fetch is synchronous (HTTP call on cache miss) — run in executor
-    loop = asyncio.get_running_loop()
-    signing_key = await loop.run_in_executor(
-        None, partial(jwks_client.get_signing_key_from_jwt, token)
-    )
-
-    decode_kwargs: dict = {
-        "algorithms": ["RS256", "ES256"],
-    }
-    if audience:
-        decode_kwargs["audience"] = audience
-    else:
-        # Missing audience means any JWT from this issuer is accepted,
-        # regardless of intended service — a confused deputy risk.
+    # Fail fast if audience is not configured — this is a config error, not
+    # a token problem.  Check before touching the token itself.
+    if not audience:
         raise ValueError(
             "JWT audience must be configured (OIDC_AUDIENCE or AUTH0_AUDIENCE). "
             "Without it, any JWT from the issuer would be accepted."
         )
-    decode_kwargs["issuer"] = issuer
 
-    # Guard: detect opaque tokens before pyjwt.decode() attempts JSON parsing.
-    # Auth0 returns opaque access tokens (encrypted binary payload) when the
-    # audience is missing or mismatched.  These tokens have a valid JWT header
-    # (so get_signing_key_from_jwt succeeds) but a non-JSON payload that causes
-    # an unhelpful UnicodeDecodeError deep inside PyJWT.
+    # Guard: detect opaque/garbage tokens before the JWKS client tries to
+    # parse the JWT header.  Moved before get_signing_key_from_jwt because
+    # completely malformed tokens cause UnicodeDecodeError in the JWKS client
+    # itself (when decoding the header to extract the ``kid``).
     _reject_opaque_token(token)
+
+    jwks_client = _get_jwks_client(resolved_jwks_uri)
+    # JWKS fetch is synchronous (HTTP call on cache miss) — run in executor
+    loop = asyncio.get_running_loop()
+    try:
+        signing_key = await loop.run_in_executor(
+            None, partial(jwks_client.get_signing_key_from_jwt, token)
+        )
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise ValueError(f"Failed to extract signing key from token: {exc}") from exc
+
+    decode_kwargs: dict = {
+        "algorithms": ["RS256", "ES256"],
+        "audience": audience,
+        "issuer": issuer,
+    }
 
     claims = pyjwt.decode(
         token,

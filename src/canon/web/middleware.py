@@ -8,11 +8,40 @@ import time
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 from canon import analytics
 
 logger = logging.getLogger(__name__)
+
+# Paths that should never be served — common scanner/bot probes.
+_BLOCKED_PREFIXES = (
+    "/.git/",
+    "/.env",
+    "/.svn/",
+    "/.hg/",
+    "/@fs/",
+    "/wp-admin",
+    "/wp-login",
+    "/wp-content",
+    "/xmlrpc.php",
+    "/phpmyadmin",
+)
+
+
+class SecurityBlockMiddleware(BaseHTTPMiddleware):
+    """Return 404 for known-sensitive paths before they reach the app.
+
+    Scanners/bots probe for ``.git/config``, ``.env``, WordPress paths,
+    etc.  Blocking early avoids logging noise and ensures these paths
+    never accidentally match a route.
+    """
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        path = request.url.path.lower()
+        if any(path.startswith(p) for p in _BLOCKED_PREFIXES):
+            return JSONResponse({"detail": "Not found"}, status_code=404)
+        return await call_next(request)
 
 
 class CacheControlMiddleware(BaseHTTPMiddleware):
@@ -48,12 +77,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         if path in ("/healthz", "/readyz") or path.startswith("/static/"):
             return response
 
+        status = response.status_code
         logger.info(
             "http_request",
             extra={
                 "method": request.method,
                 "path": path,
-                "status": response.status_code,
+                "status_code": status,
                 "duration_ms": duration_ms,
                 "user_agent": request.headers.get("user-agent", ""),
             },
@@ -63,9 +93,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             properties={
                 "method": request.method,
                 "path": path,
-                "status": response.status_code,
+                "status_code": status,
                 "duration_ms": duration_ms,
                 "user_agent": request.headers.get("user-agent", ""),
+                "is_error": status >= 500,
             },
         )
         return response

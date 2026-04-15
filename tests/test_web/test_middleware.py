@@ -65,7 +65,7 @@ class TestRequestLoggingMiddleware:
         log_record = next(r for r in caplog.records if "http_request" in r.message)
         assert log_record.method == "GET"
         assert log_record.path == "/app/org/dashboard"
-        assert log_record.status == 200
+        assert log_record.status_code == 200
 
     def test_skips_healthz(self, caplog):
         client = TestClient(_make_app(RequestLoggingMiddleware))
