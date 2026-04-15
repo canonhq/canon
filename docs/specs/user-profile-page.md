@@ -30,7 +30,7 @@ This visibility is essential as we deploy the Auth0 role-assignment Action and e
 
 ## 2. Profile Header
 
-<!-- canon:system:2 status:done -->
+<!-- canon:system:2 status:in_progress -->
 
 The profile header presents the user's visual identity, including avatar, display name, email address, and GitHub account linkage.
 
@@ -45,7 +45,7 @@ The profile header presents the user's visual identity, including avatar, displa
 <!-- canon:ticket:github:446 -->
 ## 3. Roles & Permissions
 
-<!-- canon:system:3 status:done -->
+<!-- canon:system:3 status:in_progress -->
 
 This section displays the user's current Auth0 permissions and inferred role. Permissions are derived from the session's `permissions` array, populated by Auth0 access token claims or the fallback logic in `deps.py`.
 
@@ -65,7 +65,7 @@ The interface presents both the user's effective role and the granular permissio
 <!-- canon:ticket:github:447 -->
 ## 4. Organization & Access
 
-<!-- canon:system:4 status:done -->
+<!-- canon:system:4 status:in_progress -->
 
 This section displays the user's current organization context and enables switching between organizations when the user has multi-organization access.
 
@@ -79,7 +79,7 @@ This section displays the user's current organization context and enables switch
 <!-- canon:ticket:github:448 -->
 ## 5. Backend API
 
-<!-- canon:system:5 status:done -->
+<!-- canon:system:5 status:in_progress -->
 
 The `GET /api/profile` endpoint returns a complete profile payload by combining session data with database-stored fields, providing a single source of truth for profile information.
 
