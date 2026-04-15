@@ -110,6 +110,20 @@ export default withMermaid(
             ],
           },
           {
+            text: "Extensions",
+            items: [
+              { text: "Using Extensions", link: "/guides/extensions" },
+              {
+                text: "Creating Extensions",
+                link: "/guides/creating-extensions",
+              },
+              {
+                text: "Testing Locally",
+                link: "/guides/testing-extensions-locally",
+              },
+            ],
+          },
+          {
             text: "GitHub Actions",
             items: [
               { text: "Overview", link: "/guides/github-actions/" },
@@ -157,6 +171,7 @@ export default withMermaid(
               { text: "REST API", link: "/reference/api" },
               { text: "Spec Format", link: "/reference/spec-format" },
               { text: "CANON.yaml", link: "/reference/config" },
+              { text: "Extensions", link: "/reference/extensions" },
             ],
           },
         ],
