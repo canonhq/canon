@@ -105,7 +105,7 @@ def _invalidate_web_cache(owner: str, repo: str) -> None:
         pass  # Cache not available (e.g. during tests)
 
     try:
-        from canon.slack.commands import invalidate_spec_cache
+        from canon.slack import invalidate_spec_cache
 
         invalidate_spec_cache(owner, repo)
     except ImportError:

@@ -22,6 +22,7 @@ def main(argv: list[str] | None = None) -> None:
     from .done import register as done_register
     from .evidence import register as evidence_register
     from .export import register as export_register
+    from .extension_cmd import register as extension_register
     from .ide_config import register as ide_config_register
     from .lint import register as lint_register
     from .login import register as login_register
@@ -58,6 +59,7 @@ def main(argv: list[str] | None = None) -> None:
     export_register(subparsers)
     ide_config_register(subparsers)
     evidence_register(subparsers)
+    extension_register(subparsers)
 
     args = parser.parse_args(argv)
 
@@ -216,6 +218,10 @@ def main(argv: list[str] | None = None) -> None:
         from .evidence import run_evidence
 
         run_evidence(args)
+    elif args.command == "extension":
+        from .extension_cmd import run_extension
+
+        run_extension(args)
     else:
         parser.print_help()
         sys.exit(1)

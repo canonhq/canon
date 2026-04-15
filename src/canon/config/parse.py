@@ -37,6 +37,7 @@ KNOWN_TOP_KEYS = {
     "ticket_systems",
     "routing",
     "auth_profiles",
+    "extensions",
 }
 KNOWN_SPECS_KEYS = {"auto_tickets", "require_review", "doc_paths", "lifecycle_sync"}
 KNOWN_AGENTS_KEYS = {"doc_updates", "pr_analysis", "stale_detection", "realization_check"}

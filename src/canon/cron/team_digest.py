@@ -26,10 +26,14 @@ async def run_team_digest() -> dict:
         logger.info("Slack bot not configured — skipping team digest")
         return {"skipped": True}
 
+    from canon.slack import SLACK_AVAILABLE, SpecLoader, build_digest_blocks
+
+    if not SLACK_AVAILABLE:
+        logger.info("canon-slack extension not installed — skipping team digest")
+        return {"skipped": True, "reason": "extension_not_installed"}
+
     from canon.config.parse import parse_canon_yaml
     from canon.github.client import GitHubClient
-    from canon.slack.digest import build_digest_blocks
-    from canon.slack.spec_loader import SpecLoader
 
     client = GitHubClient(
         app_id=settings.github_app_id,

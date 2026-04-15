@@ -29,8 +29,13 @@ async def run_stale_check() -> dict:
         logger.info("Slack bot not configured — skipping stale spec check")
         return {"skipped": True}
 
+    from canon.slack import SLACK_AVAILABLE, SpecLoader
+
+    if not SLACK_AVAILABLE:
+        logger.info("canon-slack extension not installed — skipping stale spec check")
+        return {"skipped": True, "reason": "extension_not_installed"}
+
     from canon.github.client import GitHubClient
-    from canon.slack.spec_loader import SpecLoader
 
     client = GitHubClient(
         app_id=settings.github_app_id,
@@ -90,7 +95,7 @@ async def run_stale_check() -> dict:
     # Send notifications
     from slack_sdk.web.async_client import AsyncWebClient
 
-    from canon.slack.notifications import NotificationConfig, NotificationDispatcher
+    from canon.slack import NotificationConfig, NotificationDispatcher
 
     slack_client = AsyncWebClient(token=settings.slack_bot_token)
     dispatcher = NotificationDispatcher(

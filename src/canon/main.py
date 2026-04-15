@@ -204,9 +204,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         logger.info("GitHub OAuth configured for web editor")
 
     # Identity store for Slack→GitHub mapping
-    from .slack.identity_store import IdentityStore
+    from .slack import SLACK_AVAILABLE, IdentityStore
 
-    app.state.identity_store = IdentityStore(db_pool=getattr(app.state, "db_pool", None))
+    if SLACK_AVAILABLE and IdentityStore is not None:
+        app.state.identity_store = IdentityStore(db_pool=getattr(app.state, "db_pool", None))
+    else:
+        app.state.identity_store = None
 
     app.state.github_client = _get_client()
 
@@ -372,7 +375,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
         # Wire notification dispatcher (requires bot client)
         if app.state.slack_bot is not None:
-            from .slack.notifications import NotificationConfig, NotificationDispatcher
+            from .slack import NotificationConfig, NotificationDispatcher
 
             notif_config = NotificationConfig()
             dispatcher = NotificationDispatcher(
