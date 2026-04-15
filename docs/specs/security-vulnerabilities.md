@@ -15,7 +15,7 @@ Fix three high-severity vulnerabilities identified in the Canon platform: an una
 
 ## 1. Background
 
-<!-- canon:system:1 status:done -->
+<!-- canon:system:1 status:todo -->
 
 A security review identified three vulnerabilities that must be resolved before production deployment. These are distinct from the broader [auth hardening](auth-hardening.md) work — they are immediate fixes for existing code paths, not new feature development.
 
@@ -24,7 +24,7 @@ A security review identified three vulnerabilities that must be resolved before 
 <!-- canon:ticket:github:409 -->
 ## 2. Secure Unauthenticated MCP Endpoint
 
-<!-- canon:system:2 status:in_progress -->
+<!-- canon:system:2 status:todo -->
 
 **Severity: HIGH**
 

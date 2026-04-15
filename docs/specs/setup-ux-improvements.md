@@ -17,7 +17,7 @@ with clear diagnostics when something is misconfigured.
 
 ## 1. Background
 
-<!-- canon:system:1 status:done -->
+<!-- canon:system:1 status:todo -->
 
 Canon has two installation paths — the CLI (`canon setup`) and the
 Claude Code plugin marketplace — but neither produces a fully validated
@@ -181,7 +181,7 @@ Fix naming inconsistencies and clarify the two installation paths.
 <!-- canon:ticket:github:424 -->
 ### 4.2 Clarify Installation Paths in Plugin README
 
-<!-- canon:system:4.2 status:todo -->
+<!-- canon:system:4.2 status:in_progress -->
 
 #### Acceptance Criteria
 
