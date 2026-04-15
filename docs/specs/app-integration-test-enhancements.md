@@ -199,6 +199,7 @@ Test new user onboarding flows, tenant isolation enforcement, session edge cases
 - [x] New user without org → no-org page flow tested
 <!-- canon:realized-in: file:tests/integration/test_onboarding_flows.py:TestNewUserNoOrg -->
 - [x] Multi-org picker flow tested (choose-org, valid/invalid selection)
+<!-- canon:realized-in:PR#510 file:src/canon/web/routes.py -->
 <!-- canon:realized-in: file:tests/integration/test_onboarding_flows.py:TestMultiOrgPicker -->
 - [x] Logout → re-login org resolution tested (reproduces production bug)
 <!-- canon:realized-in: file:tests/integration/test_onboarding_flows.py:TestLogoutReloginOrgLost -->
