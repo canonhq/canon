@@ -98,7 +98,9 @@ class TestSpecSyncCompletedEvent:
             patch("canon.github.handlers.on_push.parse_spec") as mock_parse,
             patch("canon.github.handlers.on_push.load_org_mapping_config") as mock_org,
             patch("canon.github.handlers.on_push.synthesize_mapping_config") as mock_synth,
-            patch("canon.github.handlers.on_push._resolve_adapter_multi") as mock_resolve,
+            patch(
+                "canon.github.handlers.on_push._resolve_adapter_multi", new_callable=AsyncMock
+            ) as mock_resolve,
             patch("canon.github.handlers.on_push.forward_sync") as mock_forward,
             patch("canon.github.handlers.on_push._index_specs", new=AsyncMock()),
             patch("canon.github.handlers.on_push._index_doc_files", new=AsyncMock()),
@@ -164,7 +166,7 @@ class TestSpecSyncCompletedEvent:
         forward_sync_completed event."""
         mocks = _mock_dependencies
 
-        def _resolve(mapping, doc, project_key, file_path):
+        def _resolve(mapping, doc, project_key, file_path, **kwargs):
             if "feature-a" in file_path:
                 return (_MockAdapter("jira"), "CANON", MagicMock(), {})
             return (_MockAdapter("linear"), "LIN", MagicMock(), {})

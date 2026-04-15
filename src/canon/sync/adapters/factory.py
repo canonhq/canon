@@ -29,9 +29,18 @@ def create_adapter(
     *,
     ticket_project: str,
     system: Literal["jira", "linear", "github"] | None = None,
+    github_token: str = "",
 ) -> TicketAdapter | None:
-    """Return a TicketAdapter if credentials are configured, None otherwise."""
-    resolved = system or _detect_system()
+    """Return a TicketAdapter if credentials are configured, None otherwise.
+
+    Args:
+        ticket_project: Project key (for GitHub: "owner/repo" format).
+        system: Explicit system override; auto-detected from env vars when omitted.
+        github_token: Optional GitHub token (e.g. from a GitHub App installation).
+            Used as fallback when GITHUB_TOKEN env var is not set.
+            When provided, owner/repo are extracted from ``ticket_project``.
+    """
+    resolved = system or _detect_system(github_token=github_token)
 
     if resolved == "jira":
         host = os.environ.get("JIRA_HOST", "")
@@ -48,9 +57,13 @@ def create_adapter(
         return LinearAdapter(LinearConfig(api_key=api_key))
 
     if resolved == "github":
-        token = os.environ.get("GITHUB_TOKEN", "")
+        token = os.environ.get("GITHUB_TOKEN", "") or github_token
         default_owner = os.environ.get("GITHUB_OWNER", "")
         default_repo = os.environ.get("GITHUB_REPO", "")
+        if (not default_owner or not default_repo) and ticket_project and "/" in ticket_project:
+            parts = ticket_project.split("/", 1)
+            default_owner = default_owner or parts[0]
+            default_repo = default_repo or parts[1]
         if not token or not default_owner or not default_repo:
             return None
         return GitHubAdapter(
@@ -64,6 +77,8 @@ def from_config(
     name: str,
     config: TicketSystemConfig,
     auth_profiles: dict[str, AuthProfile] | None = None,
+    *,
+    github_token: str = "",
 ) -> TicketAdapter | None:
     """Create an adapter from a TicketSystemConfig.
 
@@ -71,6 +86,8 @@ def from_config(
         name: Logical name of the ticket system (for logging/diagnostics).
         config: The system configuration to create an adapter from.
         auth_profiles: Optional auth profiles for credential resolution.
+        github_token: Optional GitHub token (e.g. from a GitHub App installation).
+            Used as fallback when auth_profile / env var token is not set.
 
     Resolves credentials from an auth profile (if set) or falls back to
     the standard env var auto-detection.
@@ -94,7 +111,7 @@ def from_config(
         return LinearAdapter(LinearConfig(api_key=api_key))
 
     if config.system == "github":
-        token = os.environ.get(f"{prefix}TOKEN", "")
+        token = os.environ.get(f"{prefix}TOKEN", "") or github_token
         # For GitHub, project is "owner/repo" format
         default_owner = os.environ.get(f"{prefix}OWNER", "")
         default_repo = os.environ.get(f"{prefix}REPO", "")
@@ -124,12 +141,15 @@ async def validate_config(ticket_project: str) -> None:
         await adapter.validate_config(ticket_project)
 
 
-def _detect_system() -> Literal["jira", "linear", "github"] | None:
+def _detect_system(
+    *,
+    github_token: str = "",
+) -> Literal["jira", "linear", "github"] | None:
     if os.environ.get("JIRA_HOST"):
         return "jira"
     if os.environ.get("LINEAR_API_KEY"):
         return "linear"
-    if os.environ.get("GITHUB_TOKEN"):
+    if github_token or os.environ.get("GITHUB_TOKEN"):
         return "github"
     return None
 

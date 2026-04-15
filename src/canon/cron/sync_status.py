@@ -17,7 +17,7 @@ from ..github.client import GitHubClient
 from ..parser.models import ParseOptions
 from ..parser.parse import parse_spec
 from ..settings import Settings
-from ..sync.adapters.factory import create_adapter, from_config
+from ..sync.adapters.factory import create_adapter, from_config, from_org
 from ..sync.engine import reverse_sync
 from ..sync.mapping import deep_merge_configs, synthesize_mapping_config
 from ..sync.org_config import load_org_mapping_config
@@ -48,8 +48,29 @@ async def run_reverse_sync() -> list[dict]:
 
     results: list[dict] = []
 
+    # Best-effort: create IntegrationStore for DB-stored OAuth credentials
+    integration_store = None
+    pool = None
+    if settings.database_url and settings.byok_encryption_key:
+        try:
+            import asyncpg
+
+            from ..db.integration_store import IntegrationStore
+
+            pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=2)
+            integration_store = IntegrationStore(pool, settings.byok_encryption_key)
+        except ImportError:
+            logger.info("asyncpg not installed — skipping DB credential resolution for cron")
+        except Exception:
+            logger.warning(
+                "Failed to initialize IntegrationStore for cron job — "
+                "DB-stored OAuth credentials will not be used this run",
+                exc_info=True,
+            )
+
     try:
-        # Get installation token and list repos
+        # Get installation token for GitHub adapter reuse and list repos
+        github_token = await client.get_installation_token()
         headers = await client._auth_headers()
         resp = await client._http.get(
             "/installation/repositories",
@@ -107,7 +128,11 @@ async def run_reverse_sync() -> list[dict]:
                     result = parse_spec(content, ParseOptions(file_path=file_path))
                     project_key = result.document.frontmatter.ticket_project
 
-                    # Resolve adapter via routing or single-system fallback
+                    # Resolve adapter via routing or single-system fallback.
+                    # Credential resolution order:
+                    # 1. CANON.yaml auth_profiles / env vars (from_config)
+                    # 2. GitHub App installation token (github_token)
+                    # 3. DB org_integrations (from_org, for OAuth-connected orgs)
                     adapter = None
                     resolved_sys_config = None
                     if not mapping.is_empty():
@@ -117,8 +142,24 @@ async def run_reverse_sync() -> list[dict]:
                         if target_name:
                             resolved_sys_config = mapping.ticket_systems[target_name]
                             adapter = from_config(
-                                target_name, resolved_sys_config, mapping.auth_profiles or None
+                                target_name,
+                                resolved_sys_config,
+                                mapping.auth_profiles or None,
+                                github_token=github_token,
                             )
+                            if not adapter and integration_store and resolved_sys_config.system:
+                                try:
+                                    adapter = await from_org(
+                                        owner, resolved_sys_config.system, integration_store
+                                    )
+                                except Exception:
+                                    logger.warning(
+                                        "DB credential lookup failed for %s/%s system=%s",
+                                        owner,
+                                        repo_name,
+                                        resolved_sys_config.system,
+                                        exc_info=True,
+                                    )
                             project_key = project_key or resolved_sys_config.project or ""
                         else:
                             single = mapping.single_system()
@@ -126,16 +167,52 @@ async def run_reverse_sync() -> list[dict]:
                                 resolved_sys_config = single
                                 sys_name = next(iter(mapping.ticket_systems.keys()))
                                 adapter = from_config(
-                                    sys_name, single, mapping.auth_profiles or None
+                                    sys_name,
+                                    single,
+                                    mapping.auth_profiles or None,
+                                    github_token=github_token,
                                 )
+                                if not adapter and integration_store and single.system:
+                                    try:
+                                        adapter = await from_org(
+                                            owner, single.system, integration_store
+                                        )
+                                    except Exception:
+                                        logger.warning(
+                                            "DB credential lookup failed for %s/%s system=%s",
+                                            owner,
+                                            repo_name,
+                                            single.system,
+                                            exc_info=True,
+                                        )
                                 project_key = project_key or single.project or ""
 
                     if not adapter:
                         if not project_key:
                             continue
-                        adapter = create_adapter(ticket_project=project_key)
+                        adapter = create_adapter(
+                            ticket_project=project_key, github_token=github_token
+                        )
 
                     if not adapter:
+                        logger.warning(
+                            "No ticket adapter resolved for %s/%s/%s (project_key=%r) "
+                            "— skipping reverse sync",
+                            owner,
+                            repo_name,
+                            file_path,
+                            project_key,
+                        )
+                        analytics.track(
+                            "sync_adapter_resolution_failed",
+                            properties={
+                                "repo": f"{owner}/{repo_name}",
+                                "file_path": file_path,
+                                "project_key": project_key,
+                                "context": "reverse_sync",
+                            },
+                            groups={"organization": owner},
+                        )
                         continue
 
                     updated_md, sync_result = await reverse_sync(
@@ -185,6 +262,8 @@ async def run_reverse_sync() -> list[dict]:
                     logger.exception("Error syncing %s/%s/%s", owner, repo_name, file_path)
     finally:
         await client.close()
+        if pool is not None:
+            await pool.close()
 
     return results
 

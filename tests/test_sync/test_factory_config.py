@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from canon.sync.adapters.factory import from_config
+from canon.sync.adapters.factory import _detect_system, create_adapter, from_config
 from canon.sync.adapters.github_issues import GitHubAdapter
 from canon.sync.adapters.jira import JiraAdapter
 from canon.sync.adapters.linear import LinearAdapter
@@ -90,6 +90,106 @@ class TestFromConfig:
         object.__setattr__(config, "host_override", None)
         with pytest.raises(ValueError, match="No default env prefix"):
             from_config("primary", config)
+
+
+class TestDetectSystemWithToken:
+    def test_github_token_triggers_github_detection(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            assert _detect_system(github_token="ghs_xxx") == "github"
+
+    def test_no_token_no_env_returns_none(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            assert _detect_system() is None
+
+    def test_env_var_still_works(self) -> None:
+        with patch.dict(os.environ, {"GITHUB_TOKEN": "ghp_tok"}, clear=True):
+            assert _detect_system() == "github"
+
+    def test_jira_takes_precedence_over_github_token(self) -> None:
+        with patch.dict(os.environ, {"JIRA_HOST": "jira.example.com"}, clear=True):
+            assert _detect_system(github_token="ghs_xxx") == "jira"
+
+
+class TestCreateAdapterWithGitHubToken:
+    def test_github_token_with_owner_repo_project(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            adapter = create_adapter(ticket_project="myorg/myrepo", github_token="ghs_xxx")
+        assert isinstance(adapter, GitHubAdapter)
+        assert adapter.config.default_owner == "myorg"
+        assert adapter.config.default_repo == "myrepo"
+        assert adapter.config.token == "ghs_xxx"
+
+    def test_env_token_takes_precedence_over_github_token(self) -> None:
+        env = {
+            "GITHUB_TOKEN": "ghp_env",
+            "GITHUB_OWNER": "env-org",
+            "GITHUB_REPO": "env-repo",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            adapter = create_adapter(ticket_project="myorg/myrepo", github_token="ghs_app")
+        assert isinstance(adapter, GitHubAdapter)
+        assert adapter.config.token == "ghp_env"
+
+    def test_no_token_no_env_returns_none(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            adapter = create_adapter(ticket_project="myorg/myrepo")
+        assert adapter is None
+
+    def test_project_without_slash_returns_none(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            adapter = create_adapter(ticket_project="no-slash", github_token="ghs_xxx")
+        assert adapter is None
+
+    def test_project_with_multiple_slashes_splits_on_first(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            adapter = create_adapter(ticket_project="org/repo/extra", github_token="ghs_xxx")
+        assert isinstance(adapter, GitHubAdapter)
+        assert adapter.config.default_owner == "org"
+        assert adapter.config.default_repo == "repo/extra"
+
+    def test_env_owner_repo_not_overridden_by_project(self) -> None:
+        env = {"GITHUB_OWNER": "env-org", "GITHUB_REPO": "env-repo"}
+        with patch.dict(os.environ, env, clear=True):
+            adapter = create_adapter(ticket_project="proj-org/proj-repo", github_token="ghs_xxx")
+        assert isinstance(adapter, GitHubAdapter)
+        assert adapter.config.default_owner == "env-org"
+        assert adapter.config.default_repo == "env-repo"
+
+
+class TestFromConfigWithGitHubToken:
+    def test_env_token_takes_precedence_over_github_token(self) -> None:
+        """Auth profile / env var credentials should win over installation token."""
+        config = TicketSystemConfig(system="github", project="myorg/myrepo")
+        env = {"GITHUB_TOKEN": "ghp_env_token"}
+        with patch.dict(os.environ, env, clear=False):
+            adapter = from_config("oss", config, github_token="ghs_app_token")
+        assert isinstance(adapter, GitHubAdapter)
+        assert adapter.config.token == "ghp_env_token"
+
+    def test_falls_back_to_github_token_when_no_env(self) -> None:
+        """Installation token is fallback when no env var is configured."""
+        config = TicketSystemConfig(system="github", project="myorg/myrepo")
+        with patch.dict(os.environ, {}, clear=True):
+            adapter = from_config("oss", config, github_token="ghs_app_token")
+        assert isinstance(adapter, GitHubAdapter)
+        assert adapter.config.token == "ghs_app_token"
+        assert adapter.config.default_owner == "myorg"
+        assert adapter.config.default_repo == "myrepo"
+
+    def test_env_token_used_when_no_github_token(self) -> None:
+        config = TicketSystemConfig(system="github", project="myorg/myrepo")
+        env = {"GITHUB_TOKEN": "ghp_env_token"}
+        with patch.dict(os.environ, env, clear=False):
+            adapter = from_config("oss", config, github_token="")
+        assert isinstance(adapter, GitHubAdapter)
+        assert adapter.config.token == "ghp_env_token"
+
+    def test_jira_unaffected_by_github_token(self) -> None:
+        config = TicketSystemConfig(system="jira", project="PAY")
+        env = {"JIRA_HOST": "j.com", "JIRA_EMAIL": "a@b.com", "JIRA_API_TOKEN": "tok"}
+        with patch.dict(os.environ, env, clear=False):
+            adapter = from_config("primary", config, github_token="ghs_xxx")
+        assert isinstance(adapter, JiraAdapter)
 
 
 class TestAdapterCapabilities:

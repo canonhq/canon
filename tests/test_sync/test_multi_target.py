@@ -73,7 +73,8 @@ Content.
 
 
 class TestAdapterResolutionTracking:
-    def test_resolve_adapter_tracks_failure(self):
+    @pytest.mark.asyncio
+    async def test_resolve_adapter_tracks_failure(self):
         """_resolve_adapter should track PostHog event when no adapter found."""
         from canon.github.handlers.on_push import _resolve_adapter
         from canon.sync.mapping import TicketMappingConfig
@@ -82,7 +83,7 @@ class TestAdapterResolutionTracking:
             patch("canon.github.handlers.on_push.analytics") as mock_analytics,
             patch("canon.github.handlers.on_push.create_adapter", return_value=None),
         ):
-            adapter, _pk, _cfg = _resolve_adapter(
+            adapter, _pk, _cfg = await _resolve_adapter(
                 TicketMappingConfig(), None, "MY-PROJECT", "docs/specs/test.md"
             )
 

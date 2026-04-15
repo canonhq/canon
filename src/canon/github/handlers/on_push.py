@@ -9,7 +9,7 @@ from canon import analytics
 from ...parser.models import ParseOptions, SpecDocument
 from ...parser.parse import parse_spec
 from ...sync.adapters.base import TicketAdapter
-from ...sync.adapters.factory import create_adapter, from_config
+from ...sync.adapters.factory import create_adapter, from_config, from_org
 from ...sync.engine import forward_sync, forward_sync_multi
 from ...sync.mapping import (
     TicketMappingConfig,
@@ -33,6 +33,19 @@ def _get_notification_dispatcher():
 
         return getattr(app.state, "notification_dispatcher", None)
     except Exception:
+        return None
+
+
+def _get_integration_store():
+    """Get IntegrationStore from app.state, or None."""
+    try:
+        from canon.main import app
+
+        return getattr(app.state, "integration_store", None)
+    except ImportError:
+        return None
+    except Exception:
+        logger.warning("Failed to access integration_store from app.state", exc_info=True)
         return None
 
 
@@ -238,13 +251,44 @@ async def _track_code_changes(owner: str, repo: str, changed_paths: list[str]) -
         pass  # Best-effort — don't break push handling
 
 
-def _resolve_adapter(
+async def _try_org_adapter(
+    sys_config: TicketSystemConfig | None,
+    org: str,
+) -> TicketAdapter | None:
+    """Try to create an adapter from DB-stored org integration credentials."""
+    if not sys_config or not sys_config.system:
+        return None
+    integration_store = _get_integration_store()
+    if integration_store is None:
+        return None
+    try:
+        return await from_org(org, sys_config.system, integration_store)
+    except Exception:
+        logger.warning(
+            "from_org credential lookup failed for org=%s system=%s — "
+            "DB-stored OAuth credentials will not be used for this sync",
+            org,
+            sys_config.system,
+            exc_info=True,
+        )
+        return None
+
+
+async def _resolve_adapter(
     mapping: TicketMappingConfig,
     doc,
     project_key: str,
     file_path: str,
+    *,
+    github_token: str = "",
+    org: str = "",
 ) -> tuple[TicketAdapter | None, str, TicketSystemConfig | None]:
     """Resolve a ticket adapter for a spec doc using routing or legacy fallback.
+
+    Credential resolution order:
+    1. CANON.yaml auth_profiles / env vars (via ``from_config``)
+    2. GitHub App installation token (``github_token``, for GitHub adapters)
+    3. DB org_integrations (via ``from_org``, for OAuth-connected orgs)
 
     Returns (adapter, project_key, system_config) or (None, "", None) when
     no adapter can be resolved.
@@ -258,21 +302,30 @@ def _resolve_adapter(
         if target_name:
             sys_config = mapping.ticket_systems[target_name]
             # Empty dict → None so from_config uses default env var detection
-            adapter = from_config(target_name, sys_config, mapping.auth_profiles or None)
+            adapter = from_config(
+                target_name, sys_config, mapping.auth_profiles or None, github_token=github_token
+            )
+            # Fallback: try DB-stored org credentials (Jira/Linear OAuth)
+            if not adapter:
+                adapter = await _try_org_adapter(sys_config, org)
             project_key = project_key or sys_config.project or ""
         else:
             single = mapping.single_system()
             if single:
                 sys_config = single
                 sys_name = next(iter(mapping.ticket_systems.keys()))
-                adapter = from_config(sys_name, single, mapping.auth_profiles or None)
+                adapter = from_config(
+                    sys_name, single, mapping.auth_profiles or None, github_token=github_token
+                )
+                if not adapter:
+                    adapter = await _try_org_adapter(single, org)
                 project_key = project_key or single.project or ""
 
     if not adapter:
         if not project_key:
             logger.info("No ticket_project in frontmatter for %s, skipping sync", file_path)
             return None, "", None
-        adapter = create_adapter(ticket_project=project_key)
+        adapter = create_adapter(ticket_project=project_key, github_token=github_token)
 
     if not adapter:
         logger.warning(
@@ -296,11 +349,14 @@ def _resolve_adapter(
     return adapter, project_key, sys_config
 
 
-def _resolve_adapter_multi(
+async def _resolve_adapter_multi(
     mapping: TicketMappingConfig,
     doc: SpecDocument,
     project_key: str,
     file_path: str,
+    *,
+    github_token: str = "",
+    org: str = "",
 ) -> tuple[
     TicketAdapter | None,
     str,
@@ -308,6 +364,11 @@ def _resolve_adapter_multi(
     dict[str, tuple[TicketAdapter, TicketSystemConfig]],
 ]:
     """Resolve primary + shadow adapters using routing rules.
+
+    Args:
+        github_token: GitHub App installation token. When provided, GitHub
+            adapters use this instead of the GITHUB_TOKEN env var.
+        org: GitHub org login, used for DB credential fallback via ``from_org``.
 
     Returns (adapter, project_key, system_config, shadow_adapters).
     shadow_adapters is a dict of {name: (adapter, config)} for shadow targets.
@@ -321,13 +382,21 @@ def _resolve_adapter_multi(
         )
         if primary_name:
             sys_config = mapping.ticket_systems[primary_name]
-            adapter = from_config(primary_name, sys_config, mapping.auth_profiles or None)
+            adapter = from_config(
+                primary_name, sys_config, mapping.auth_profiles or None, github_token=github_token
+            )
+            if not adapter:
+                adapter = await _try_org_adapter(sys_config, org)
             resolved_key = project_key or sys_config.project or ""
 
             # Instantiate shadow adapters
             for sname in shadow_names:
                 scfg = mapping.ticket_systems[sname]
-                sadapter = from_config(sname, scfg, mapping.auth_profiles or None)
+                sadapter = from_config(
+                    sname, scfg, mapping.auth_profiles or None, github_token=github_token
+                )
+                if not sadapter:
+                    sadapter = await _try_org_adapter(scfg, org)
                 if sadapter:
                     shadow_adapters[sname] = (sadapter, scfg)
                 else:
@@ -349,8 +418,8 @@ def _resolve_adapter_multi(
 
     # Fall back to single-adapter resolution (no shadows).
     # Use the original project_key to avoid bleeding state from the failed multi-target path.
-    adapter, project_key, sys_config = _resolve_adapter(
-        mapping, doc, original_project_key, file_path
+    adapter, project_key, sys_config = await _resolve_adapter(
+        mapping, doc, original_project_key, file_path, github_token=github_token, org=org
     )
     return adapter, project_key, sys_config, {}
 
@@ -438,6 +507,12 @@ async def on_push(client, payload: dict) -> None:
     org_mapping = await load_org_mapping_config(client, owner)
     if org_mapping:
         mapping = deep_merge_configs(org_mapping, mapping)
+
+    # Obtain the GitHub App installation token so that GitHub-targeted ticket
+    # adapters can reuse it instead of requiring a separate GITHUB_TOKEN env var.
+    # This is critical for multi-tenant deployments where each repo installation
+    # has its own scoped token.
+    github_token = await client.get_installation_token()
 
     # Track distinct adapter system names seen across the per-spec sync loop.
     # Populated as each spec gets a resolved adapter; rolled up into the
@@ -530,8 +605,13 @@ async def on_push(client, payload: dict) -> None:
 
             project_key = result.document.frontmatter.ticket_project
 
-            adapter, project_key, sys_config, shadow_adapters = _resolve_adapter_multi(
-                mapping, result.document, project_key, file_path
+            adapter, project_key, sys_config, shadow_adapters = await _resolve_adapter_multi(
+                mapping,
+                result.document,
+                project_key,
+                file_path,
+                github_token=github_token,
+                org=owner,
             )
             if not adapter or not project_key:
                 continue
