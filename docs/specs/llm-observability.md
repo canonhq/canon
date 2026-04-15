@@ -130,6 +130,7 @@ When PostHog is not configured (OSS), the vanilla `anthropic.Anthropic` client i
 
 - [x] `ClaudeClient` uses `posthog.ai.anthropic.Anthropic` when PostHog is configured
 <!-- canon:realized-in:PR#471 file:src/canon/agent/client.py -->
+<!-- canon:realized-in:PR#506 file:src/canon/agent/client.py -->
 - [x] `ClaudeClient` falls back to `anthropic.Anthropic` when PostHog is not configured
 - [x] `$ai_generation` events include `feature=pr_analysis` in properties
 - [ ] `$ai_generation` events include org as `distinct_id` and `organization` group
@@ -199,8 +200,10 @@ Each streaming call site should pass a `feature` and `action`:
 
 - [x] `spec_editor.py` streaming calls emit `$ai_generation` events when PostHog is configured
 <!-- canon:realized-in:PR#471 file:src/canon/agent/spec_editor.py -->
+<!-- canon:realized-in:PR#506 file:src/canon/agent/spec_editor.py -->
 - [x] `spec_generator.py` streaming calls emit `$ai_generation` events when PostHog is configured
 <!-- canon:realized-in:PR#471 file:src/canon/agent/spec_generator.py -->
+<!-- canon:realized-in:PR#506 file:src/canon/agent/spec_generator.py -->
 - [x] Each call includes `feature` and `action` in `posthog_properties`
 - [x] Streaming behavior (chunk-by-chunk yielding) is unchanged
 <!-- canon:realized-in:PR#471 file:tests/test_agent/test_spec_editor.py -->
