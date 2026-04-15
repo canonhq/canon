@@ -400,6 +400,7 @@ oss-validation:
 - [ ] CI job exports OSS, installs deps, runs linter, runs tests — all green
 - [x] Auth module files present in export: `providers/protocol.py`, `providers/generic_oidc.py`, `routes.py`, `middleware.py`, `deps.py`, `jwt.py`
 <!-- canon:realized-in:PR#388 file:tests/test_oss_export.py -->
+<!-- canon:realized-in:PR#509 file:.github/scripts/export-oss.sh -->
 - [x] Cloud-only files absent: `providers/auth0.py`, `management.py`
 - [ ] OSS tests pass without cloud extras installed (no `authlib` needed for CLI/parser tests)
 - [ ] OSS Docker image builds and passes smoke test
