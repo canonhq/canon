@@ -121,7 +121,8 @@ The current system has multiple silent failure paths. When sync skips, adapter r
 ### Acceptance Criteria
 
 - [ ] Failed realization checks post a visible comment on the PR ("Canon analysis failed — spec status may not update automatically")
-- [ ] Sync errors are tracked as PostHog events (existing analytics infrastructure) with enough context to diagnose
+- [x] Sync errors are tracked as PostHog events (existing analytics infrastructure) with enough context to diagnose
+<!-- canon:realized-in:PR#512 file:src/canon/cron/sync_status.py -->
 - [ ] Reverse sync cron emits a summary event after each run: files processed, statuses changed, errors encountered
 - [ ] Adapter resolution failures log the config that was attempted, not just "adapter not found"
 
