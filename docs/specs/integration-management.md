@@ -278,7 +278,9 @@ The adapter factory currently reads credentials exclusively from env vars. Updat
 - [ ] DB lookup decrypts `encrypted_config` and constructs adapter config
 - [ ] If DB has no integration for provider, falls back to env vars (existing behavior unchanged)
 - [ ] CANON.yaml `auth_profiles` override both DB and env vars when specified per-repo
-- [ ] Resolution order is documented in code comments
+- [x] Resolution order is documented in code comments
+<!-- canon:realized-in:PR#512 file:src/canon/github/handlers/on_push.py -->
+<!-- canon:realized-in:PR#512 file:src/canon/cron/sync_status.py -->
 - [ ] Existing `from_config()` and `from_env()` methods preserved for backward compatibility
 
 ### 5.2 Jira Adapter — OAuth Token Support
