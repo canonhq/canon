@@ -27,7 +27,7 @@ _ORG_PATH_RE = re.compile(r"^/app/([^/]+)")
 # Org slugs reserved for internal routes.  If a GitHub org with one of these
 # names installs the app, tenant isolation will not work correctly — the
 # installation handler validates against this set.
-RESERVED_ORG_SLUGS = frozenset({"admin", "no-org", "choose-org"})
+RESERVED_ORG_SLUGS = frozenset({"admin", "no-org", "choose-org", "setup"})
 
 
 def _is_api_request(request: Request) -> bool:

@@ -268,6 +268,22 @@ async def callback(request: Request):
                 ]
                 if org_logins:
                     request.session["user"]["org_memberships"] = org_logins
+                    # Use org_memberships as a fallback when org_login wasn't
+                    # resolved from JWT org_id or GitHub membership lookup.
+                    # Without this, users land on /app/no-org after re-login
+                    # even though the provider confirms their org membership.
+                    if not org_login:
+                        if len(org_logins) == 1:
+                            org_login = org_logins[0]
+                            request.session["user"]["org_login"] = org_login
+                            logger.info(
+                                "org_login resolved from provider org memberships (org=%s)",
+                                org_login,
+                            )
+                        elif len(org_logins) > 1 and not request.session.get("pending_org_choices"):
+                            # Multiple orgs — show chooser, consistent with
+                            # the GitHub membership path (lines 188-191).
+                            request.session["pending_org_choices"] = org_logins
         except Exception:
             logger.warning("Failed to fetch provider org memberships", exc_info=True)
 

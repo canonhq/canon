@@ -375,6 +375,19 @@ async def dashboard_redirect(request: Request):
             )
             if pending:
                 return RedirectResponse(url="/app/choose-org", status_code=302)
+            # Fallback: use org_memberships (set by callback from provider)
+            # when org_login wasn't resolved from JWT or GitHub membership.
+            memberships = user.get("org_memberships", [])
+            if memberships:
+                chosen = memberships[0]
+                # Persist to session so the auth middleware's org isolation
+                # check passes on the subsequent request.
+                user["org_login"] = chosen
+                logger.info(
+                    "dashboard_redirect: org resolved from org_memberships fallback (org=%s)",
+                    chosen,
+                )
+                return RedirectResponse(url=f"/app/{chosen}/", status_code=302)
             return RedirectResponse(url="/app/no-org", status_code=302)
     org = _get_org(request)
     return RedirectResponse(url=f"/app/{org}/", status_code=302)
