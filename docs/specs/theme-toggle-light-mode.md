@@ -32,7 +32,7 @@ Enhance the 3-way theme toggle button with a tooltip so users know which mode is
 
 ## 2. Light Mode Surface Tokens
 
-<!-- canon:system:2 status:done -->
+<!-- canon:system:2 status:in_progress -->
 
 Define light-mode equivalents for the surface color tokens so components can use consistent brand-tinted backgrounds instead of stock grays.
 
