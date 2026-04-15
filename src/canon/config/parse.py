@@ -98,6 +98,23 @@ class AiExposureConfig(BaseModel):
     restricted_tags: list[str] = []
 
 
+EvidencePersist = Literal["file", "mcp", "both"]
+EvidenceCommitOnPush = Literal["ask", "always", "never"]
+
+
+class EvidencePipelineConfig(BaseModel):
+    """Plugin → GitHub App evidence pipeline (plugin-evidence-pipeline.md §3.2).
+
+    Off by default; users opt in per-repo via CANON.yaml. When enabled, the
+    Stop hook records dev-session evidence to .canon/session-evidence.json
+    and the canon-verify gate writes to .canon/verify-log.jsonl.
+    """
+
+    enabled: bool = False
+    persist: EvidencePersist = "file"
+    commit_on_push: EvidenceCommitOnPush = "ask"
+
+
 class SreConfig(BaseModel):
     alerts_channel: str = "#canon-alerts"
     auto_triage: bool = True
@@ -157,6 +174,7 @@ class IdeConfig(BaseModel):
     auto_context: AutoContextConfig = AutoContextConfig()
     auto_verify: AutoVerifyConfig = AutoVerifyConfig()
     ai_exposure: AiExposureConfig = AiExposureConfig()
+    evidence_pipeline: EvidencePipelineConfig = EvidencePipelineConfig()
 
 
 class SpecsConfig(BaseModel):
@@ -829,6 +847,14 @@ def _merge_with_defaults(
 
     ide_data = partial.get("ide")
     ide = IdeConfig()
+    # ⚠️ When you add a new field to IdeConfig, you MUST also add explicit
+    # parsing for it here. This function does NOT use IdeConfig.model_validate
+    # — it constructs IdeConfig field-by-field with hand-rolled type guards
+    # so that invalid YAML degrades gracefully to defaults instead of raising.
+    # New fields without explicit parsing here will silently fall back to
+    # the model default and ignore the user's CANON.yaml value.
+    # See: plugin-evidence-pipeline.md execution notes (Phase C foundation
+    # surfaced this gotcha when adding evidence_pipeline).
     if isinstance(ide_data, dict):
         ac_data = ide_data.get("auto_context")
         auto_context = AutoContextConfig()
@@ -877,7 +903,28 @@ def _merge_with_defaults(
                 else [],
             )
 
-        ide = IdeConfig(auto_context=auto_context, auto_verify=auto_verify, ai_exposure=ai_exposure)
+        ep_data = ide_data.get("evidence_pipeline")
+        evidence_pipeline = EvidencePipelineConfig()
+        if isinstance(ep_data, dict):
+            valid_persist = {"file", "mcp", "both"}
+            valid_commit = {"ask", "always", "never"}
+            evidence_pipeline = EvidencePipelineConfig(
+                enabled=ep_data["enabled"] if isinstance(ep_data.get("enabled"), bool) else False,
+                persist=ep_data["persist"]
+                if isinstance(ep_data.get("persist"), str) and ep_data["persist"] in valid_persist
+                else "file",
+                commit_on_push=ep_data["commit_on_push"]
+                if isinstance(ep_data.get("commit_on_push"), str)
+                and ep_data["commit_on_push"] in valid_commit
+                else "ask",
+            )
+
+        ide = IdeConfig(
+            auto_context=auto_context,
+            auto_verify=auto_verify,
+            ai_exposure=ai_exposure,
+            evidence_pipeline=evidence_pipeline,
+        )
 
     sre_data = partial.get("sre")
     sre = SreConfig()

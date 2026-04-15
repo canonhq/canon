@@ -20,3 +20,4 @@ class McpDeps:
     cache: Any = None  # TTLCache | None
     settings: Any = None  # Settings | None
     agent_store: Any = None  # AgentStore | None
+    session_evidence_store: Any = None  # SessionEvidenceStore | None

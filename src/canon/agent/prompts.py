@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 from pydantic import BaseModel
 
+from canon.evidence.models import SessionRecord
 from canon.parser.models import SpecSection
 
 # ─── Types ────────────────────────────────────────────────
@@ -49,6 +50,12 @@ class PRAnalysisContext(BaseModel):
     files: list[PRFile]
     specs: list[RepoSpec]
     context_docs: list[ContextDoc] = []
+    # Optional dev-session evidence captured by the Canon plugin (the
+    # plugin-evidence-pipeline). When present, the analyzer renders it as a
+    # high-confidence hint for AC mapping. Each entry is a SessionRecord
+    # validated upstream by the loader (`_load_session_evidence`), so the
+    # renderer can rely on schema-typed access. See plugin-evidence-pipeline.md §7.
+    session_evidence: list[SessionRecord] = []
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -203,6 +210,18 @@ def build_user_message(
             parts.append(f"Title: {doc.doc_title} | Section: {doc.heading}")
             parts.append(doc.body)
 
+    # Dev-session evidence (plugin-evidence-pipeline §7)
+    # Build the per-spec exposure map from context.specs so the renderer can
+    # filter evidence the same way build_user_message filters spec content.
+    exposure_map = _spec_exposure_map(
+        context.specs, ai_exposure_default, ai_exposure_restricted_tags
+    )
+    evidence_section = _render_session_evidence(
+        context.session_evidence, restricted_specs=exposure_map
+    )
+    if evidence_section:
+        parts.append(evidence_section)
+
     # File list (always included)
     parts.append("\n## Changed Files")
     for f in context.files:
@@ -237,6 +256,180 @@ def build_user_message(
 
 
 # ─── Internal Helpers ─────────────────────────────────────
+
+
+_AC_TEXT_MAX_CHARS = 200
+
+
+def _sanitize_ac_text(text: str) -> str:
+    """Sanitize an AC text string before rendering it into the LLM prompt.
+
+    Evidence comes from the plugin via the MCP `record_session_evidence`
+    tool. The payload is upstream-validated for shape but the `ac_text`
+    field is free-form user content — a malicious payload could try to
+    smuggle prompt-injection instructions into the analyzer's user message.
+
+    This function:
+    - Strips newlines so a multi-line payload can't break out of the
+      bullet-point context
+    - Escapes backticks so Markdown code-fence formatting can't be hijacked
+    - Caps length so a pathological session can't blow the prompt budget
+
+    See PR #501 review (silent-failure-hunter + code-reviewer) for the
+    threat model. The analyzer is also instructed via the rendered preamble
+    to "verify against the actual code" rather than trust the hint.
+    """
+    if not text:
+        return ""
+    cleaned = text.replace("\r", " ").replace("\n", " ").replace("`", "'")
+    if len(cleaned) > _AC_TEXT_MAX_CHARS:
+        cleaned = cleaned[: _AC_TEXT_MAX_CHARS - 1] + "…"
+    return cleaned
+
+
+def _render_session_evidence(
+    sessions: list[SessionRecord],
+    *,
+    restricted_specs: dict[str, str] | None = None,
+) -> str | None:
+    """Render dev-session evidence as a 'Dev Session Evidence' prompt section.
+
+    Returns None when there's nothing useful to render. The analyzer is
+    instructed to trust evidence as a hint but verify against the diff.
+
+    `restricted_specs` is an optional `{spec_slug: exposure_level}` map
+    derived from the same `ai_exposure` controls used for spec content
+    rendering. Specs marked `"none"` are dropped entirely from the evidence
+    section; specs marked `"metadata"` keep the spec/section reference but
+    have their AC text redacted.
+
+    AC text is sanitized via `_sanitize_ac_text` before rendering — see
+    that function's docstring for the prompt-injection threat model.
+
+    See: docs/specs/plugin-evidence-pipeline.md §7.
+    """
+    if not sessions:
+        return None
+
+    restricted = restricted_specs or {}
+
+    def _exposure(spec_slug: str) -> str:
+        return restricted.get(spec_slug, "full")
+
+    spec_section_pairs: set[tuple[str, str]] = set()
+    realized_acs: list[tuple[str, str, str]] = []  # (spec, section, ac_text_or_redacted)
+    verify_runs_total = 0
+    verify_runs_pass = 0
+    verify_runs_fail = 0
+    files_modified: set[str] = set()
+
+    for session in sessions:
+        for spec_touched in session.specs_touched:
+            # Normalize to basename-without-extension to match _spec_exposure_map keys.
+            # Caller-controlled evidence may use paths like "docs/specs/foo.md" instead
+            # of the canonical slug "foo" — without normalization, _exposure() falls
+            # through to default "full", silently bypassing ai_exposure: none.
+            raw = spec_touched.spec
+            spec_slug = raw.rsplit("/", 1)[-1].removesuffix(".md") if raw else ""
+            if not spec_slug or _exposure(spec_slug) == "none":
+                continue
+            for sec in spec_touched.sections:
+                spec_section_pairs.add((spec_slug, sec))
+        for ac in session.acs_addressed:
+            if ac.verify_status != "realized":
+                continue
+            raw = ac.spec
+            spec_slug = raw.rsplit("/", 1)[-1].removesuffix(".md") if raw else ""
+            if not spec_slug or _exposure(spec_slug) == "none":
+                continue
+            if _exposure(spec_slug) == "metadata":
+                ac_text = "(AC text redacted by ai_exposure)"
+            else:
+                ac_text = _sanitize_ac_text(ac.ac_text)
+            realized_acs.append((spec_slug, ac.section, ac_text))
+        for run in session.verify_runs:
+            verify_runs_total += 1
+            if run.result == "pass":
+                verify_runs_pass += 1
+            elif run.result == "fail":
+                verify_runs_fail += 1
+        for f in session.files_modified:
+            files_modified.add(f)
+
+    # Don't render an empty section
+    if not (spec_section_pairs or realized_acs or verify_runs_total):
+        return None
+
+    lines: list[str] = ["\n## Dev Session Evidence"]
+    lines.append(
+        f"The developer worked on this branch across {len(sessions)} session(s) "
+        "captured by the Canon plugin. Treat these as high-confidence hints when "
+        "mapping the diff to ACs, but verify against the actual code."
+    )
+
+    if spec_section_pairs:
+        lines.append("\n### Spec sections explicitly loaded")
+        for spec_slug, sec in sorted(spec_section_pairs):
+            # Sanitize spec_slug and sec to prevent injected headings/fences
+            lines.append(f"- `{_sanitize_ac_text(spec_slug)}` §{_sanitize_ac_text(sec)}")
+
+    if realized_acs:
+        lines.append("\n### ACs reported as realized via canon-verify")
+        for spec_slug, sec, ac_text in realized_acs[:50]:  # cap to prevent budget blow
+            lines.append(f"- `{_sanitize_ac_text(spec_slug)}` §{_sanitize_ac_text(sec)}: {ac_text}")
+        if len(realized_acs) > 50:
+            lines.append(f"_({len(realized_acs) - 50} more omitted for brevity)_")
+
+    if verify_runs_total:
+        lines.append(
+            f"\n### Verification trail: {verify_runs_total} gate run(s) "
+            f"({verify_runs_pass} pass, {verify_runs_fail} fail)"
+        )
+
+    return "\n".join(lines)
+
+
+def _spec_exposure_map(
+    specs: list,  # list[RepoSpec]
+    config_default: str,
+    restricted_tags: list[str] | None,
+) -> dict[str, str]:
+    """Build a `{spec_slug: exposure_level}` map from RepoSpec list.
+
+    Mirrors the resolution order used by `_summarize_spec`: per-spec
+    `ai_exposure` frontmatter beats restricted_tags beats the repo default.
+    Used by `_render_session_evidence` to filter evidence content.
+    """
+    result: dict[str, str] = {}
+    restricted_tag_set = set(restricted_tags or [])
+
+    for spec in specs:
+        document = getattr(spec, "document", None)
+        if document is None:
+            continue
+        frontmatter = getattr(document, "frontmatter", None)
+        if frontmatter is None:
+            continue
+        # Spec slug is derived from the file path basename without extension
+        file_path = getattr(spec, "file_path", "")
+        slug = file_path.rsplit("/", 1)[-1].removesuffix(".md") if file_path else ""
+        if not slug:
+            continue
+
+        # Resolution order: frontmatter > restricted_tags > config default
+        per_spec = getattr(frontmatter, "ai_exposure", None)
+        if per_spec in ("full", "metadata", "none"):
+            result[slug] = per_spec
+            continue
+
+        spec_tags = set(getattr(frontmatter, "tags", []) or [])
+        if spec_tags & restricted_tag_set:
+            result[slug] = "metadata"
+            continue
+
+        result[slug] = config_default
+
+    return result
 
 
 def _summarize_spec(

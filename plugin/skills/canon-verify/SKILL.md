@@ -123,3 +123,26 @@ Realization comments appear after ACs:
 ```
 <!-- canon:realized-in:PR#42 file:src/auth.py:10-25 -->
 ```
+
+## Verification Trail (evidence pipeline)
+
+When `ide.evidence_pipeline.enabled: true` is set in `CANON.yaml`, every
+`canon verify --gate` invocation appends a record to
+`.canon/verify-log.jsonl`. Each record has the shape:
+
+```json
+{"at": "2026-04-11T20:15:00Z", "section": "2.1", "mode": "gate", "result": "pass", "gaps": 0, "conflicts": 0}
+```
+
+The Stop hook reads this trail when composing session evidence so the GitHub
+App's PR analyzer can see which gate runs ran on which sections during the
+dev session. Inspect the trail directly with:
+
+```bash
+canon evidence list-verify-runs --since 2026-04-11T00:00:00Z
+```
+
+The log auto-rotates at 1 MB (renames to `verify-log.jsonl.1`). When the
+evidence pipeline is disabled, no trail is written.
+
+See `docs/specs/plugin-evidence-pipeline.md` §4 for the design.

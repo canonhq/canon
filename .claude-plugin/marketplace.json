@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "canon",
-  "description": "Canon (formerly Specwright) — AI-native spec-driven development platform with living documentation, code verification, and coverage tracking",
+  "description": "Canon — AI-native spec-driven development. Living specs, verified code, coverage that updates itself. Includes the canon-reviewer agent and 13 skills covering plan, implement, verify, audit, and branch completion.",
   "owner": {
     "name": "Canon",
     "email": "eng@canonhq.co"
@@ -10,7 +10,7 @@
     {
       "name": "canon",
       "description": "AI-native spec documentation — verify code against specs, track coverage, maintain living docs. Powered by Canon.",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "author": {
         "name": "Canon"
       },

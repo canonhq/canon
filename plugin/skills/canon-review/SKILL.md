@@ -65,3 +65,19 @@ Organize findings by severity:
 ## Step 5: Suggest Updates
 
 For each finding, provide specific suggestions for what to change in the documentation.
+
+## Standalone canon-reviewer Dispatch
+
+For tighter spec-compliance review (vs the broad documentation drift check
+above), dispatch the **canon-reviewer** agent via the Agent tool. It focuses
+narrowly on whether code satisfies spec acceptance criteria and categorizes
+findings as **Spec Gap**, **Spec Conflict**, **Quality Issue**, or
+**Suggestion** (with severity rules — Spec Gaps and Conflicts are blockers).
+
+Use canon-reviewer when:
+- The user wants AC-level verdicts, not documentation drift
+- A spec has clearly enumerated ACs you can pass to the reviewer as input
+- You're working outside a canon-implement loop (canon-implement dispatches the
+  reviewer automatically after each task)
+
+Pass the reviewer: the diff, the spec section ID, and `CLAUDE.md` if present.

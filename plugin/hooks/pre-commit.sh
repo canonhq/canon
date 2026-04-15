@@ -23,9 +23,13 @@ fi
 
 # Check if on_commit is enabled (default: false).
 # When false: advisory only. When true: requires user acknowledgment before commit.
-# Scoped to ide: section to avoid matching on_commit in other YAML sections.
 on_commit_enabled="false"
-if grep -A 20 '^ide:' "$CANON_YAML" 2>/dev/null | grep -q 'on_commit:.*true'; then
+if command -v canon >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+  ide_config=$(cd "$CLAUDE_PROJECT_DIR" && canon ide-config --json 2>/dev/null || echo '{}')
+  if [ "$(echo "$ide_config" | jq -r '.auto_verify.on_commit // false')" = "true" ]; then
+    on_commit_enabled="true"
+  fi
+elif grep -A 20 '^ide:' "$CANON_YAML" 2>/dev/null | grep -q 'on_commit:.*true'; then
   on_commit_enabled="true"
 fi
 

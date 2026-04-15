@@ -10,10 +10,26 @@ if [ ! -f "$CANON_YAML" ]; then
   exit 0
 fi
 
-# Check if on_stop is disabled
-# Naive grep — may match outside ide section; acceptable tradeoff for hook speed.
-if grep -q 'on_stop:.*false' "$CANON_YAML" 2>/dev/null; then
-  exit 0
+# Read ide config via canon CLI; fall back to grep on missing CLI or jq.
+read_ide_config() {
+  if command -v canon >/dev/null 2>&1; then
+    (cd "$CLAUDE_PROJECT_DIR" && canon ide-config --json 2>/dev/null) || echo '{}'
+  else
+    echo '{}'
+  fi
+}
+
+if command -v jq >/dev/null 2>&1; then
+  ide_config=$(read_ide_config)
+  on_stop=$(echo "$ide_config" | jq -r '.auto_verify.on_stop // true' 2>/dev/null)
+  if [ "$on_stop" = "false" ]; then
+    exit 0
+  fi
+else
+  # Fallback: legacy grep when jq is unavailable.
+  if grep -q 'on_stop:.*false' "$CANON_YAML" 2>/dev/null; then
+    exit 0
+  fi
 fi
 
 # Get spec doc_paths patterns from CANON.yaml (default: docs/specs/*.md)
@@ -62,4 +78,13 @@ if [ -n "$matched_specs" ]; then
   echo "You modified spec files:${matched_specs}. Run /canon:verify to check spec compliance or /canon:update to sync statuses."
 elif [ -n "$has_src_changes" ]; then
   echo "You modified source files that may relate to specs. Consider running /canon:review to check for documentation drift."
+fi
+
+# Evidence pipeline (opt-in via ide.evidence_pipeline.enabled).
+# Best-effort: failures here never break the hook.
+if command -v jq >/dev/null 2>&1 && command -v canon >/dev/null 2>&1; then
+  ev_enabled=$(echo "${ide_config:-{\}}" | jq -r '.evidence_pipeline.enabled // false' 2>/dev/null)
+  if [ "$ev_enabled" = "true" ]; then
+    (cd "$CLAUDE_PROJECT_DIR" && canon evidence record 2>/dev/null) || true
+  fi
 fi

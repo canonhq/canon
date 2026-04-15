@@ -1,7 +1,7 @@
 {
   "listing": {
     "title": "Canon — Spec-Driven Development",
-    "tagline": "Verify code against specs, track coverage, maintain living documentation",
+    "tagline": "Living specs. Verified code. Coverage that updates itself.",
     "icon": "file-text",
     "screenshots": [],
     "featured": false

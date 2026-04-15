@@ -20,7 +20,9 @@ def main(argv: list[str] | None = None) -> None:
     from .db import register as db_register
     from .dedup import register as dedup_register
     from .done import register as done_register
+    from .evidence import register as evidence_register
     from .export import register as export_register
+    from .ide_config import register as ide_config_register
     from .lint import register as lint_register
     from .login import register as login_register
     from .logout import register as logout_register
@@ -54,6 +56,8 @@ def main(argv: list[str] | None = None) -> None:
     release_notes_register(subparsers)
     stale_register(subparsers)
     export_register(subparsers)
+    ide_config_register(subparsers)
+    evidence_register(subparsers)
 
     args = parser.parse_args(argv)
 
@@ -143,7 +147,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "verify":
         from .verify import run_verify
 
-        exit_code = run_verify(section=args.section, json_output=args.json)
+        exit_code = run_verify(section=args.section, gate=args.gate, json_output=args.json)
         if exit_code:
             sys.exit(exit_code)
     elif args.command == "audit":
@@ -204,6 +208,14 @@ def main(argv: list[str] | None = None) -> None:
         )
         if exit_code:
             sys.exit(exit_code)
+    elif args.command == "ide-config":
+        from .ide_config import run_ide_config
+
+        run_ide_config()
+    elif args.command == "evidence":
+        from .evidence import run_evidence
+
+        run_evidence(args)
     else:
         parser.print_help()
         sys.exit(1)

@@ -5,7 +5,7 @@ owner: ng
 team: canon
 ticket_project: canonhq/canon-private
 created: 2026-03-18
-updated: 2026-03-18
+updated: 2026-04-11
 tags: [plugin, ide, hooks, mcp, multi-agent, security]
 depends_on: []
 ---
@@ -373,52 +373,41 @@ If the target file already exists and contains non-Canon content, warn and requi
 
 ## 7. Plugin-to-GitHub-App Evidence Pipeline
 
-<!-- canon:system:7 status:draft -->
+<!-- canon:system:7 status:moved -->
 
-When a developer works on spec-related code in their IDE, the plugin could pre-populate realization evidence so the GitHub App's PR analysis is faster and more accurate. This section is exploratory.
+**Moved to its own spec:** `docs/specs/plugin-evidence-pipeline.md`
 
-### 7.1 Concept
-
-During a dev session, the Stop hook could write a `.canon/session-evidence.json` file tracking which spec sections were worked on, which ACs were addressed, and which files were modified. When a PR is opened, the GitHub App reads this file from the branch and uses it as hints for the agent analysis.
-
-### 7.2 Open Questions
-
-- Should evidence be committed (discoverable by GitHub App) or communicated via MCP/API?
-- How to handle multiple dev sessions contributing to one PR?
-- Does this create a coupling between plugin and GitHub App that's hard to maintain?
-- Is the improvement in PR analysis quality worth the complexity?
-
-This section is intentionally left as `draft` — it requires validation of the core hooks (§5) before exploring this optimization.
+The dev→PR evidence pipeline grew large enough during planning to warrant its own
+spec. The original concept (Stop hook writes `.canon/session-evidence.json`,
+GitHub App reads it at PR time) is preserved there with full design and rollout.
 
 ## 8. Rollout Plan
 
-<!-- canon:system:8 status:draft -->
+<!-- canon:system:8 status:done -->
 
-### Phase 1: Foundation (CANON.yaml + MCP)
+### Phase 1: Foundation (CANON.yaml + MCP) — DONE
 
-1. Add `IdeConfig` to CANON.yaml parser (§2)
-2. Add `ai_exposure` to spec frontmatter and MCP filtering (§3)
-3. Add `summary_only` and pagination to MCP server (§4)
-4. Ship as Canon CLI/MCP update — no plugin changes yet
+1. ✅ Add `IdeConfig` to CANON.yaml parser (§2)
+2. ✅ Add `ai_exposure` to spec frontmatter and MCP filtering (§3)
+3. ✅ Add `summary_only` and pagination to MCP server (§4)
+4. ✅ Shipped as Canon CLI/MCP update
 
-### Phase 2: Plugin Hooks
+### Phase 2: Plugin Hooks — DONE
 
-1. Add SessionStart hook (§5.1)
-2. Add Stop hook (§5.3)
-3. Ship as plugin v0.2.0
-4. Validate with internal usage before adding UserPromptSubmit
+1. ✅ Add SessionStart hook (§5.1)
+2. ✅ Add Stop hook (§5.3)
+3. Pending plugin v0.2.0 release tag
 
-### Phase 3: Multi-Agent + UserPromptSubmit
+### Phase 3: Multi-Agent + UserPromptSubmit — DONE
 
-1. Add `canon setup --agent` CLI command (§6)
-2. Add UserPromptSubmit hook (§5.2) — most complex, needs tuning
-3. Add PreToolUse commit hook (§5.4)
-4. Ship as plugin v0.3.0
+1. ✅ Add `canon setup --agent` CLI command (§6)
+2. ✅ Add UserPromptSubmit hook (§5.2)
+3. ✅ Add PreToolUse commit hook (§5.4)
+4. Pending plugin v0.3.0 release tag
 
-### Phase 4: Evidence Pipeline (Exploratory)
+### Phase 4: Evidence Pipeline — MOVED
 
-1. Validate §7 concept based on Phase 2/3 learnings
-2. Implement if warranted
+§7 has been moved to `plugin-evidence-pipeline.md` for full design and rollout.
 
 ## 9. Open Questions
 

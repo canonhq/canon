@@ -4,12 +4,24 @@ AI-native spec documentation — verify code against specs, track coverage, main
 
 ## Installation
 
-From the terminal:
+Canon ships through two paths. Pick the one that matches what you need:
 
-```bash
-claude plugin marketplace add canonhq/canon
-claude plugin install canon
-```
+| Use case | Command | What it produces |
+|---|---|---|
+| **Set up Canon in a repo** (write `CANON.yaml`, install MCP server, scaffold spec template) | `pipx install canonhq && canon setup` | `CANON.yaml`, `.mcp.json`, `docs/specs/_template.md`, optional `.claude/skills/` |
+| **Add Canon skills to Claude Code** (slash commands and skills only) | `claude plugin marketplace add canonhq/canon` then `claude plugin install canon` | Plugin installed under `~/.claude/plugins/`, available in every session |
+| **Both** (recommended for new repos) | Run `canon setup` first, then `claude plugin install canon` | Full integration: per-repo config + global plugin |
+
+**When to use the CLI path:**
+- You're starting a new Canon repo and need `CANON.yaml` written
+- You want the MCP server installed automatically
+- You want the spec template scaffolded
+
+**When to use the marketplace path:**
+- You already have Canon set up in your repos and just want the slash commands
+- You're trying Canon out and don't want to install a Python package
+
+`canon setup` writes `.mcp.json` and `.claude/skills/` so the marketplace install is **not required** if you've already run `canon setup`. The two paths are additive — installing both is supported and produces no conflicts.
 
 Or from inside a Claude Code session:
 
@@ -17,6 +29,70 @@ Or from inside a Claude Code session:
 /plugin marketplace add canonhq/canon
 /plugin install canon
 ```
+
+## Multi-Agent Setup
+
+Canon's spec context works in any AI coding agent that supports MCP or rule files. Use `canon setup --agent <platform>` to generate the right config file for each:
+
+| Platform | Command | Output file |
+|---|---|---|
+| Claude Code | `canon setup --agent claude` | `.claude/CLAUDE.md` |
+| Cursor | `canon setup --agent cursor` | `.cursorrules` |
+| GitHub Copilot | `canon setup --agent copilot` | `.github/copilot-instructions.md` |
+| Codex | `canon setup --agent codex` | `AGENTS.md` |
+| Gemini CLI | `canon setup --agent gemini` | `GEMINI.md` |
+| All of the above | `canon setup --agent all` | All five files |
+
+Each generated file is ~20 lines. It tells the agent that Canon specs exist, points at `CANON.yaml`, and explains how to access spec context (via the Canon MCP tools or the `canon` CLI). The files are committed to the repo and only need regenerating when Canon ships a new agent-config template.
+
+## Slash Commands
+
+These slash commands appear in `/` autocomplete in any session where the Canon plugin is installed. Each is a thin wrapper that delegates to the corresponding skill — the skill remains the source of truth.
+
+| Command | Wraps | What it does |
+|---|---|---|
+| `/canon` | `canon-meta` | Entry point — opens skill discovery and helps you pick the right Canon skill |
+| `/canon-context` | `canon-context` | Load spec context for the current task |
+| `/canon-plan` | `canon-plan` | Explore → propose → spec → design → tasks → implementation plan |
+| `/canon-task` | `canon-task` | Pick up a single task from a spec and implement its acceptance criteria |
+| `/canon-verify` | `canon-verify` | Check whether code satisfies spec acceptance criteria (report or `--gate` mode) |
+| `/canon-status` | `canon-status` | Show spec coverage dashboard for the current repo |
+
+Slash commands accept arguments — for example `/canon-task auth-hardening:2.1` jumps directly to that section.
+
+## Output Style
+
+Canon ships a `canon` output style that formats acceptance criteria, section status changes, realization evidence, and coverage tables consistently. Select it via `/config` → "Output style" → "canon". It's optional — Claude Code's default style still works fine for Canon repos.
+
+## Statusline (optional)
+
+> **Platform note**: Claude Code's plugin system does not currently support shipping a statusline directly from a plugin. Canon ships a reference script you can wire into your user-level statusline manually.
+
+Canon includes a reference statusline script at `plugin/scripts/canon-statusline.sh` that emits a one-line summary of spec health for the active project:
+
+```
+canon: 44 specs · 53% · 12 in_progress · 873 open ACs
+```
+
+To enable it globally:
+
+```bash
+cp ~/.claude/plugins/marketplaces/canon/plugin/scripts/canon-statusline.sh ~/.claude/canon-statusline.sh
+chmod +x ~/.claude/canon-statusline.sh
+```
+
+Then add to `~/.claude/settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/canon-statusline.sh"
+  }
+}
+```
+
+The script exits silently in non-Canon repos, so you can leave it on globally without affecting other projects.
 
 ## Skills
 

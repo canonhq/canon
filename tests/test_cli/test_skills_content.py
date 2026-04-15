@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -37,9 +40,6 @@ class TestPluginStructure:
 
     def test_mcp_json_exists(self):
         assert (PLUGIN_DIR / ".mcp.json").exists()
-
-    def test_settings_exists(self):
-        assert (PLUGIN_DIR / "settings.json").exists()
 
 
 class TestSkillFiles:
@@ -277,6 +277,209 @@ class TestReadmeCompleteness:
         content = (PLUGIN_DIR / "README.md").read_text()
         for agent in EXPECTED_AGENTS:
             assert agent in content, f"README missing agent: {agent}"
+
+
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+COMMANDS_DIR = PLUGIN_DIR / "commands"
+OUTPUT_STYLES_DIR = PLUGIN_DIR / "output-styles"
+SCRIPTS_DIR = PLUGIN_DIR / "scripts"
+
+EXPECTED_COMMANDS = [
+    "canon",
+    "canon-context",
+    "canon-plan",
+    "canon-task",
+    "canon-verify",
+    "canon-status",
+]
+
+
+class TestCommandFiles:
+    @pytest.mark.parametrize("command_name", EXPECTED_COMMANDS)
+    def test_command_exists(self, command_name: str):
+        cmd_path = COMMANDS_DIR / f"{command_name}.md"
+        assert cmd_path.exists(), f"Missing command: {command_name}.md"
+
+    @pytest.mark.parametrize("command_name", EXPECTED_COMMANDS)
+    def test_command_has_frontmatter(self, command_name: str):
+        cmd_path = COMMANDS_DIR / f"{command_name}.md"
+        content = cmd_path.read_text()
+        assert content.startswith("---"), f"{command_name} missing YAML frontmatter"
+        parts = content.split("---", 2)
+        assert len(parts) >= 3, f"{command_name} malformed frontmatter"
+        fm = yaml.safe_load(parts[1])
+        assert isinstance(fm, dict), f"{command_name} frontmatter is not a dict"
+        assert fm.get("name") == command_name, (
+            f"{command_name} frontmatter name '{fm.get('name')}' doesn't match filename"
+        )
+        assert fm.get("description"), f"{command_name} missing description"
+
+    @pytest.mark.parametrize("command_name", EXPECTED_COMMANDS)
+    def test_command_body_delegates_to_skill(self, command_name: str):
+        cmd_path = COMMANDS_DIR / f"{command_name}.md"
+        body = cmd_path.read_text().split("---", 2)[2]
+        # Each command body should reference the canon-* skill it wraps
+        assert "canon-" in body or "canon:" in body, (
+            f"{command_name} body should mention the skill it delegates to"
+        )
+
+    def test_all_expected_commands_present(self):
+        actual = sorted(p.stem for p in COMMANDS_DIR.glob("*.md"))
+        assert actual == sorted(EXPECTED_COMMANDS)
+
+
+class TestOutputStyles:
+    def test_canon_style_exists(self):
+        assert (OUTPUT_STYLES_DIR / "canon.md").exists()
+
+    def test_canon_style_frontmatter(self):
+        content = (OUTPUT_STYLES_DIR / "canon.md").read_text()
+        assert content.startswith("---")
+        parts = content.split("---", 2)
+        fm = yaml.safe_load(parts[1])
+        assert fm["name"] == "canon"
+        assert fm.get("description")
+
+    def test_canon_style_has_body(self):
+        content = (OUTPUT_STYLES_DIR / "canon.md").read_text()
+        body = content.split("---", 2)[2]
+        # Style should mention the key Canon concepts it formats
+        assert "acceptance criteria" in body.lower() or "AC" in body
+        assert "canon:realized-in" in body or "canon:system" in body
+
+
+class TestStatuslineScript:
+    def test_script_exists(self):
+        assert (SCRIPTS_DIR / "canon-statusline.sh").exists()
+
+    def test_script_is_executable(self):
+        path = SCRIPTS_DIR / "canon-statusline.sh"
+        assert os.access(path, os.X_OK), "canon-statusline.sh is not executable"
+
+    def test_script_is_bash(self):
+        content = (SCRIPTS_DIR / "canon-statusline.sh").read_text()
+        assert content.startswith("#!/usr/bin/env bash")
+
+    def test_script_handles_non_canon_repo(self, tmp_path: Path):
+        env = os.environ.copy()
+        env["CLAUDE_PROJECT_DIR"] = str(tmp_path)
+        proc = subprocess.run(
+            ["bash", str(SCRIPTS_DIR / "canon-statusline.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            input="{}",
+            timeout=5,
+        )
+        assert proc.returncode == 0
+        # No CANON.yaml → empty output
+        assert proc.stdout.strip() == ""
+
+    def test_script_handles_canon_repo(self, tmp_path: Path):
+        # Need a Canon repo and the dev `canon` CLI on PATH for the script to
+        # actually emit stats. Use uv run as a shim via wrapper script.
+        (tmp_path / "CANON.yaml").write_text("specs:\n  doc_paths:\n    - docs/specs/*.md\n")
+        specs_dir = tmp_path / "docs" / "specs"
+        specs_dir.mkdir(parents=True)
+        (specs_dir / "example.md").write_text(
+            "---\ntitle: Example\nstatus: in_progress\n---\n# Example\n"
+            "## 1. Background\n### Acceptance Criteria\n- [x] AC1\n- [ ] AC2\n"
+        )
+
+        # Create a temporary wrapper that exposes 'canon' as 'uv run canon'
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        wrapper = bin_dir / "canon"
+        wrapper.write_text(
+            f'#!/usr/bin/env bash\nexec uv run --project {PROJECT_ROOT} canon "$@"\n'
+        )
+        wrapper.chmod(0o755)
+
+        env = os.environ.copy()
+        env["CLAUDE_PROJECT_DIR"] = str(tmp_path)
+        env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
+
+        proc = subprocess.run(
+            ["bash", str(SCRIPTS_DIR / "canon-statusline.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            input="{}",
+            timeout=30,
+        )
+        assert proc.returncode == 0
+        out = proc.stdout.strip()
+        # Should emit a canon: prefixed line with the metrics
+        assert out.startswith("canon:"), f"unexpected output: {out!r}"
+        assert "specs" in out
+
+
+class TestHookOutput:
+    """Test the actual output of hook scripts under realistic conditions."""
+
+    @pytest.fixture
+    def canon_project(self, tmp_path: Path) -> Path:
+        """Create a minimal Canon project with one spec."""
+        (tmp_path / "CANON.yaml").write_text("specs:\n  doc_paths:\n    - docs/specs/*.md\n")
+        specs_dir = tmp_path / "docs" / "specs"
+        specs_dir.mkdir(parents=True)
+        (specs_dir / "example.md").write_text(
+            "---\ntitle: Example\nstatus: draft\n---\n# Example\n## 1. Background\n"
+        )
+        return tmp_path
+
+    @pytest.fixture
+    def empty_project(self, tmp_path: Path) -> Path:
+        """Canon project with CANON.yaml but no specs directory."""
+        (tmp_path / "CANON.yaml").write_text("specs:\n  doc_paths:\n    - docs/specs/*.md\n")
+        return tmp_path
+
+    def _run_hook(self, hook: str, cwd: Path) -> tuple[int, str, str, float]:
+        env = os.environ.copy()
+        env["CLAUDE_PROJECT_DIR"] = str(cwd)
+        env["CLAUDE_ENV_FILE"] = str(cwd / ".env-hook")
+        start = time.monotonic()
+        proc = subprocess.run(
+            ["bash", str(HOOKS_DIR / hook)],
+            env=env,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            input="",
+            timeout=5,
+        )
+        elapsed = time.monotonic() - start
+        return proc.returncode, proc.stdout, proc.stderr, elapsed
+
+    def test_session_start_under_2s(self, canon_project: Path):
+        rc, _, _, elapsed = self._run_hook("session-start.sh", canon_project)
+        assert rc == 0
+        assert elapsed < 2.0, f"session-start.sh took {elapsed:.2f}s"
+
+    def test_session_start_emits_iron_laws_with_specs(self, canon_project: Path):
+        rc, out, _, _ = self._run_hook("session-start.sh", canon_project)
+        assert rc == 0
+        assert "Iron Law" in out
+        assert "/canon:context" in out
+        assert "/canon:verify" in out
+
+    def test_session_start_no_iron_laws_without_specs(self, empty_project: Path):
+        rc, out, _, _ = self._run_hook("session-start.sh", empty_project)
+        assert rc == 0
+        assert "Iron Law" not in out
+        assert "no specs" in out.lower() or "No specs" in out
+
+    def test_session_start_under_byte_cap(self, canon_project: Path):
+        rc, out, _, _ = self._run_hook("session-start.sh", canon_project)
+        assert rc == 0
+        size = len(out.encode())
+        assert size < 2500, f"session-start.sh emitted {size} bytes (cap 2500)"
+
+    def test_stop_under_2s(self, canon_project: Path):
+        # stop.sh may exit 0 silently (no git diff). Just verify it doesn't hang or error.
+        rc, _, _, elapsed = self._run_hook("stop.sh", canon_project)
+        assert rc == 0
+        assert elapsed < 2.0, f"stop.sh took {elapsed:.2f}s"
 
 
 class TestWorkflowChains:

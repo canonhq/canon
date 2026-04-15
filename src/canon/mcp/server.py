@@ -6,6 +6,7 @@ import logging
 import re as _re
 import time
 from contextlib import asynccontextmanager
+from datetime import UTC
 from typing import Any
 
 import frontmatter as fm_lib
@@ -942,4 +943,140 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         except Exception as e:
             return {"error": f"Failed to commit: {e}"}
 
+    # ─── Tool: record_session_evidence ───────────────────
+
+    @mcp.tool(
+        name="record_session_evidence",
+        description=(
+            "Record dev-session evidence captured by the Canon plugin. "
+            "Stores a SessionRecord (spec sections touched, ACs addressed, "
+            "files modified, verify gate runs) to the Canon backend so the "
+            "GitHub App's PR analyzer can use it as hint input at PR-open time. "
+            "See plugin-evidence-pipeline.md §6 for the schema."
+        ),
+    )
+    async def record_session_evidence(
+        repo: str,
+        branch: str,
+        session: dict,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict:
+        d = _get_deps(ctx)
+        return await _record_session_evidence_impl(d, repo, branch, session)
+
     return mcp
+
+
+# ─── Standalone helpers for testability ──────────────────────────────────
+
+
+async def _record_session_evidence_impl(
+    deps: McpDeps,
+    repo: str,
+    branch: str,
+    session: dict,
+) -> dict:
+    """Core logic for the record_session_evidence MCP tool.
+
+    Extracted as a standalone helper so tests can call it directly without
+    constructing a full MCP Context.
+
+    Security posture (plugin-evidence-pipeline §6 + PR #501 review):
+    - Repo-level `ai_exposure: "none"` rejects the insert. The check fails
+      CLOSED — a lookup error returns an error to the caller rather than
+      silently bypassing the privacy gate.
+    - Rate limit (60/hour/repo) fails CLOSED — a counter error returns an
+      error rather than silently disabling the limiter.
+    - Caller authentication is enforced upstream by the MCP middleware (see
+      `src/canon/mcp/auth.py`); this helper trusts the resolved repo string.
+    - Repo access is implicitly verified by the CANON.yaml fetch via the
+      GitHub App installation (get_file_content will 404 for repos where
+      Canon is not installed).
+    - KNOWN LIMITATION: per-user repo authorization is not enforced — any
+      holder of a valid Canon API key can write evidence for any repo where
+      the Canon app is installed. Requires threading org_login from the API
+      key record through the MCP auth context. See PR #501 review comment.
+    """
+    analytics.track(
+        "mcp_tool_called",
+        properties={"tool": "record_session_evidence", "repo": repo},
+        groups={"organization": repo.split("/")[0] if "/" in repo else ""},
+    )
+
+    if deps.session_evidence_store is None:
+        return {"error": "Session evidence store not available"}
+
+    # Validate the SessionRecord shape via the canonical Pydantic model
+    try:
+        from ..evidence.models import SessionRecord
+
+        record = SessionRecord.model_validate(session)
+    except Exception as err:
+        return {"error": f"Invalid session record: {err}"}
+
+    # Respect ai_exposure: if the repo's default is "none", reject.
+    # Fail-closed: a lookup failure returns an error rather than silently
+    # bypassing the privacy gate. We bypass both `_get_ai_exposure_config`
+    # AND `load_repo_config` here because they both fail CLOSED *to a default*
+    # (one to "metadata", one to DEFAULT_CONFIG) — which is the right call for
+    # the search/read path (worst case: leak metadata for a repo whose config
+    # we can't read) but the wrong call for this write path. For evidence
+    # ingestion we need to distinguish "config read OK and not none" from
+    # "config read failed", so we call the underlying GitHub primitive
+    # directly and parse the result ourselves.
+    if "/" not in repo:
+        return {"error": "Invalid repo format — must be 'owner/repo'"}
+    if deps.github_client is None:
+        # Can't verify ai_exposure without a GitHub client — fail closed
+        return {
+            "error": "Evidence rejected: GitHub client not available (cannot verify ai_exposure)"
+        }
+    owner, repo_name = repo.split("/", 1)
+    try:
+        from ..config.parse import parse_canon_yaml
+
+        content, _sha = await deps.github_client.get_file_content(owner, repo_name, "CANON.yaml")
+        repo_config = parse_canon_yaml(content).config
+    except Exception as err:
+        logger.warning(
+            "ai_exposure lookup failed for %s; rejecting insert: %s",
+            repo,
+            err,
+        )
+        return {"error": "Evidence rejected: ai_exposure config unavailable"}
+    if repo_config.ide.ai_exposure.default == "none":
+        return {"error": "Evidence rejected: repo ai_exposure is 'none'"}
+
+    # Rate limit: max 60 records per hour per repo. Fail-closed: a counter
+    # error returns an error rather than silently disabling the limiter.
+    from datetime import datetime, timedelta
+
+    try:
+        window_start = datetime.now(UTC) - timedelta(hours=1)
+        count = await deps.session_evidence_store.count_in_window(repo, since=window_start)
+    except Exception as err:
+        logger.warning(
+            "rate limit check failed for %s; rejecting insert: %s",
+            repo,
+            err,
+        )
+        return {"error": "Rate limit check unavailable; try again later"}
+    if count >= 60:
+        return {"error": "Rate limit exceeded: max 60 records per hour per repo"}
+
+    try:
+        row_id = await deps.session_evidence_store.insert(
+            repo=repo,
+            branch=branch,
+            session_id=record.session_id,
+            payload=record.model_dump(),
+            schema_version=1,
+        )
+    except Exception as err:
+        return {"error": f"Failed to insert session evidence: {err}"}
+
+    return {
+        "recorded": row_id is not None,
+        "session_id": record.session_id,
+        "id": row_id,
+    }

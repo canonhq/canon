@@ -63,19 +63,25 @@ def run_status(
     total_sections = 0
     total_ac = 0
     done_ac = 0
+    in_progress_specs = 0
+    sections_in_progress = 0
 
     rows: list[tuple[str, str, str, str, str]] = []
     for doc in docs:
         all_sections = _flatten_sections(doc.sections)
         sec_total = len(all_sections)
         sec_done = sum(1 for s in all_sections if s.status.state == "done")
+        sec_in_prog = sum(1 for s in all_sections if s.status.state == "in_progress")
         ac_total = sum(len(s.acceptance_criteria) for s in all_sections)
         ac_done = sum(sum(1 for ac in s.acceptance_criteria if ac.checked) for s in all_sections)
         pct = f"{ac_done / ac_total * 100:.0f}%" if ac_total else "—"
 
         total_sections += sec_total
+        sections_in_progress += sec_in_prog
         total_ac += ac_total
         done_ac += ac_done
+        if doc.frontmatter.status == "in_progress":
+            in_progress_specs += 1
 
         rows.append(
             (

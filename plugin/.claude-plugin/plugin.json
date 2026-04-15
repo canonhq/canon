@@ -1,11 +1,11 @@
 {
   "name": "canon",
   "description": "AI-native spec-driven development — plan features from specs, implement with AC traceability, verify code against acceptance criteria, and track coverage. Powered by Canon.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Gerner Ventures"
   },
-  "repository": "https://github.com/canonhq/canon-claude-plugin",
+  "repository": "https://github.com/canonhq/canon",
   "license": "MIT",
   "mcpServers": {
     "canon": {

@@ -16,10 +16,26 @@ if [ ! -f "$CANON_YAML" ]; then
   exit 0
 fi
 
-# Check if on_session_start is disabled in CANON.yaml
-# Naive grep — may match outside ide section; acceptable tradeoff for hook speed.
-if grep -q 'on_session_start:.*false' "$CANON_YAML" 2>/dev/null; then
-  exit 0
+# Read ide config via canon CLI; fall back to grep on missing CLI or jq.
+read_ide_config() {
+  if command -v canon >/dev/null 2>&1; then
+    (cd "$CLAUDE_PROJECT_DIR" && canon ide-config --json 2>/dev/null) || echo '{}'
+  else
+    echo '{}'
+  fi
+}
+
+if command -v jq >/dev/null 2>&1; then
+  ide_config=$(read_ide_config)
+  on_session_start=$(echo "$ide_config" | jq -r '.auto_context.on_session_start // true' 2>/dev/null)
+  if [ "$on_session_start" = "false" ]; then
+    exit 0
+  fi
+else
+  # Fallback: legacy grep when jq is unavailable.
+  if grep -q 'on_session_start:.*false' "$CANON_YAML" 2>/dev/null; then
+    exit 0
+  fi
 fi
 
 # Persist CANON_REPO env var for downstream hooks.
@@ -59,6 +75,23 @@ fi
 
 if [ "$has_specs" = true ]; then
   msg="$msg
+
+Canon Iron Laws (read before any code change):
+
+  1. Before any non-trivial change, run /canon:context first to load the
+     relevant spec. 30 seconds of context saves 30 minutes of rework.
+  2. If a spec doesn't exist for what you're building, create one with
+     /canon:new before writing code. A 5-minute spec prevents drift.
+  3. After implementing an AC, record realization evidence with /canon:verify.
+     \"I'll update the spec later\" means never.
+  4. Before claiming work is done, run /canon:verify --gate. Tests passing
+     is not the same as ACs satisfied.
+
+If you find yourself thinking any of these, STOP and run the right Canon skill:
+  - \"This is just a quick fix\"                  → /canon:context
+  - \"The spec doesn't exist yet\"                → /canon:new
+  - \"I'll update the spec later\"                → /canon:verify
+  - \"I know what to do, I don't need the spec\"  → /canon:context
 
 Canon skills:
   /canon:context   — Load spec context for current task (start here)

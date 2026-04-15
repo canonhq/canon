@@ -198,6 +198,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.agent_store = None
     app.state.user_store = None
     app.state.session_store = None
+    app.state.session_evidence_store = None
     app.state.connection_store = None
     app.state.integration_store = None
     app.state.stripe_client = None
@@ -212,6 +213,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             app.state.registry = InstallationRegistry(pool)
             app.state.agent_store = AgentStore(pool)
             app.state.error_store = ErrorStore(pool)
+            from .db.session_evidence_store import SessionEvidenceStore
+
+            app.state.session_evidence_store = SessionEvidenceStore(pool)
             app.state.user_store = UserStore(pool)
             app.state.session_store = SessionStore(pool)
             encryption_key = settings.byok_encryption_key
@@ -279,6 +283,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             cache=app.state.cache,
             settings=settings,
             agent_store=getattr(app.state, "agent_store", None),
+            session_evidence_store=getattr(app.state, "session_evidence_store", None),
         )
         mcp_server = create_mcp_server(mcp_deps)
         app.state.mcp_server = mcp_server

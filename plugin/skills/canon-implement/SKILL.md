@@ -118,13 +118,12 @@ Or insert realization comments directly in the spec file:
 ```
 
 ### 3f. Verify (gate mode)
-Run `canon verify --gate` for the relevant section. This checks:
-- All target ACs have realization evidence
-- Tests pass
-- No conflicting implementations
+Run `canon verify --gate --section <id>` for the relevant section. This checks
+that every in-scope AC is marked as checked. Then run the project's test suite
+(`uv run pytest`, `npm test`, etc.) to confirm tests pass.
 
-If gate **passes**: proceed to commit.
-If gate **fails**: stop and present diagnostic context:
+If gate **passes** and tests **pass**: proceed to spec-aware review.
+If either **fails**: stop and present diagnostic context:
 ```
 Gate failed for Task N:
   - AC "..." lacks realization evidence
@@ -132,6 +131,32 @@ Gate failed for Task N:
 
 Options: fix now / skip task / abort plan
 ```
+
+If a debugging skill is available in the session (e.g.,
+`superpowers:systematic-debugging`), suggest invoking it before retrying.
+Detection is opportunistic — never hard-depend on external plugins. If no
+debugging skill is loaded, proceed with the standard fix-and-retry flow.
+
+### 3f.5. Spec-Aware Review
+
+Before committing, dispatch the **canon-reviewer** agent via the Agent tool to
+verify that the code actually satisfies the AC (not just that the AC is marked
+checked). Pass:
+
+- The git diff of the just-completed task (`git diff HEAD`)
+- The spec section ID and AC list from Step 3b
+- The project conventions from `CLAUDE.md` if present
+
+The reviewer categorizes findings as **Spec Gap**, **Spec Conflict**, **Quality
+Issue**, or **Suggestion**. Apply the severity rules:
+
+- **Spec Gap or Spec Conflict** → STOP the plan. Present the findings and offer:
+  fix now / skip task / abort plan.
+- **Quality Issue or Suggestion** → print the findings but proceed to commit.
+  These are advisory and do not block plan execution.
+
+The two-layer verification (gate + reviewer) catches the case where an AC is
+marked checked but the implementation is wrong or incomplete.
 
 ### 3g. Commit
 ```bash
