@@ -344,6 +344,7 @@ Cache keys: `analytics:{org}:{endpoint}:{team}:{days}`. Use in-process TTL cache
 
 - [x] New `PostHogQueryClient` class in `src/canon/analytics_query.py` queries PostHog HogQL API
 <!-- canon:realized-in:audit file:src/canon/analytics_query.py:14 -->
+<!-- canon:realized-in:PR#509 file:.github/scripts/export-oss.sh -->
 - [ ] New setting `POSTHOG_PERSONAL_API_KEY` for read access to PostHog query API
 - [x] `GET /analytics/health` returns composite score, pillar breakdown, and 30-day trend
 <!-- canon:realized-in:audit file:src/canon/web/analytics_routes.py:506 -->

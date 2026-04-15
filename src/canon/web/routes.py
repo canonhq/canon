@@ -451,10 +451,13 @@ async def no_org_page(request: Request):
 @app_router.get("/choose-org", response_class=JSONResponse)
 async def choose_org_page(request: Request):
     """Return available orgs for authenticated users with multiple matches."""
-    if spa := await _serve_spa(request, "choose-org"):
+    accept = request.headers.get("Accept", "")
+    if "application/json" not in accept and (spa := await _serve_spa(request, "choose-org")):
         return spa
     pending = request.session.get("pending_org_choices", []) if hasattr(request, "session") else []
     if not pending:
+        if "application/json" in accept:
+            return JSONResponse(content={"orgs": []})
         return RedirectResponse(url="/app/no-org", status_code=302)
     return JSONResponse(content={"orgs": pending})
 
