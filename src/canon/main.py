@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import logging
 import os
@@ -17,10 +18,38 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import ClientDisconnect
 
 from . import analytics, otel_logging
-from .admin.audit import AuditStore
-from .admin.routes import router as admin_router
-from .admin.store import AdminStore
-from .alerts.slack import SlackAlerter
+
+# Cloud-only modules — optional in FOSS builds.
+# Use find_spec instead of try/except ImportError so transitive dependency
+# failures (broken installs, renamed symbols) propagate naturally.
+if importlib.util.find_spec("canon.admin") is not None:
+    from .admin.audit import AuditStore
+    from .admin.routes import router as admin_router
+    from .admin.store import AdminStore
+else:
+    logging.getLogger(__name__).info(
+        "Admin module not available — skipping admin routes (FOSS build)"
+    )
+    AuditStore = None  # type: ignore[assignment, misc]
+    admin_router = None  # type: ignore[assignment]
+    AdminStore = None  # type: ignore[assignment, misc]
+
+if importlib.util.find_spec("canon.alerts.slack") is not None:
+    from .alerts.slack import SlackAlerter
+else:
+    logging.getLogger(__name__).info(
+        "SlackAlerter not available — Slack alerts disabled (FOSS build)"
+    )
+    SlackAlerter = None  # type: ignore[assignment, misc]
+
+if importlib.util.find_spec("canon.billing.routes") is not None:
+    from .billing.routes import router as billing_router
+    from .billing.routes import webhook_router as billing_webhook_router
+else:
+    logging.getLogger(__name__).info("Billing routes not available — skipping billing (FOSS build)")
+    billing_router = None  # type: ignore[assignment]
+    billing_webhook_router = None  # type: ignore[assignment]
+
 from .auth.api_key_routes import api_key_router
 from .auth.device_routes import device_router
 from .auth.github_routes import github_auth_router
@@ -28,8 +57,6 @@ from .auth.middleware import AuthMiddleware
 from .auth.oauth_integrations import oauth_integration_router
 from .auth.refresh_routes import refresh_router
 from .auth.routes import auth_router
-from .billing.routes import router as billing_router
-from .billing.routes import webhook_router as billing_webhook_router
 from .db import (
     AgentStore,
     ErrorStore,
@@ -121,12 +148,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         settings.posthog_project_id or "(empty)",
     )
 
-    # SRE Slack alerter
-    app.state.slack_alerter = SlackAlerter(
-        webhook_url=settings.slack_alerts_webhook_url,
-    )
-    if app.state.slack_alerter.enabled:
-        logger.info("Slack alerts enabled (channel configured)")
+    # SRE Slack alerter (cloud-only)
+    app.state.slack_alerter = None
+    if SlackAlerter is not None:
+        app.state.slack_alerter = SlackAlerter(
+            webhook_url=settings.slack_alerts_webhook_url,
+        )
+        if app.state.slack_alerter.enabled:
+            logger.info("Slack alerts enabled (channel configured)")
 
     # OTel logs to PostHog (opt-in)
     if settings.posthog_logs_enabled:
@@ -227,12 +256,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             if encryption_key:
                 app.state.connection_store = UserConnectionStore(pool, encryption_key)
                 app.state.integration_store = IntegrationStore(pool, encryption_key)
-            app.state.admin_store = AdminStore(
-                pool,
-                provider=app.state.oidc_provider,
-                cache=app.state.cache,
-            )
-            app.state.audit_store = AuditStore(pool)
+            if AdminStore is not None:
+                app.state.admin_store = AdminStore(
+                    pool,
+                    provider=app.state.oidc_provider,
+                    cache=app.state.cache,
+                )
+            if AuditStore is not None:
+                app.state.audit_store = AuditStore(pool)
             logger.info("Database pool initialised")
 
             # Billing (optional — requires Stripe keys + DB)
@@ -377,8 +408,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     phq = getattr(app.state, "posthog_query_client", None)
     if phq is not None:
         await phq.aclose()
-    if hasattr(app.state, "slack_alerter"):
-        await app.state.slack_alerter.close()
+    slack_alerter = getattr(app.state, "slack_alerter", None)
+    if slack_alerter is not None:
+        await slack_alerter.close()
     otel_logging.shutdown()
     analytics.shutdown()
     if app.state.db_pool is not None:
@@ -563,9 +595,11 @@ if _docs_dist.is_dir():
 # Webhook routes for real-time reverse sync from ticket systems
 app.include_router(webhooks_router)
 
-# Billing routes
-app.include_router(billing_router)
-app.include_router(billing_webhook_router)
+# Billing routes (cloud-only)
+if billing_router is not None:
+    app.include_router(billing_router)
+if billing_webhook_router is not None:
+    app.include_router(billing_webhook_router)
 
 # Mount web UI routes
 app.include_router(web_router)
@@ -578,8 +612,9 @@ app.include_router(integration_router)
 # Mount public v1 API routes consumed by GitHub Actions
 app.include_router(api_v1_actions_router)
 app.include_router(ticket_router)
-# Admin API router must come before the SPA catch-all
-app.include_router(admin_router)
+# Admin API router must come before the SPA catch-all (cloud-only)
+if admin_router is not None:
+    app.include_router(admin_router)
 # SPA catch-all must be last — serves Vue app for unmatched /app/* routes
 app.include_router(spa_router)
 
