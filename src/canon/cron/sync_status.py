@@ -219,7 +219,7 @@ async def run_reverse_sync() -> list[dict]:
                         result.document, adapter, system_config=resolved_sys_config
                     )
 
-                    if sync_result.status_changed:
+                    if sync_result.status_changed and updated_md != content:
                         await client.create_or_update_file(
                             owner,
                             repo_name,
