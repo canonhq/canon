@@ -337,7 +337,7 @@ class TestExpandSectionStream:
 
 class TestSpecEditorConfig:
     def test_default_config_values(self):
-        assert SPEC_EDITOR_CONFIG.model == "claude-sonnet-4-5-20250929"
+        assert SPEC_EDITOR_CONFIG.model == "claude-sonnet-4-6"
         assert SPEC_EDITOR_CONFIG.max_output_tokens == 4_000
         assert SPEC_EDITOR_CONFIG.temperature == 0.3
 

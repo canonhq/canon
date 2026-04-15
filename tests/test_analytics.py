@@ -110,7 +110,7 @@ def test_track_ai_generation_emits_event():
     analytics._client = mock_client
 
     analytics.track_ai_generation(
-        model="claude-sonnet-4-5-20250929",
+        model="claude-sonnet-4-6",
         input_tokens=100,
         output_tokens=50,
         latency_seconds=1.5,
@@ -125,7 +125,7 @@ def test_track_ai_generation_emits_event():
     assert call_kwargs["distinct_id"] == analytics.SERVER_ACTOR
     assert call_kwargs["groups"] == {"organization": "acme"}
     props = call_kwargs["properties"]
-    assert props["$ai_model"] == "claude-sonnet-4-5-20250929"
+    assert props["$ai_model"] == "claude-sonnet-4-6"
     assert props["$ai_provider"] == "anthropic"
     assert props["$ai_input_tokens"] == 100
     assert props["$ai_output_tokens"] == 50

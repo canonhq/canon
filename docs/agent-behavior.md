@@ -252,7 +252,7 @@ specs:
 
 | Parameter | Value |
 |-----------|-------|
-| Model | `claude-sonnet-4-5-20250929` (Sonnet 4.5) |
+| Model | `claude-sonnet-4-6` (Sonnet 4.5) |
 | Max input tokens | 128,000 |
 | Max output tokens | 16,000 |
 | Temperature | 0 (deterministic) |

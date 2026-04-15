@@ -544,7 +544,7 @@ class TestFormatAnalysisComment:
 
     def test_footer_format(self):
         result = self._make_result(tokens_used=TokenUsage(input=10200, output=758))
-        comment = format_analysis_comment(result, model="claude-sonnet-4-5-20250929")
+        comment = format_analysis_comment(result, model="claude-sonnet-4-6")
         assert "canon" in comment
         assert "sonnet" in comment
         assert "10.2k in" in comment

@@ -27,9 +27,10 @@ class AgentAPIError(Exception):
 
 
 class AgentConfig(BaseModel):
-    model: str = "claude-sonnet-4-5-20250929"
+    model: str = "claude-sonnet-4-6"
     max_input_tokens: int = 128_000
     max_output_tokens: int = 16_000
+    max_context_tokens: int = 950_000  # Sonnet 4.6 has 1M context; leave margin for output
     temperature: float = 0
 
 

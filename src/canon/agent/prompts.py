@@ -148,10 +148,16 @@ def estimate_tokens(text: str) -> int:
 def build_user_message(
     context: PRAnalysisContext,
     max_diff_chars: int = 24000,
+    max_spec_chars: int = 0,
     ai_exposure_default: str = "full",
     ai_exposure_restricted_tags: list[str] | None = None,
 ) -> str:
-    """Build the user message for the PR analysis prompt."""
+    """Build the user message for the PR analysis prompt.
+
+    Args:
+        max_diff_chars: Character budget for diffs.
+        max_spec_chars: Character budget for spec summaries. 0 means unlimited.
+    """
     parts: list[str] = []
 
     # PR metadata
@@ -166,10 +172,21 @@ def build_user_message(
     # Spec summaries (respecting ai_exposure)
     if context.specs:
         spec_parts: list[str] = []
+        spec_chars_used = 0
         for spec in context.specs:
             summary = _summarize_spec(spec, ai_exposure_default, ai_exposure_restricted_tags)
             if summary is not None:
-                spec_parts.append(summary)
+                if max_spec_chars > 0 and spec_chars_used + len(summary) > max_spec_chars:
+                    # Over budget — downgrade remaining specs to metadata-only
+                    summary = _summarize_spec(
+                        spec, ai_exposure_default, ai_exposure_restricted_tags, force_metadata=True
+                    )
+                    if summary is not None:
+                        spec_parts.append(summary)
+                        spec_chars_used += len(summary)
+                else:
+                    spec_parts.append(summary)
+                    spec_chars_used += len(summary)
         if spec_parts:
             parts.append("\n## Spec Documents")
             parts.extend(spec_parts)
@@ -226,10 +243,12 @@ def _summarize_spec(
     spec: RepoSpec,
     config_default: str = "full",
     restricted_tags: list[str] | None = None,
+    force_metadata: bool = False,
 ) -> str | None:
     """Summarize a spec for the PR analysis prompt.
 
     Returns None if the spec's ai_exposure is 'none'.
+    If force_metadata is True, uses metadata-only format regardless of exposure level.
     """
     from canon.parser.models import SpecDocument, resolve_ai_exposure
 
@@ -245,7 +264,7 @@ def _summarize_spec(
         f"Title: {fm.title} | Status: {fm.status} | Owner: {fm.owner} | Team: {fm.team}",
     ]
 
-    if exposure == "metadata":
+    if force_metadata or exposure == "metadata":
         # Only include section titles and AC counts, no content or AC text
         _walk_sections(doc.sections, lines, _format_section_metadata, 0)
     else:

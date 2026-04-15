@@ -109,12 +109,57 @@ def analyze_pr(
     client: ClaudeClient | None = None,
 ) -> PRAnalysisResult | None:
     """Analyze a PR against repo specs using Claude. Returns None if unavailable."""
+    from .prompts import estimate_tokens
+
     c = client or _get_client()
     if not c.is_available:
         return None
 
-    max_diff_chars = max((config.max_input_tokens - 2000) * 4, 4000)
-    user_message = build_user_message(context, max_diff_chars)
+    # Budget: total prompt (system + user) must fit within the model's context
+    # window minus output tokens. We compute the diff and spec budgets
+    # dynamically to avoid exceeding the API's token limit.
+    system_tokens = estimate_tokens(SYSTEM_PROMPT)
+    token_budget = config.max_context_tokens - config.max_output_tokens - system_tokens
+
+    # First pass: build message with zero diff budget to measure spec/metadata size
+    skeleton = build_user_message(context, max_diff_chars=0)
+    skeleton_tokens = estimate_tokens(skeleton)
+
+    # If specs alone blow the budget, rebuild with a spec char limit that
+    # reserves at least 25% of the budget for diffs.
+    max_spec_chars = 0  # 0 = unlimited
+    min_diff_tokens = max(token_budget // 4, 4000)
+    if skeleton_tokens > token_budget - min_diff_tokens:
+        max_spec_chars = max((token_budget - min_diff_tokens) * 4, 8000)
+        skeleton = build_user_message(context, max_diff_chars=0, max_spec_chars=max_spec_chars)
+        skeleton_tokens = estimate_tokens(skeleton)
+        logger.info(
+            "Specs too large, capped at %d chars (%d est. tokens after cap)",
+            max_spec_chars,
+            skeleton_tokens,
+        )
+
+    # Allocate remaining budget to diffs (chars ≈ tokens * 4)
+    diff_token_budget = max(token_budget - skeleton_tokens, 1000)
+    max_diff_chars = max(diff_token_budget * 4, 4000)
+
+    # Cap at the legacy limit so we don't balloon on small PRs
+    legacy_limit = max((config.max_input_tokens - 2000) * 4, 4000)
+    max_diff_chars = min(max_diff_chars, legacy_limit)
+
+    user_message = build_user_message(context, max_diff_chars, max_spec_chars=max_spec_chars)
+
+    # Safety check: if total still exceeds context, truncate the message
+    total_tokens = system_tokens + estimate_tokens(user_message)
+    if total_tokens > config.max_context_tokens - config.max_output_tokens:
+        max_user_chars = (config.max_context_tokens - config.max_output_tokens - system_tokens) * 4
+        if max_user_chars > 0:
+            user_message = user_message[:max_user_chars]
+            logger.warning(
+                "Prompt too large (%d est. tokens), truncated user message to %d chars",
+                total_tokens,
+                max_user_chars,
+            )
 
     try:
         result = c.complete(SYSTEM_PROMPT, user_message, config)

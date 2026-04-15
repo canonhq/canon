@@ -17,7 +17,7 @@ from .client import AgentConfig, ClaudeClient
 logger = logging.getLogger(__name__)
 
 SPEC_GENERATOR_CONFIG = AgentConfig(
-    model="claude-sonnet-4-5-20250929",
+    model="claude-sonnet-4-6",
     max_output_tokens=8_000,
     temperature=0.3,
 )

@@ -204,6 +204,6 @@ class TestGenerateSpecStream:
 
 class TestSpecGeneratorConfig:
     def test_default_config_values(self):
-        assert SPEC_GENERATOR_CONFIG.model == "claude-sonnet-4-5-20250929"
+        assert SPEC_GENERATOR_CONFIG.model == "claude-sonnet-4-6"
         assert SPEC_GENERATOR_CONFIG.max_output_tokens == 8_000
         assert SPEC_GENERATOR_CONFIG.temperature == 0.3
