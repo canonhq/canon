@@ -210,6 +210,18 @@ async def _resolve_jwt(request: Request, token: str) -> CurrentUser:
     registry = getattr(request.app.state, "registry", None)
     org_login = await resolve_org_login(claims, registry)
 
+    # Fallback: when JWT lacks org_id (device flow edge case) and
+    # resolve_org_login couldn't determine the org (multi-org registry),
+    # extract the org from the request URL. The auth middleware already
+    # verified that the JWT is valid and the requested org exists, so
+    # this is safe — downstream require_permission enforces authorization.
+    if not org_login:
+        import re
+
+        match = re.match(r"^/app/([^/]+)", request.url.path)
+        if match:
+            org_login = match.group(1)
+
     return CurrentUser(
         sub=sub,
         email=claims.get("email", ""),
