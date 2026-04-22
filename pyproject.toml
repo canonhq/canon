@@ -1,6 +1,6 @@
 [project]
 name = "canonhq"
-version = "1.53.0"
+version = "1.54.0"
 description = "Canon — spec-driven development platform"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -74,6 +74,29 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/canon"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "docs-site/",
+  "frontend/",
+  ".claude/",
+  ".claude-plugin/",
+  "chart/",
+  "infra/",
+  "extensions/",
+  "oss/",
+  "static/",
+  "templates/",
+  "actions/",
+  "scripts/",
+  ".github/",
+  "Dockerfile",
+  "Dockerfile.dev",
+  "devspace.yaml",
+  "Makefile",
+  ".mcp.json",
+  "github-app-manifest.json",
+]
 
 [tool.hatch.build.targets.sdist.force-include]
 "plugin/skills" = "plugin/skills"
