@@ -7,6 +7,7 @@ import re as _re
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC
+from pathlib import Path
 from typing import Any
 
 import frontmatter as fm_lib
@@ -964,7 +965,101 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         d = _get_deps(ctx)
         return await _record_session_evidence_impl(d, repo, branch, session)
 
+    # Register extension-provided MCP tools
+    _register_extension_tools(mcp)
+
     return mcp
+
+
+# ─── Extension tool registration ────────────────────────────────────────
+
+
+def _register_extension_tools(mcp: FastMCP) -> None:
+    """Register MCP tools from installed extensions.
+
+    Discovers extensions with ``provides.mcp_tools`` in their manifests,
+    dynamically imports their handlers, and registers them on the MCP server.
+    Tool names are namespaced: ``{ext_id}_{tool_name}``.
+    """
+    import importlib
+
+    from canon.extensions.registry import load_registry
+
+    # Find project root by walking up from this file
+    project_root = _find_project_root()
+    if project_root is None:
+        logger.info("Could not find project root — extension MCP tools will not be registered")
+        return
+
+    try:
+        registry = load_registry(project_root)
+    except (ValueError, OSError) as exc:
+        logger.warning("Could not load extension registry for MCP tool discovery: %s", exc)
+        return
+
+    for ext_id, entry in registry.extensions.items():
+        if not entry.enabled:
+            continue
+
+        ext_dir = project_root / ".canon" / "extensions" / ext_id
+        try:
+            from canon.extensions.manifest import load_manifest
+
+            manifest = load_manifest(ext_dir)
+        except Exception:
+            logger.warning("Could not load manifest for extension %s", ext_id, exc_info=True)
+            continue
+
+        for tool_spec in manifest.provides.mcp_tools:
+            tool_name = f"{ext_id}_{tool_spec.name}"
+            handler_path = tool_spec.handler
+            if not handler_path:
+                continue
+
+            try:
+                module_path, _, attr_name = handler_path.rpartition(":")
+                if not module_path or not attr_name:
+                    logger.warning(
+                        "Invalid handler path %r for tool %s — expected 'module:callable'",
+                        handler_path,
+                        tool_name,
+                    )
+                    continue
+                module = importlib.import_module(module_path)
+                handler = getattr(module, attr_name)
+                if not callable(handler):
+                    logger.warning(
+                        "Handler %r for tool %s is not callable", handler_path, tool_name
+                    )
+                    continue
+                # Validate handler is async (MCP tools must be async)
+                import asyncio
+
+                if not asyncio.iscoroutinefunction(handler):
+                    logger.warning(
+                        "Handler %r for tool %s is not async — MCP tools must be async functions",
+                        handler_path,
+                        tool_name,
+                    )
+                    continue
+
+                mcp.tool(name=tool_name, description=tool_spec.description or "")(handler)
+                logger.info("Registered extension MCP tool: %s", tool_name)
+            except (ImportError, AttributeError) as exc:
+                logger.warning("Failed to register MCP tool %s: %s", tool_name, exc)
+
+
+def _find_project_root() -> Path | None:
+    """Walk up from cwd to find a directory with CANON.yaml."""
+    current = Path.cwd()
+    for _ in range(10):
+        if (current / "CANON.yaml").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return None
 
 
 # ─── Standalone helpers for testability ──────────────────────────────────

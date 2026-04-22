@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from canon.sync.adapters.base import TicketAdapter
@@ -70,6 +71,12 @@ def create_adapter(
             GitHubConfig(token=token, default_owner=default_owner, default_repo=default_repo)
         )
 
+    # Fallback: check extension-provided adapters
+    if resolved:
+        adapter = _try_extension_adapter(resolved)
+        if adapter is not None:
+            return adapter
+
     return None
 
 
@@ -125,6 +132,11 @@ def from_config(
         return GitHubAdapter(
             GitHubConfig(token=token, default_owner=default_owner, default_repo=default_repo)
         )
+
+    # Fallback: check extension-provided adapters
+    adapter = _try_extension_adapter(config.system)
+    if adapter is not None:
+        return adapter
 
     logger.warning("Ticket system %r: unknown system type %r", name, config.system)
     return None
@@ -223,4 +235,52 @@ async def from_org(
                 GitHubConfig(token=token, default_owner=default_owner, default_repo=default_repo)
             )
 
+    return None
+
+
+def _try_extension_adapter(system_name: str) -> TicketAdapter | None:
+    """Try to find and instantiate an adapter from installed extensions.
+
+    Returns None if no extension provides an adapter for this system name.
+    Discovers the project root by walking up from cwd to find CANON.yaml.
+    """
+    try:
+        from canon.extensions.adapter_discovery import discover_adapters
+    except ImportError:
+        return None
+
+    project_root = _find_project_root_from_cwd()
+    try:
+        adapters = discover_adapters(project_root)
+    except Exception:
+        logger.warning("Extension adapter discovery failed for %r", system_name, exc_info=True)
+        return None
+
+    adapter_cls = adapters.get(system_name)
+    if adapter_cls is None:
+        return None
+
+    logger.info("Using extension adapter for system %r", system_name)
+    try:
+        return adapter_cls()
+    except Exception as exc:
+        logger.error(
+            "Extension adapter for %r failed to initialize: %s",
+            system_name,
+            exc,
+            exc_info=True,
+        )
+        return None
+
+
+def _find_project_root_from_cwd() -> Path | None:
+    """Walk up from cwd to find a directory with CANON.yaml."""
+    current = Path.cwd()
+    for _ in range(10):
+        if (current / "CANON.yaml").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
     return None

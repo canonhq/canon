@@ -174,14 +174,12 @@ git clone https://github.com/your-org/canon-ext-sprint-plan
 canon extension add ./canon-ext-sprint-plan
 ```
 
-## Ticket Adapters (Phase 2)
+## Ticket Adapters
 
-::: info Coming Soon
-Python-based ticket adapters will be supported in Phase 2. Adapters implement the `TicketAdapter` protocol and register via Python entry points.
-:::
+Extensions can provide ticket adapters that integrate with Canon's sync engine. Adapters implement the `TicketAdapter` protocol and are discovered via Python entry points or manifest declarations.
 
 ```python
-# Example: adapters/azure_devops.py (Phase 2)
+# Example: adapters/azure_devops.py
 from canon.sync.adapters.base import AdapterCapabilities, TicketAdapter
 
 class AzureDevOpsAdapter:

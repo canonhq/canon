@@ -64,6 +64,7 @@ When you run `canon extension add`, Canon:
 Use `--dev` when developing or testing extensions. It creates symlinks instead of copies, so edits to the extension source directory take effect immediately — no reinstall needed.
 :::
 
+
 ## Extension Configuration
 
 Extensions that need user-specific settings read them from the `extensions` section of `CANON.yaml`:
@@ -99,9 +100,9 @@ This checks:
 
 ## Extension Discovery
 
-::: info Coming Soon
-`canon extension search` and a community catalog are planned for Phase 2. For now, extensions are installed from local directories or cloned repos.
-:::
+
+Browse and install extensions from the official catalog.
+
 
 Browse community extensions at [github.com/canonhq/canon-extensions](https://github.com/canonhq/canon-extensions) (once available).
 

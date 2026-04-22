@@ -83,9 +83,6 @@ provides:
 
 ### Adapters
 
-::: info Phase 2
-Adapter registration is not yet implemented. The manifest fields are parsed and validated but not acted on.
-:::
 
 ```yaml
 provides:
@@ -104,9 +101,6 @@ provides:
 
 ### Hooks
 
-::: info Phase 2
-Hook integration is not yet implemented.
-:::
 
 ```yaml
 provides:
@@ -121,9 +115,6 @@ Supported events: `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `Stop`, `aft
 
 ### MCP Tools
 
-::: info Phase 3
-MCP tool registration is not yet implemented.
-:::
 
 ```yaml
 provides:
@@ -141,9 +132,6 @@ provides:
 
 ### Agents
 
-::: info Phase 3
-Agent placement is not yet implemented.
-:::
 
 ```yaml
 provides:
