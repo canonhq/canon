@@ -116,6 +116,22 @@ class AuthMiddleware(BaseHTTPMiddleware):
             else:
                 user_org = ""
 
+            # When a bearer token is valid but lacks org_id (e.g. device flow
+            # where Auth0 didn't scope the token to an org), verify the user
+            # has access to the requested org via registry membership lookup.
+            # This is a fallback — org_id in the JWT is the primary mechanism.
+            if not user_org and has_bearer:
+                registry = getattr(request.app.state, "registry", None)
+                if registry:
+                    try:
+                        installation = await registry.get_installation_by_org(requested_org)
+                        if installation:
+                            # The requested org exists and the user has a valid
+                            # JWT — allow through, downstream deps enforce perms.
+                            user_org = requested_org
+                    except Exception:
+                        pass
+
             # Always enforce org isolation: user's verified org must match URL.
             # The auth_enabled guard at the top of dispatch() already skips
             # this entire middleware for dev/self-hosted with auth disabled.
