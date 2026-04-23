@@ -73,7 +73,7 @@ def run_login(
     if api_key:
         _login_api_key(client, api_key)
     else:
-        resolved_org = org or _detect_org_from_git()
+        resolved_org = org or _detect_org()
         _login_device(client, org=resolved_org)
 
     client.close()
@@ -100,34 +100,60 @@ def _login_token(*, token: str, api_url: str, server: str, org: str) -> None:
     print(f"Stored token credential (api_url: {resolved_url})")
 
 
-def _detect_org_from_git() -> str:
-    """Best-effort: derive a Canon org slug from the current repo's GitHub remote.
+def _detect_org() -> str:
+    """Detect the Canon org from CANON.yaml, git remote, or interactive prompt.
 
-    Canon uses the GitHub owner login as its ``org_login`` (see
-    ``Installation.org_login``), so the GitHub owner can be used directly as
-    the ``--org`` hint. Returns "" when the CLI isn't running inside a git
-    repo, when ``origin`` is missing, or when the URL isn't a recognizable
-    GitHub remote. On success, prints a message so the user can see which
-    org was auto-selected and override with ``--org`` if needed.
+    Resolution order:
+    1. CANON.yaml ``team`` field (most explicit)
+    2. Git remote owner (GitHub owner = Canon org)
+    3. Interactive prompt (if stdin is a TTY)
 
-    Note: auto-detect degrades gracefully only in single-org deployments. In
-    a multi-org deployment the backend cannot fall back when the hint is
-    missing, so users should prefer passing ``--org`` explicitly.
+    Returns "" if detection fails and no interactive prompt is possible.
     """
+    import re
     from pathlib import Path
 
+    slug_re = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+    root = Path.cwd()
+
+    # 1. CANON.yaml team field
+    config_path = root / "CANON.yaml"
+    if config_path.exists():
+        try:
+            from canon.config.parse import parse_canon_yaml
+
+            result = parse_canon_yaml(config_path.read_text())
+            if result.config.team and slug_re.match(result.config.team):
+                print(f"Detected organization from CANON.yaml: {result.config.team}")
+                return result.config.team
+        except Exception:
+            pass
+
+    # 2. Git remote
     from ._local import resolve_github_remote
 
     try:
-        remote = resolve_github_remote(root=Path.cwd())
+        remote = resolve_github_remote(root=root)
     except FileNotFoundError:
-        # cwd was deleted or inaccessible — treat as "not in a repo".
-        return ""
-    if not remote:
-        return ""
-    owner, _repo = remote
-    print(f"Detected organization from git remote: {owner} (override with --org)")
-    return owner
+        remote = None
+    if remote:
+        owner, _repo = remote
+        if slug_re.match(owner):
+            print(f"Detected organization from git remote: {owner}")
+            return owner
+
+    # 3. Interactive prompt
+    if sys.stdin.isatty():
+        org = input("Organization slug (e.g. canonhq): ").strip()
+        if org and slug_re.match(org):
+            return org
+
+    return ""
+
+
+def _detect_org_from_git() -> str:
+    """Legacy alias — prefer _detect_org()."""
+    return _detect_org()
 
 
 def _login_api_key(client: PlatformClient, api_key: str) -> None:
@@ -203,19 +229,23 @@ def _login_device(client: PlatformClient, *, org: str = "") -> None:
         status = result.get("status", "")
 
         if status == "approved":
+            # Only trust org from the backend response — don't persist the
+            # locally-detected hint, as the user may not actually be linked
+            # to that org. _get_org() handles fallback at call time.
+            resolved_org = result.get("org", "")
             save_credentials(
                 {
                     "method": "oauth",
                     "access_token": result["access_token"],
                     "refresh_token": result.get("refresh_token", ""),
                     "expires_at": time.time() + result.get("expires_in", 86400),
-                    "org": result.get("org", ""),
+                    "org": resolved_org,
                     "email": result.get("email", ""),
                 }
             )
             print(f"\nLogged in as {result.get('email', 'unknown')}")
-            if result.get("org"):
-                print(f"Organization: {result['org']}")
+            if resolved_org:
+                print(f"Organization: {resolved_org}")
             return
 
         if status == "expired":

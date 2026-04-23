@@ -10,10 +10,8 @@ from pathlib import Path
 from ..setup import cleanup_stale_skills, create_canon_yaml, create_mcp_json, list_setup_files
 
 
-def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
-    parser = subparsers.add_parser(
-        "setup", help="Set up or reconfigure Canon in the current directory"
-    )
+def _add_setup_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add shared arguments for setup/init commands."""
     parser.add_argument("--team", default=None, help="Team name for CANON.yaml")
     parser.add_argument(
         "--ticket-system",
@@ -36,6 +34,13 @@ def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[ty
         action="store_true",
         help="Overwrite existing non-Canon agent config files",
     )
+
+
+def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+    parser = subparsers.add_parser(
+        "setup", help="Set up or reconfigure Canon in the current directory"
+    )
+    _add_setup_arguments(parser)
 
 
 # ─── Helpers ──────────────────────────────────────────────

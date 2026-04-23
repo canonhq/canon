@@ -19,11 +19,13 @@ def main(argv: list[str] | None = None) -> None:
     from .auth_cmd import register as auth_register
     from .db import register as db_register
     from .dedup import register as dedup_register
+    from .doctor_cmd import register as doctor_register
     from .done import register as done_register
     from .evidence import register as evidence_register
     from .export import register as export_register
     from .extension_cmd import register as extension_register
     from .ide_config import register as ide_config_register
+    from .integrations_cmd import register as integrations_register
     from .lint import register as lint_register
     from .login import register as login_register
     from .logout import register as logout_register
@@ -60,6 +62,14 @@ def main(argv: list[str] | None = None) -> None:
     ide_config_register(subparsers)
     evidence_register(subparsers)
     extension_register(subparsers)
+    integrations_register(subparsers)
+    doctor_register(subparsers)
+
+    # Alias: canon init -> canon setup (shares the same arguments)
+    from .setup_cmd import _add_setup_arguments
+
+    init_parser = subparsers.add_parser("init", help="Alias for 'setup'")
+    _add_setup_arguments(init_parser)
 
     args = parser.parse_args(argv)
 
@@ -67,19 +77,19 @@ def main(argv: list[str] | None = None) -> None:
         from .db import run_db
 
         run_db(args)
-    elif args.command == "setup":
-        if args.agent:
+    elif args.command in ("setup", "init"):
+        if getattr(args, "agent", None):
             from .agent_setup import SUPPORTED_PLATFORMS, run_agent_setup
 
             platforms = list(SUPPORTED_PLATFORMS) if args.agent == "all" else [args.agent]
             run_agent_setup(platforms=platforms, force=args.force)
         else:
-            from .setup_cmd import run_setup
+            from .wizard import run_wizard
 
-            run_setup(
-                team=args.team,
-                ticket_system=args.ticket_system,
-                non_interactive=args.non_interactive,
+            run_wizard(
+                team=getattr(args, "team", None),
+                ticket_system=getattr(args, "ticket_system", None),
+                non_interactive=getattr(args, "non_interactive", False),
             )
     elif args.command == "login":
         from .login import run_login
@@ -222,6 +232,16 @@ def main(argv: list[str] | None = None) -> None:
         from .extension_cmd import run_extension
 
         run_extension(args)
+    elif args.command in ("integrations", "int"):
+        from .integrations_cmd import run_integrations
+
+        run_integrations(args)
+    elif args.command == "doctor":
+        from .doctor_cmd import run_doctor
+
+        exit_code = run_doctor(json_output=args.json_output, fix=args.fix)
+        if exit_code:
+            sys.exit(exit_code)
     else:
         parser.print_help()
         sys.exit(1)

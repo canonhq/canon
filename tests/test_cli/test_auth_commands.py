@@ -264,48 +264,60 @@ class TestAuthStatusSubcommand:
             mock_run.assert_called_once()
 
 
-class TestDetectOrgFromGit:
-    def test_returns_owner_on_success(self, capsys):
-        from canon.cli.login import _detect_org_from_git
+class TestDetectOrg:
+    def test_returns_team_from_canon_yaml(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "CANON.yaml").write_text("team: acme\n")
+        from canon.cli.login import _detect_org
+
+        result = _detect_org()
+
+        assert result == "acme"
+        assert "acme" in capsys.readouterr().out
+
+    def test_falls_back_to_git_remote(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from canon.cli.login import _detect_org
 
         with patch(
             "canon.cli._local.resolve_github_remote",
             return_value=("acme", "widgets"),
         ):
-            result = _detect_org_from_git()
+            result = _detect_org()
 
         assert result == "acme"
-        # User should see which org was auto-selected.
         assert "acme" in capsys.readouterr().out
 
-    def test_returns_empty_when_remote_unresolvable(self, capsys):
-        from canon.cli.login import _detect_org_from_git
+    def test_returns_empty_when_no_sources(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        from canon.cli.login import _detect_org
 
         with patch("canon.cli._local.resolve_github_remote", return_value=None):
-            result = _detect_org_from_git()
+            # Non-interactive (stdin not a tty in tests)
+            result = _detect_org()
 
         assert result == ""
-        # Silent on the not-in-a-repo path — no noise for non-git users.
-        assert capsys.readouterr().out == ""
 
-    def test_returns_empty_when_cwd_missing(self):
-        """FileNotFoundError from Path.cwd() is handled — not a git repo."""
-        from canon.cli.login import _detect_org_from_git
+    def test_returns_empty_when_cwd_missing(self, tmp_path, monkeypatch):
+        """FileNotFoundError from resolve_github_remote is handled."""
+        monkeypatch.chdir(tmp_path)
+        from canon.cli.login import _detect_org
 
         with patch(
             "canon.cli._local.resolve_github_remote",
             side_effect=FileNotFoundError("cwd deleted"),
         ):
-            assert _detect_org_from_git() == ""
+            result = _detect_org()
+        assert result == ""
 
 
 class TestRunLoginAutoDetect:
     def test_auto_detects_when_org_omitted(self):
-        """run_login with no --org falls back to git auto-detection."""
+        """run_login with no --org falls back to auto-detection."""
         from canon.cli.login import run_login
 
         with (
-            patch("canon.cli.login._detect_org_from_git", return_value="detected-org") as mock_det,
+            patch("canon.cli.login._detect_org", return_value="detected-org") as mock_det,
             patch("canon.cli.login._login_device") as mock_login,
             patch("canon.cli._platform.PlatformClient"),
         ):

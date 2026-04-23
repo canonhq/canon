@@ -59,8 +59,11 @@ class PlatformClient:
         headers.update(self._auth_header(cred))
         resp = self._http.request(method, path, headers=headers, **kwargs)
 
-        # Reactive refresh on 401
-        if resp.status_code == 401 and cred.get("method") == "oauth":
+        # Reactive refresh on 401 or 307 redirect to login
+        is_auth_failure = resp.status_code == 401 or (
+            resp.status_code == 307 and "/auth/login" in resp.headers.get("location", "")
+        )
+        if is_auth_failure and cred.get("method") == "oauth":
             cred = self._refresh(cred)
             headers.update(self._auth_header(cred))
             resp = self._http.request(method, path, headers=headers, **kwargs)
