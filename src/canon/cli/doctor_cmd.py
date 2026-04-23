@@ -269,7 +269,7 @@ def _config_checks(root: Path) -> list[CheckResult]:
 # ── Auth Checks ──────────────────────────────────────────
 
 
-def _check_jwt_org_scope(token: str) -> CheckResult | None:
+def _check_jwt_org_scope(token: str, *, auth_method: str = "") -> CheckResult | None:
     """Decode JWT and check if org_id claim is present.
 
     Returns a CheckResult if there's a problem, None if OK or unable to check.
@@ -295,7 +295,15 @@ def _check_jwt_org_scope(token: str) -> CheckResult | None:
             message="JWT has org_id claim",
         )
 
-    # No org_id — check if this matters by looking at the org from _get_org
+    # Auth0's device authorization grant does not propagate the organization
+    # parameter into the access token — this is a known Auth0 limitation, not
+    # a misconfiguration. The backend already handles unscoped tokens via
+    # registry-based org resolution, so this is not actionable for the user.
+    if auth_method == "oauth":
+        return None
+
+    # Non-device-flow tokens (e.g. web login) should have org_id when an org
+    # is configured — warn only for those.
     try:
         from .integrations_cmd import _get_org
 
@@ -357,7 +365,7 @@ def _auth_checks() -> list[CheckResult]:
 
             # Check JWT org scope
             token = cred.get("access_token", "")
-            org_scope = _check_jwt_org_scope(token)
+            org_scope = _check_jwt_org_scope(token, auth_method=cred.get("method", ""))
             if org_scope:
                 results.append(org_scope)
     elif cred.get("method") == "api_key":
