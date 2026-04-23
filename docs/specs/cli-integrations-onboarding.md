@@ -74,6 +74,7 @@ New command group: `canon integrations` (alias: `canon int`).
 
 <!-- canon:system:2.1 status:todo -->
 
+<!-- canon:ticket:github:523 -->
 Show all configured integrations across all credential sources.
 
 #### Output Format
@@ -106,6 +107,7 @@ Integrations for myorg/myrepo
 
 <!-- canon:system:2.2 status:todo -->
 
+<!-- canon:ticket:github:524 -->
 Guided flow to connect a ticket system or service. Routes to the appropriate
 connection method based on authentication state.
 
@@ -151,6 +153,7 @@ connection method based on authentication state.
 
 <!-- canon:system:2.3 status:todo -->
 
+<!-- canon:ticket:github:525 -->
 Disconnect an integration with confirmation.
 
 #### Acceptance Criteria
@@ -166,6 +169,7 @@ Disconnect an integration with confirmation.
 
 <!-- canon:system:2.4 status:todo -->
 
+<!-- canon:ticket:github:526 -->
 Health check one or all configured integrations.
 
 #### Acceptance Criteria
@@ -191,6 +195,7 @@ to a fully working Canon installation in one session.
 
 <!-- canon:system:3.1 status:todo -->
 
+<!-- canon:ticket:github:527 -->
 Detect the current repository state and decide what to do.
 
 #### Acceptance Criteria
@@ -206,6 +211,7 @@ Detect the current repository state and decide what to do.
 
 <!-- canon:system:3.2 status:todo -->
 
+<!-- canon:ticket:github:528 -->
 Check auth state and guide through login if needed.
 
 #### Acceptance Criteria
@@ -222,6 +228,7 @@ Check auth state and guide through login if needed.
 
 <!-- canon:system:3.3 status:todo -->
 
+<!-- canon:ticket:github:529 -->
 Walk through connecting a ticket system.
 
 #### Acceptance Criteria
@@ -238,6 +245,7 @@ Walk through connecting a ticket system.
 
 <!-- canon:system:3.4 status:todo -->
 
+<!-- canon:ticket:github:530 -->
 Set remaining CANON.yaml options with sensible defaults.
 
 #### Acceptance Criteria
@@ -254,6 +262,7 @@ Set remaining CANON.yaml options with sensible defaults.
 
 <!-- canon:system:3.5 status:todo -->
 
+<!-- canon:ticket:github:531 -->
 Set up MCP server, agent configs, and IDE integration.
 
 #### Acceptance Criteria
@@ -269,6 +278,7 @@ Set up MCP server, agent configs, and IDE integration.
 
 <!-- canon:system:3.6 status:todo -->
 
+<!-- canon:ticket:github:532 -->
 Create initial content and validate the full installation.
 
 #### Acceptance Criteria
@@ -282,6 +292,7 @@ Create initial content and validate the full installation.
 
 <!-- canon:system:3.7 status:todo -->
 
+<!-- canon:ticket:github:533 -->
 Print a clear, actionable summary.
 
 #### Acceptance Criteria
@@ -309,6 +320,7 @@ implementation.
 
 <!-- canon:system:4.1 status:todo -->
 
+<!-- canon:ticket:github:534 -->
 #### Acceptance Criteria
 
 - [ ] **Config checks**: CANON.yaml exists + parses, .mcp.json exists + has canon entry, skills directory exists with skills, doc_paths have spec files
@@ -322,6 +334,7 @@ implementation.
 
 <!-- canon:system:4.2 status:todo -->
 
+<!-- canon:ticket:github:421 -->
 #### Acceptance Criteria
 
 - [ ] Default output: colored status table grouped by category
