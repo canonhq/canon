@@ -150,7 +150,11 @@ async def run_reverse_sync() -> list[dict]:
                             if not adapter and integration_store and resolved_sys_config.system:
                                 try:
                                     adapter = await from_org(
-                                        owner, resolved_sys_config.system, integration_store
+                                        owner,
+                                        resolved_sys_config.system,
+                                        integration_store,
+                                        jira_client_id=settings.jira_oauth_client_id,
+                                        jira_client_secret=settings.jira_oauth_client_secret,
                                     )
                                 except Exception:
                                     logger.warning(
@@ -175,7 +179,11 @@ async def run_reverse_sync() -> list[dict]:
                                 if not adapter and integration_store and single.system:
                                     try:
                                         adapter = await from_org(
-                                            owner, single.system, integration_store
+                                            owner,
+                                            single.system,
+                                            integration_store,
+                                            jira_client_id=settings.jira_oauth_client_id,
+                                            jira_client_secret=settings.jira_oauth_client_secret,
                                         )
                                     except Exception:
                                         logger.warning(

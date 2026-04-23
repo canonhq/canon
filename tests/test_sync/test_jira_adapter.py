@@ -9,9 +9,11 @@ import pytest
 
 from canon.parser.models import SectionStatus
 from canon.sync.adapters.jira import (
+    ATLASSIAN_TOKEN_URL,
     INITIAL_BACKOFF,
     MAX_RETRIES,
     JiraAdapter,
+    JiraAuthError,
     JiraValidationError,
 )
 from canon.sync.models import CreateTicketInput, JiraConfig, UpdateTicketInput
@@ -771,3 +773,164 @@ class TestRequestRetry:
 
         result = await adapter._request("POST", "/transition")
         assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# Token refresh
+# ---------------------------------------------------------------------------
+
+
+def _oauth_adapter_with_refresh(
+    store: AsyncMock | None = None,
+) -> JiraAdapter:
+    """Create an OAuth adapter configured for token refresh."""
+    return JiraAdapter(
+        JiraConfig(
+            auth_method="oauth",
+            access_token="old_tok",
+            refresh_token="refresh_tok",
+            cloud_id="cloud-abc",
+            site_url="https://test.atlassian.net",
+        ),
+        store=store,
+        org_login="testorg",
+        jira_client_id="client_id",
+        jira_client_secret="client_secret",
+    )
+
+
+class TestTokenRefresh:
+    @pytest.mark.asyncio
+    async def test_refresh_on_401_retries_successfully(self) -> None:
+        """When a 401 is received, refresh the token and retry the request."""
+        adapter = _oauth_adapter_with_refresh()
+        attempt = 0
+
+        async def mock_request(method: str, url: str, **kwargs) -> httpx.Response:
+            nonlocal attempt
+            attempt += 1
+            if attempt == 1:
+                return _response(401)
+            return _response(200, {"ok": True})
+
+        adapter._client.request = mock_request  # type: ignore[assignment]
+
+        async def fake_refresh() -> bool:
+            adapter.config = adapter.config.model_copy(update={"access_token": "new_tok"})
+            # Don't call _build_client — keep the mock in place
+            return True
+
+        adapter._refresh_tokens = fake_refresh  # type: ignore[assignment]
+
+        result = await adapter._request("GET", "/test")
+
+        assert result == {"ok": True}
+        assert attempt == 2
+        assert adapter.config.access_token == "new_tok"
+
+    @pytest.mark.asyncio
+    async def test_refresh_failure_raises_auth_error(self) -> None:
+        """When refresh fails, raise JiraAuthError."""
+        adapter = _oauth_adapter_with_refresh()
+
+        async def mock_request(method: str, url: str, **kwargs) -> httpx.Response:
+            return _response(401)
+
+        adapter._client.request = mock_request  # type: ignore[assignment]
+
+        async def fake_refresh() -> bool:
+            return False
+
+        adapter._refresh_tokens = fake_refresh  # type: ignore[assignment]
+
+        with pytest.raises(JiraAuthError, match="re-authorize"):
+            await adapter._request("GET", "/test")
+
+    @pytest.mark.asyncio
+    async def test_refresh_marks_needs_reauth_on_failure(self) -> None:
+        """When the Atlassian token endpoint rejects the refresh, mark needs_reauth."""
+        store = AsyncMock()
+        store.update_status = AsyncMock(return_value=True)
+        adapter = _oauth_adapter_with_refresh(store)
+
+        refresh_resp = httpx.Response(
+            400,
+            json={"error": "invalid_grant"},
+            request=httpx.Request("POST", ATLASSIAN_TOKEN_URL),
+        )
+
+        with patch("canon.sync.adapters.jira.httpx.AsyncClient") as mock_client_cls:
+            mock_http = AsyncMock()
+            mock_http.post = AsyncMock(return_value=refresh_resp)
+            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+            mock_http.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_http
+
+            result = await adapter._refresh_tokens()
+
+        assert result is False
+        store.update_status.assert_called_once_with("testorg", "jira", "needs_reauth")
+
+    @pytest.mark.asyncio
+    async def test_refresh_persists_new_tokens(self) -> None:
+        """Successful refresh updates config and calls store.update_config."""
+        store = AsyncMock()
+        store.update_config = AsyncMock(return_value=True)
+        adapter = _oauth_adapter_with_refresh(store)
+
+        refresh_resp = httpx.Response(
+            200,
+            json={"access_token": "fresh_tok", "refresh_token": "fresh_refresh"},
+            request=httpx.Request("POST", ATLASSIAN_TOKEN_URL),
+        )
+
+        with patch("canon.sync.adapters.jira.httpx.AsyncClient") as mock_client_cls:
+            mock_http = AsyncMock()
+            mock_http.post = AsyncMock(return_value=refresh_resp)
+            mock_http.__aenter__ = AsyncMock(return_value=mock_http)
+            mock_http.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_http
+
+            result = await adapter._refresh_tokens()
+
+        assert result is True
+        assert adapter.config.access_token == "fresh_tok"
+        assert adapter.config.refresh_token == "fresh_refresh"
+        store.update_config.assert_called_once()
+        call_kwargs = store.update_config.call_args
+        assert call_kwargs[0] == ("testorg", "jira")
+        assert call_kwargs[1]["config"]["access_token"] == "fresh_tok"
+
+    @pytest.mark.asyncio
+    async def test_no_refresh_on_api_token_mode(self) -> None:
+        """API token mode should raise 401 immediately without refresh attempt."""
+        adapter = _adapter(_api_token_config())
+
+        async def mock_request(method: str, url: str, **kwargs) -> httpx.Response:
+            return _response(401)
+
+        adapter._client.request = mock_request  # type: ignore[assignment]
+
+        with pytest.raises(httpx.HTTPStatusError) as exc_info:
+            await adapter._request("GET", "/test")
+
+        assert exc_info.value.response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_refresh_only_attempted_once(self) -> None:
+        """Even if retry after refresh also returns 401, don't refresh again."""
+        adapter = _oauth_adapter_with_refresh()
+
+        async def mock_request(method: str, url: str, **kwargs) -> httpx.Response:
+            return _response(401)
+
+        adapter._client.request = mock_request  # type: ignore[assignment]
+
+        async def fake_refresh() -> bool:
+            return True  # refresh "succeeds" but 401 persists
+
+        adapter._refresh_tokens = fake_refresh  # type: ignore[assignment]
+
+        # After successful refresh, retry hits 401 again — should raise, not loop
+        with pytest.raises(httpx.HTTPStatusError):
+            await adapter._request("GET", "/test")

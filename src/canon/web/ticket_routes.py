@@ -149,7 +149,14 @@ async def _get_adapter(
             detail="Integration credential store is not available",
         )
 
-    adapter = await from_org(org, system, integration_store)
+    settings = request.app.state.settings
+    adapter = await from_org(
+        org,
+        system,
+        integration_store,
+        jira_client_id=settings.jira_oauth_client_id,
+        jira_client_secret=settings.jira_oauth_client_secret,
+    )
     if adapter is None:
         raise HTTPException(
             status_code=422,

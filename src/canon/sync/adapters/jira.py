@@ -1,10 +1,11 @@
-"""Jira REST v3 adapter with retry logic and rate limiting."""
+"""Jira REST v3 adapter with retry logic, rate limiting, and OAuth token refresh."""
 
 from __future__ import annotations
 
 import asyncio
 import base64
 import logging
+from typing import TYPE_CHECKING
 
 import httpx
 
@@ -19,6 +20,9 @@ from canon.sync.models import (
 )
 from canon.sync.status_map import jira_category_to_spec_status, spec_status_to_jira
 
+if TYPE_CHECKING:
+    from canon.db.integration_store import IntegrationStore
+
 logger = logging.getLogger(__name__)
 
 # Transient HTTP status codes that should be retried
@@ -27,26 +31,49 @@ RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 MAX_RETRIES = 3
 INITIAL_BACKOFF = 1.0  # seconds
 
+ATLASSIAN_TOKEN_URL = "https://auth.atlassian.com/oauth/token"
+
 
 class JiraValidationError(Exception):
     """Raised when Jira configuration is invalid."""
 
 
+class JiraAuthError(Exception):
+    """Raised when token refresh fails and re-authorization is required."""
+
+
 class JiraAdapter:
-    def __init__(self, config: JiraConfig) -> None:
+    def __init__(
+        self,
+        config: JiraConfig,
+        *,
+        store: IntegrationStore | None = None,
+        org_login: str = "",
+        jira_client_id: str = "",
+        jira_client_secret: str = "",
+    ) -> None:
         self.config = config
-        if config.auth_method == "oauth" and config.access_token:
-            # OAuth mode: use Bearer token with Atlassian cloud API
-            base_url = f"https://api.atlassian.com/ex/jira/{config.cloud_id}/rest/api/3"
+        self._store = store
+        self._org_login = org_login
+        self._jira_client_id = jira_client_id
+        self._jira_client_secret = jira_client_secret
+        self._refreshed = False  # guard against infinite refresh loops
+        self._build_client()
+
+    def _build_client(self) -> None:
+        """(Re)build the HTTP client from current config."""
+        if self.config.auth_method == "oauth" and self.config.access_token:
+            base_url = f"https://api.atlassian.com/ex/jira/{self.config.cloud_id}/rest/api/3"
             headers = {
-                "Authorization": f"Bearer {config.access_token}",
+                "Authorization": f"Bearer {self.config.access_token}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             }
         else:
-            # API token mode (default)
-            creds = base64.b64encode(f"{config.email}:{config.api_token}".encode()).decode()
-            base_url = f"https://{config.host}/rest/api/3"
+            creds = base64.b64encode(
+                f"{self.config.email}:{self.config.api_token}".encode()
+            ).decode()
+            base_url = f"https://{self.config.host}/rest/api/3"
             headers = {
                 "Authorization": f"Basic {creds}",
                 "Content-Type": "application/json",
@@ -239,6 +266,68 @@ class JiraAdapter:
             json={"transition": {"id": transition["id"]}},
         )
 
+    async def _refresh_tokens(self) -> bool:
+        """Refresh the OAuth access token using the stored refresh token.
+
+        Returns True if the refresh succeeded, False otherwise.
+        On success, persists updated tokens to the integration store.
+        """
+        if not self.config.refresh_token:
+            logger.warning("Jira token refresh failed: no refresh_token stored")
+            return False
+        if not self._jira_client_id or not self._jira_client_secret:
+            logger.warning("Jira token refresh failed: missing OAuth client credentials")
+            return False
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                ATLASSIAN_TOKEN_URL,
+                json={
+                    "grant_type": "refresh_token",
+                    "client_id": self._jira_client_id,
+                    "client_secret": self._jira_client_secret,
+                    "refresh_token": self.config.refresh_token,
+                },
+            )
+
+        if resp.status_code != 200:
+            logger.warning(
+                "Jira token refresh failed: HTTP %d — %s",
+                resp.status_code,
+                resp.text[:200],
+            )
+            if self._store and self._org_login:
+                await self._store.update_status(self._org_login, "jira", "needs_reauth")
+            return False
+
+        data = resp.json()
+        new_access = data["access_token"]
+        new_refresh = data.get("refresh_token", self.config.refresh_token)
+
+        # Update in-memory config and rebuild the HTTP client
+        self.config = self.config.model_copy(
+            update={"access_token": new_access, "refresh_token": new_refresh}
+        )
+        self._build_client()
+
+        # Persist to DB
+        if self._store and self._org_login:
+            new_config = {
+                "access_token": new_access,
+                "refresh_token": new_refresh,
+                "cloud_id": self.config.cloud_id,
+                "site_url": self.config.site_url,
+            }
+            await self._store.update_config(
+                self._org_login,
+                "jira",
+                config=new_config,
+                provider_metadata=None,  # preserve existing metadata
+            )
+            logger.info("Jira tokens refreshed and persisted for org %s", self._org_login)
+
+        return True
+
     async def _request(
         self,
         method: str,
@@ -246,7 +335,7 @@ class JiraAdapter:
         json: dict | None = None,
         params: dict | None = None,
     ) -> dict:
-        """Make a Jira API request with retry and rate limit handling."""
+        """Make a Jira API request with retry, rate limit, and token refresh."""
         last_exc: Exception | None = None
         backoff = INITIAL_BACKOFF
 
@@ -260,6 +349,16 @@ class JiraAdapter:
             except httpx.HTTPStatusError as e:
                 last_exc = e
                 status = e.response.status_code
+
+                # On 401 in OAuth mode, attempt a single token refresh
+                if status == 401 and self.config.auth_method == "oauth" and not self._refreshed:
+                    self._refreshed = True
+                    if await self._refresh_tokens():
+                        logger.info("Retrying %s %s after token refresh", method, path)
+                        continue  # retry with new token
+                    raise JiraAuthError(
+                        "Jira access token expired and refresh failed — re-authorize via Settings"
+                    ) from e
 
                 if status not in RETRYABLE_STATUS_CODES or attempt == MAX_RETRIES:
                     raise

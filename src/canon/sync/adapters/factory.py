@@ -198,6 +198,9 @@ async def from_org(
     org_login: str,
     system: Literal["jira", "linear", "github"],
     integration_store: IntegrationStore,
+    *,
+    jira_client_id: str = "",
+    jira_client_secret: str = "",
 ) -> TicketAdapter | None:
     """Create an adapter using DB-stored OAuth credentials for an org.
 
@@ -206,6 +209,9 @@ async def from_org(
     multi-tenant deployment that would let any authenticated user route
     ticket operations through the host operator's credentials, which is
     cross-org credential exposure.
+
+    For Jira, pass ``jira_client_id`` and ``jira_client_secret`` to enable
+    automatic token refresh on 401.
     """
     config = await integration_store.get_integration_config(org_login, system)
     if config is None:
@@ -219,7 +225,11 @@ async def from_org(
                 refresh_token=config.get("refresh_token", ""),
                 cloud_id=config["cloud_id"],
                 site_url=config.get("site_url", ""),
-            )
+            ),
+            store=integration_store,
+            org_login=org_login,
+            jira_client_id=jira_client_id,
+            jira_client_secret=jira_client_secret,
         )
 
     if system == "linear":

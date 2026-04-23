@@ -8,6 +8,7 @@ from canon import analytics
 
 from ...parser.models import ParseOptions, SpecDocument
 from ...parser.parse import parse_spec
+from ...settings import Settings
 from ...sync.adapters.base import TicketAdapter
 from ...sync.adapters.factory import create_adapter, from_config, from_org
 from ...sync.engine import forward_sync, forward_sync_multi
@@ -262,7 +263,14 @@ async def _try_org_adapter(
     if integration_store is None:
         return None
     try:
-        return await from_org(org, sys_config.system, integration_store)
+        settings = Settings()
+        return await from_org(
+            org,
+            sys_config.system,
+            integration_store,
+            jira_client_id=settings.jira_oauth_client_id,
+            jira_client_secret=settings.jira_oauth_client_secret,
+        )
     except Exception:
         logger.warning(
             "from_org credential lookup failed for org=%s system=%s — "
