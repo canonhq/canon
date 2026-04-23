@@ -356,6 +356,15 @@ auditRetentionCronJob:
   schedule: "0 3 * * *"
   concurrencyPolicy: Forbid
 
+## @section Token refresh CronJob parameters
+## @param refreshTokensCronJob.enabled Enable OAuth token refresh CronJob
+## @param refreshTokensCronJob.schedule Cron schedule expression (default: every 30 minutes)
+## @param refreshTokensCronJob.concurrencyPolicy CronJob concurrency policy
+refreshTokensCronJob:
+  enabled: false
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+
 ## @section Autoscaling
 ## @param autoscaling.enabled Enable HPA
 ## @param autoscaling.minReplicas Minimum replicas
