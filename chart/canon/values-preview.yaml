@@ -51,6 +51,8 @@ teamDigestCronJob:
   enabled: false
 auditRetentionCronJob:
   enabled: false
+refreshTokensCronJob:
+  enabled: false
 
 config:
   environment: "preview"
