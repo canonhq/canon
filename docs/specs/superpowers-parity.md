@@ -60,6 +60,7 @@ We add capabilities that naturally extend Canon's spec-driven identity. We do NO
 
 <!-- canon:system:2 status:in_progress -->
 
+<!-- canon:ticket:github:590 -->
 Canon needs a SessionStart hook that injects skill discovery context, ensuring Canon skills are found and used when relevant. Currently Canon has no hook — users must remember to invoke `/canon:*` commands manually.
 
 ### Acceptance Criteria
@@ -136,6 +137,7 @@ A `canon-worktree` skill that creates isolated git worktrees for spec-driven wor
 
 <!-- canon:system:5 status:in_progress -->
 
+<!-- canon:ticket:github:591 -->
 A `canon-implement` skill that orchestrates execution of an entire implementation plan. It is the **batch orchestrator** that wraps the `canon-task` inner loop (load spec section → implement ACs → verify → record evidence) with plan-level automation: worktree setup, sequencing, commits, reviewer dispatch, and branch completion.
 
 **Relationship to canon-task:** `canon-task` is interactive and single-section — user picks one task, implements it, done. `canon-implement` runs the same AC-driven inner loop for each task in a plan file, adding automation between tasks. Users doing one-off work use `canon-task`. Users executing a multi-section plan use `canon-implement`.
@@ -171,6 +173,7 @@ A `canon-implement` skill that orchestrates execution of an entire implementatio
 
 <!-- canon:system:6 status:in_progress -->
 
+<!-- canon:ticket:github:592 -->
 A `canon-reviewer` agent that reviews code changes against spec acceptance criteria — not just code style, but whether the implementation actually satisfies what was specified.
 
 ### Acceptance Criteria
@@ -224,6 +227,7 @@ A `canon-branch` skill that handles the end of a development branch: verify, upd
 
 <!-- canon:system:8 status:in_progress -->
 
+<!-- canon:ticket:github:593 -->
 Extend `canon-verify` to act as a gate function — not just a report, but a blocker that prevents completion claims without evidence.
 
 ### Acceptance Criteria
@@ -248,6 +252,7 @@ Extend `canon-verify` to act as a gate function — not just a report, but a blo
 
 <!-- canon:system:9 status:in_progress -->
 
+<!-- canon:ticket:github:594 -->
 Canon should play well with external development discipline plugins (superpowers, etc.) rather than duplicating their work. This system defines the integration surface.
 
 ### Acceptance Criteria
@@ -269,6 +274,7 @@ Canon should play well with external development discipline plugins (superpowers
 
 <!-- canon:system:10 status:in_progress -->
 
+<!-- canon:ticket:github:587 -->
 ### Phase 1: Foundation (SessionStart + Worktrees) — DONE
 - ✅ System 2: SessionStart hook and canon-meta skill (hook lists skills; meta-skill inline injection still gap'd)
 - ✅ System 4: Git worktree management
