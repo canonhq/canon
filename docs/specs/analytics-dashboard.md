@@ -37,6 +37,7 @@ Canon tracks extensive operational data via PostHog (webhooks, syncs, PR analyse
 
 <!-- canon:system:2 status:in_progress -->
 
+<!-- canon:ticket:jira:1 -->
 Enrich Canon's PostHog event stream with lifecycle events that power the analytics dashboard. Existing events are leveraged as-is; new events fill gaps in ticket mapping, spec lifecycle, config usage, and SRE tracking.
 
 **Event inventory for health score computation:**
@@ -152,6 +153,7 @@ All `analytics.track()` calls must include `groups={"organization": org}` to ena
 
 <!-- canon:system:3 status:in_progress -->
 
+<!-- canon:ticket:jira:2 -->
 A time-based composite score (0–100) that measures Canon's value in an organization. The score rewards momentum and freshness over static coverage, answering "is Canon making things better over time?"
 
 ### 3.1 Momentum Pillar (35% weight)
@@ -262,6 +264,7 @@ When an org has fewer than 7 days of event data, the health score shows "Insuffi
 
 <!-- canon:system:4 status:in_progress -->
 
+<!-- canon:ticket:jira:3 -->
 New backend endpoints that query PostHog via HogQL and shape data for the frontend dashboard. Uses a new `analytics_query.py` module separate from the existing write-only `analytics.py`.
 
 ### 4.1 PostHog Query Client
@@ -379,6 +382,7 @@ Cache keys: `analytics:{org}:{endpoint}:{team}:{days}`. Use in-process TTL cache
 
 <!-- canon:system:5 status:in_progress -->
 
+<!-- canon:ticket:jira:4 -->
 New Vue 3 view and components implementing the Executive Summary layout: hero health score, pillar cards, and stacked trend charts.
 
 ### 5.1 Route and Navigation
