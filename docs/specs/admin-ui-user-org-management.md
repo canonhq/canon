@@ -285,6 +285,7 @@ when this spec advances past draft.
 
 <!-- canon:system:4 status:todo -->
 
+<!-- canon:ticket:github:536 -->
 Lower-frequency, higher-blast-radius, or dependent on other in-flight work.
 Specified here so we have a clear place to land them without re-opening the
 spec.
