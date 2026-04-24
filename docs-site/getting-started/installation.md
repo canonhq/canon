@@ -1,18 +1,83 @@
 # Installation
 
-Canon can be installed in four ways: as a GitHub App, a Claude Code plugin, an MCP server, or self-hosted on Kubernetes.
+## CLI (start here) {#cli}
 
-## GitHub App
+The Canon CLI is a Python package that works in any repo. No server or account required.
 
-The GitHub App provides automated PR analysis, spec tracking, ticket sync, and doc maintenance.
+### Prerequisites
+
+- **Python 3.12+** — check with `python3 --version`
+- **Git** — Canon reads your repo structure
+
+### Install
+
+::: code-group
+
+```bash [uv (recommended)]
+uv tool install canonhq
+```
+
+```bash [pip]
+pip install canonhq
+```
+
+```bash [pipx]
+pipx install canonhq
+```
+
+:::
+
+Verify it works:
+
+```bash
+canon --help
+```
+
+### Initialize a repo
+
+```bash
+cd your-repo
+canon setup
+```
+
+This creates:
+- `CANON.yaml` — project configuration
+- `docs/specs/_template.md` — starter spec template
+- `docs/specs/` directory
+
+### Optional: AI features
+
+For AI-powered audit (`canon audit`), set your Anthropic API key:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Most CLI commands (status, tasks, lint, verify, sync) work without an API key.
+
+### Optional: Ticket sync credentials
+
+To sync specs with your ticket system:
+
+| System | Credentials |
+|--------|------------|
+| **GitHub Issues** | `GITHUB_TOKEN` or `gh` CLI authenticated |
+| **Jira** | `canon login` (OAuth) or `JIRA_URL` + `JIRA_TOKEN` |
+| **Linear** | `canon login` (OAuth) or `LINEAR_API_KEY` |
+
+---
+
+## GitHub App {#github-app}
+
+The GitHub App adds automated PR analysis — Canon comments on every PR with spec references and realization status. Install this after you've tried the CLI and want to automate.
 
 ### 1. Install the App
 
 Visit the [Canon GitHub App](https://github.com/apps/canon) page and click **Install**. Select your organization and choose which repositories to enable.
 
-### 2. Add CANON.yaml
+### 2. Ensure CANON.yaml exists
 
-Create a `CANON.yaml` file in your repository root:
+If you haven't already run `canon setup`, create a minimal config:
 
 ```yaml
 version: "1"
@@ -27,55 +92,30 @@ agents:
   realization_check: true
 ```
 
-### 3. Add a Spec
+### 3. Open a PR
 
-Create your first spec in `docs/specs/`:
+The Canon bot will analyze your PR against relevant specs and post a comment with spec references, realization status, and any discrepancies.
 
-```bash
-mkdir -p docs/specs
-cp docs/specs/_template.md docs/specs/my-feature.md
-```
-
-### 4. Open a PR
-
-The Canon bot will analyze your PR against the relevant specs and post a comment with spec references, discrepancies, and realization status.
+---
 
 ## Claude Code Plugin {#claude-code-plugin}
 
-The Claude Code plugin adds spec-driven development skills (slash commands) to your Claude Code sessions.
+The plugin adds spec-driven slash commands (`/canon:context`, `/canon:task`, `/canon:verify`, etc.) to Claude Code sessions.
 
 ### Install
-
-**Option A: CLI setup (recommended)**
-
-Run from your project root after creating `CANON.yaml`:
-
-```bash
-canon setup
-```
-
-This creates `CANON.yaml`, the MCP server config (`.mcp.json`), and the spec template. To also configure the Claude Code agent instructions:
-
-```bash
-canon setup --agent claude
-```
-
-**Option B: Plugin marketplace**
-
-Add the Canon marketplace and install the plugin:
 
 ```bash
 claude plugin marketplace add canonhq/canon
 claude plugin install canon
 ```
 
-::: tip
-`canon setup` handles MCP and agent config but does not install the Claude Code plugin. For skills (slash commands), you need the plugin installed via the marketplace.
-:::
+Or use the CLI to set up both MCP and agent config:
 
-### Available Skills
+```bash
+canon setup --agent claude
+```
 
-Once installed, skills are available as `/canon:<skill>`:
+### Available skills
 
 | Skill | Description |
 |-------|-------------|
@@ -87,15 +127,21 @@ Once installed, skills are available as `/canon:<skill>`:
 | `/canon:status` | Show spec coverage dashboard |
 | `/canon:plan` | Spec-driven planning workflow |
 | `/canon:update` | Update spec statuses from code evidence |
-| `/canon:audit` | Full spec audit: update statuses, sync tickets, commit |
+| `/canon:audit` | Full spec audit with ticket sync |
+
+::: tip
+`canon setup --agent claude` configures MCP and agent instructions but doesn't install the plugin marketplace entry. For slash commands, install the plugin separately.
+:::
+
+---
 
 ## MCP Server {#mcp-server}
 
-The MCP server connects any MCP-compatible coding agent to the Canon knowledge base.
+The MCP server connects any MCP-compatible editor (Claude Code, Cursor, Windsurf, VS Code Copilot) to your spec knowledge base.
 
 ### Configure in Claude Code
 
-`canon setup` automatically creates `.mcp.json` with the Canon MCP server. You can also add it manually:
+`canon setup` creates `.mcp.json` automatically. To add it manually:
 
 ```json
 {
@@ -108,27 +154,51 @@ The MCP server connects any MCP-compatible coding agent to the Canon knowledge b
 }
 ```
 
-### Available Tools
+### Available tools
 
-- `search` — Hybrid search (vector + BM25) across all indexed specs and docs
-- `get_spec` / `get_section` — Read parsed spec data with frontmatter, sections, and ACs
-- `create_spec` — Create new specs from templates
-- `update_section_status` — Update section statuses
-- `add_realization` — Link code evidence to acceptance criteria
-- `sync_spec_status` — Bulk updates in one commit
+| Tool | Description |
+|------|-------------|
+| `search` | Hybrid search (vector + BM25) across all indexed docs |
+| `get_spec` / `get_section` | Read parsed spec data with frontmatter and ACs |
+| `create_spec` | Create new specs from templates |
+| `update_section_status` | Update section statuses |
+| `add_realization` | Link code evidence to acceptance criteria |
+| `sync_spec_status` | Bulk status updates in one commit |
 
-### Configure in Cursor / VS Code
+### Other editors
 
-MCP configuration varies by editor. Consult your editor's MCP documentation and point it at the Canon MCP server endpoint.
+For Cursor, Windsurf, or VS Code — consult your editor's MCP documentation and point it at the Canon MCP server using the same `uvx` command above.
+
+---
+
+## GitHub Actions {#github-actions}
+
+Run Canon checks in CI — spec linting, coverage reports, ticket sync, and more.
+
+### Quick setup
+
+```yaml
+name: Canon Lint
+on: pull_request
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: canonhq/canon/actions/spec-lint@v1
+```
+
+See the full [GitHub Actions guide](/guides/github-actions/) for all available actions (lint, verify, coverage, sync, audit, and more).
+
+---
 
 ## Self-Hosted {#self-hosted}
 
-For full control over your data and configuration, deploy Canon to your own Kubernetes cluster.
+Deploy Canon to your own Kubernetes cluster for full control over data.
 
-See the [Self-Hosting Guide](/guides/self-hosting) for detailed instructions covering:
-
+See the [Self-Hosting Guide](/guides/self-hosting) for:
 - GitHub App creation
 - Kubernetes secret management
 - Helm chart installation
 - Jira/Linear/GitHub Issues configuration
-- DevSpace dev environment setup

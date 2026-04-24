@@ -23,7 +23,7 @@ Add to your project's `.mcp.json`:
   "mcpServers": {
     "canon": {
       "command": "uvx",
-      "args": ["canon", "mcp"]
+      "args": ["--from", "canonhq", "canon-mcp"]
     }
   }
 }

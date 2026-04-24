@@ -1,36 +1,51 @@
 # Getting Started
 
-Canon is an AI-native documentation platform that turns your markdown specs into living, self-maintaining documents. There are several ways to use it depending on your workflow.
+Canon is a spec-driven development platform. You write structured specs in markdown, and Canon generates tickets, reviews PRs, and verifies what shipped against your acceptance criteria.
 
-## Choose Your Path
+## Install the CLI
 
-### GitHub App (recommended)
+The fastest way to start is with the CLI. No server, no sign-up required.
 
-Install the Canon GitHub App to get automated PR analysis, spec tracking, and doc maintenance across your repos. Best for teams that want the full platform experience.
+```bash
+# With pip
+pip install canonhq
 
-[Installation Guide →](./installation)
+# With uv (recommended)
+uv tool install canonhq
 
-### Claude Code Plugin
+# Or run without installing
+uvx --from canonhq canon --help
+```
 
-Add Canon skills to Claude Code for spec-driven development workflows — context loading, verification, task tracking, and coverage dashboards.
+Then initialize any repo:
 
-[Installation Guide →](./installation#claude-code-plugin)
+```bash
+cd your-repo
+canon setup
+```
 
-### MCP Server
+That's it. You now have `CANON.yaml`, a spec template, and a working local setup. Jump to the [Quickstart](./quickstart) to write your first spec and see the feedback loop.
 
-Connect any MCP-compatible coding agent (Claude Code, Cursor, VS Code Copilot) to the Canon knowledge base for spec search and context.
+## What Can Canon Do?
 
-[Installation Guide →](./installation#mcp-server)
+| Capability | How | Requirements |
+|-----------|-----|-------------|
+| **Parse & track specs** | `canon status`, `canon tasks` | CLI only |
+| **Lint specs** | `canon lint` | CLI only |
+| **Verify code against ACs** | `canon verify` | CLI only |
+| **Audit with AI** | `canon audit` | CLI + `ANTHROPIC_API_KEY` |
+| **Sync to Jira/Linear/GitHub** | `canon sync` | CLI + ticket system credentials |
+| **PR analysis & auto-updates** | GitHub App | [GitHub App install](./installation#github-app) |
+| **Spec search in your editor** | MCP server | [MCP setup](./installation#mcp-server) |
+| **Slash commands in Claude Code** | Plugin | [Plugin install](./installation#claude-code-plugin) |
+| **CI checks (lint, coverage, sync)** | GitHub Actions | [Actions setup](/guides/github-actions/) |
 
-### Self-Hosted
+Start with the CLI. Add integrations as you need them. See the [CLI Reference](/reference/cli) for the full command list.
 
-Deploy Canon to your own Kubernetes cluster for full control over data and configuration.
+## Next Steps
 
-[Self-Hosting Guide →](/guides/self-hosting)
-
-## Quick Links
-
-- [Quickstart →](./quickstart) — Write your first spec in 5 minutes
-- [Configuration →](./configuration) — CANON.yaml reference
-- [Writing Specs →](/guides/writing-specs) — Spec authoring guide with examples
-- [Concepts →](/concepts/) — Understand the core ideas behind Canon
+1. **[Installation](./installation)** — All install methods (CLI, GitHub App, MCP, Plugin, Actions, self-hosted)
+2. **[Quickstart](./quickstart)** — Write a spec, run the tools, see the loop — in 5 minutes
+3. **[Configuration](./configuration)** — Customize `CANON.yaml` for your workflow
+4. **[Writing Specs](/guides/writing-specs)** — Spec authoring guide with examples
+5. **[Concepts](/concepts/)** — Living specs, delta tracking, coverage model
