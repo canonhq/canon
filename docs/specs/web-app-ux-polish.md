@@ -53,6 +53,7 @@ This spec fills the gaps between those specs.
 
 <!-- canon:system:2 status:todo -->
 
+<!-- canon:ticket:github:595 -->
 Redesign the Tasks page from a flat table into a multi-view board with
 grouping, inline detail, and actionable ticket links.
 
@@ -60,6 +61,7 @@ grouping, inline detail, and actionable ticket links.
 
 <!-- canon:system:2.1 status:todo -->
 
+<!-- canon:ticket:github:596 -->
 #### Acceptance Criteria
 
 - [ ] Tasks grouped by parent spec as collapsible sections
@@ -72,6 +74,7 @@ grouping, inline detail, and actionable ticket links.
 
 <!-- canon:system:2.2 status:todo -->
 
+<!-- canon:ticket:github:597 -->
 #### Acceptance Criteria
 
 - [ ] Toggle buttons (List / Board / Grouped) in the page header, persisted to localStorage
@@ -84,6 +87,7 @@ grouping, inline detail, and actionable ticket links.
 
 <!-- canon:system:2.3 status:todo -->
 
+<!-- canon:ticket:github:598 -->
 #### Acceptance Criteria
 
 - [ ] Clicking a task row (in any view) expands an inline detail panel below the row
@@ -97,6 +101,7 @@ grouping, inline detail, and actionable ticket links.
 
 <!-- canon:system:2.4 status:todo -->
 
+<!-- canon:ticket:github:599 -->
 #### Acceptance Criteria
 
 - [ ] Ticket references (e.g., `github#412`) rendered as clickable links opening in a new tab
@@ -107,6 +112,7 @@ grouping, inline detail, and actionable ticket links.
 
 <!-- canon:system:3 status:todo -->
 
+<!-- canon:ticket:github:600 -->
 Add expandable detail to spec cards on the Explorer dashboard without
 requiring navigation to the spec view.
 
@@ -114,6 +120,7 @@ requiring navigation to the spec view.
 
 <!-- canon:system:3.1 status:todo -->
 
+<!-- canon:ticket:github:601 -->
 #### Acceptance Criteria
 
 - [ ] Each spec card has a chevron/expand button
@@ -125,6 +132,7 @@ requiring navigation to the spec view.
 
 <!-- canon:system:3.2 status:todo -->
 
+<!-- canon:ticket:github:602 -->
 #### Acceptance Criteria
 
 - [ ] Each spec card shows a mini AC progress bar (thin bar below the title, colored by completion percentage)
@@ -136,6 +144,7 @@ requiring navigation to the spec view.
 
 <!-- canon:system:3.3 status:todo -->
 
+<!-- canon:ticket:github:603 -->
 #### Acceptance Criteria
 
 - [ ] Status and repo filter dropdowns stick to the top of the viewport when scrolling past them
@@ -146,6 +155,7 @@ requiring navigation to the spec view.
 
 <!-- canon:system:4 status:todo -->
 
+<!-- canon:ticket:github:604 -->
 Add contextual navigation so users always know where they are and can quickly
 move between related views.
 
@@ -153,6 +163,7 @@ move between related views.
 
 <!-- canon:system:4.1 status:todo -->
 
+<!-- canon:ticket:github:605 -->
 #### Acceptance Criteria
 
 - [ ] Breadcrumb bar displayed below the top nav on all app pages (not marketing pages)
@@ -165,6 +176,7 @@ move between related views.
 
 <!-- canon:system:4.2 status:todo -->
 
+<!-- canon:ticket:github:606 -->
 #### Acceptance Criteria
 
 - [ ] Current nav item (Explorer, Tasks, Analytics, Editor, Billing) has a visible underline or highlight
@@ -175,6 +187,7 @@ move between related views.
 
 <!-- canon:system:4.3 status:todo -->
 
+<!-- canon:ticket:github:607 -->
 #### Acceptance Criteria
 
 - [ ] Spec view page includes links: "View tasks" (→ Tasks filtered by this spec), "Edit" (→ Editor with file loaded)
@@ -186,6 +199,7 @@ move between related views.
 
 <!-- canon:system:4.4 status:todo -->
 
+<!-- canon:ticket:github:608 -->
 #### Acceptance Criteria
 
 - [ ] When viewing a spec, a tab bar or pill nav appears below the breadcrumb: Overview | Tasks | (History — future) | (Analytics — future)
@@ -198,12 +212,14 @@ move between related views.
 
 <!-- canon:system:5 status:todo -->
 
+<!-- canon:ticket:github:609 -->
 Fix the broken Editor empty state and add quality-of-life improvements.
 
 ### 5.1 Actionable Empty States
 
 <!-- canon:system:5.1 status:todo -->
 
+<!-- canon:ticket:github:610 -->
 #### Acceptance Criteria
 
 - [ ] When GitHub OAuth is not connected: show "Connect your GitHub account to edit specs" with a CTA button linking to `/auth/github`
@@ -215,6 +231,7 @@ Fix the broken Editor empty state and add quality-of-life improvements.
 
 <!-- canon:system:5.2 status:todo -->
 
+<!-- canon:ticket:github:611 -->
 #### Acceptance Criteria
 
 - [ ] Editor toolbar shows save status: "Saved" (green dot), "Unsaved changes" (amber dot), "Saving..." (spinner)
@@ -225,6 +242,7 @@ Fix the broken Editor empty state and add quality-of-life improvements.
 
 <!-- canon:system:5.3 status:todo -->
 
+<!-- canon:ticket:github:612 -->
 #### Acceptance Criteria
 
 - [ ] Toggle button to show side-by-side source and rendered preview
@@ -237,6 +255,7 @@ Fix the broken Editor empty state and add quality-of-life improvements.
 
 <!-- canon:system:5.4 status:todo -->
 
+<!-- canon:ticket:github:613 -->
 #### Acceptance Criteria
 
 - [ ] Inline warnings displayed in the editor gutter or as a panel below the editor
@@ -248,6 +267,7 @@ Fix the broken Editor empty state and add quality-of-life improvements.
 
 <!-- canon:system:5.5 status:todo -->
 
+<!-- canon:ticket:github:614 -->
 #### Acceptance Criteria
 
 - [ ] "+ New Spec" button on the Explorer dashboard navigates to the editor new-spec flow
@@ -258,12 +278,14 @@ Fix the broken Editor empty state and add quality-of-life improvements.
 
 <!-- canon:system:6 status:todo -->
 
+<!-- canon:ticket:github:615 -->
 Cross-cutting UX improvements that affect the entire app.
 
 ### 6.1 Skeleton Loading States
 
 <!-- canon:system:6.1 status:todo -->
 
+<!-- canon:ticket:github:616 -->
 #### Acceptance Criteria
 
 - [ ] Replace `LoadingSpinner` with contextual skeleton loaders on: Tasks (skeleton table rows), Explorer (skeleton cards), Analytics (skeleton chart placeholders), Editor (skeleton file list)
@@ -275,6 +297,7 @@ Cross-cutting UX improvements that affect the entire app.
 
 <!-- canon:system:6.2 status:todo -->
 
+<!-- canon:ticket:github:617 -->
 #### Acceptance Criteria
 
 - [ ] Every page has a designed empty state with: an icon or illustration, a brief explanation, a primary CTA button
@@ -286,6 +309,7 @@ Cross-cutting UX improvements that affect the entire app.
 
 <!-- canon:system:6.3 status:todo -->
 
+<!-- canon:ticket:github:618 -->
 #### Acceptance Criteria
 
 - [ ] Tables (Tasks, Explorer) collapse to stacked card layouts on screens <768px
@@ -298,6 +322,7 @@ Cross-cutting UX improvements that affect the entire app.
 
 <!-- canon:system:6.4 status:todo -->
 
+<!-- canon:ticket:github:619 -->
 #### Acceptance Criteria
 
 - [ ] Global toast component renders in a fixed position (top-right)
@@ -310,6 +335,7 @@ Cross-cutting UX improvements that affect the entire app.
 
 <!-- canon:system:6.5 status:todo -->
 
+<!-- canon:ticket:github:620 -->
 #### Acceptance Criteria
 
 - [ ] `/` or `Cmd+K` focuses the global search input
