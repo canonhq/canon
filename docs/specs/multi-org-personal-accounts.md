@@ -49,6 +49,7 @@ cross-org bleed in the Explorer.
 
 <!-- canon:system:2 status:todo -->
 
+<!-- canon:ticket:github:570 -->
 Fix `_provision_auth0_org` in `on_installation.py` to handle personal GitHub
 accounts (where `account.type == "User"` rather than `"Organization"`).
 
@@ -56,6 +57,7 @@ accounts (where `account.type == "User"` rather than `"Organization"`).
 
 <!-- canon:system:2.1 status:todo -->
 
+<!-- canon:ticket:github:571 -->
 The installation webhook payload includes `installation.account.type` which is
 either `"Organization"` or `"User"`. Pass this through to the provisioning logic.
 
@@ -63,6 +65,7 @@ either `"Organization"` or `"User"`. Pass this through to the provisioning logic
 
 <!-- canon:system:2.2 status:todo -->
 
+<!-- canon:ticket:github:572 -->
 For personal accounts, either:
 - **(a)** Create an Auth0 org named after the GitHub username (e.g., `njgerner`)
   — same flow as org installs, just with a user-scoped name. Simplest approach.
@@ -84,6 +87,7 @@ assumes every installation has an `oidc_org_id`.
 
 <!-- canon:system:3 status:todo -->
 
+<!-- canon:ticket:github:573 -->
 Users who belong to multiple installations (e.g., `canonhq` org + `njgerner`
 personal) need a way to switch between them in the web UI.
 
@@ -91,6 +95,7 @@ personal) need a way to switch between them in the web UI.
 
 <!-- canon:system:3.1 status:todo -->
 
+<!-- canon:ticket:github:574 -->
 When a user logs in, if the access token doesn't contain an `org_id` (common
 with personal account installations), fall back to looking up all installations
 the user has access to and let them pick or auto-select.
@@ -99,6 +104,7 @@ the user has access to and let them pick or auto-select.
 
 <!-- canon:system:3.2 status:todo -->
 
+<!-- canon:ticket:github:575 -->
 Add an org/account switcher to the web UI header (next to the user menu) that
 lists all installations the current user has access to. Selecting one re-scopes
 the session's `org_login` and reloads the Explorer.
@@ -107,6 +113,7 @@ the session's `org_login` and reloads the Explorer.
 
 <!-- canon:system:3.3 status:todo -->
 
+<!-- canon:ticket:github:576 -->
 The `/app/setup/` redirect after GitHub App installation should scope to the
 newly installed account, not the user's existing session org. The GitHub OAuth
 callback includes an `installation_id` parameter — use this to set the correct
@@ -124,6 +131,7 @@ callback includes an `installation_id` parameter — use this to set the correct
 
 <!-- canon:system:4 status:todo -->
 
+<!-- canon:ticket:github:577 -->
 Repos from one installation should not appear under another installation's scope
 in the Explorer.
 
@@ -131,6 +139,7 @@ in the Explorer.
 
 <!-- canon:system:4.1 status:todo -->
 
+<!-- canon:ticket:github:578 -->
 Explorer API queries must filter repos by the session's current
 `installation_id`, not just `org_login`. This prevents `njgerner/dc-wedding-site`
 from appearing under the `canonhq` Explorer view.
@@ -139,6 +148,7 @@ from appearing under the `canonhq` Explorer view.
 
 <!-- canon:system:4.2 status:todo -->
 
+<!-- canon:ticket:github:579 -->
 Verify that the spec search index partitions results by installation. If the
 index is shared, add an `installation_id` filter to search queries.
 

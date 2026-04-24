@@ -17,6 +17,7 @@ Replace manual token tracking with PostHog's native Anthropic wrapper (`posthog.
 
 <!-- canon:system:1 status:todo -->
 
+<!-- canon:ticket:github:566 -->
 Canon makes LLM calls in three places:
 
 | Call Site | Module | Pattern | Tracked Today? |
@@ -214,6 +215,7 @@ Each streaming call site should pass a `feature` and `action`:
 
 <!-- canon:system:5 status:todo -->
 
+<!-- canon:ticket:github:567 -->
 Tag every `$ai_generation` event with organization context to enable per-org cost dashboards and billing reconciliation.
 
 ### Properties
@@ -246,6 +248,7 @@ Every LLM call should include:
 
 <!-- canon:system:6 status:in_progress -->
 
+<!-- canon:ticket:github:568 -->
 The existing `agent_call_completed` event in `ClaudeClient.complete()` overlaps with the automatic `$ai_generation` event. Plan a phased deprecation.
 
 ### Phase 1: Dual Emit (this spec)
@@ -266,6 +269,7 @@ Update SRE dashboard panels to query `$ai_generation` events instead of `agent_c
 
 <!-- canon:system:7 status:todo -->
 
+<!-- canon:ticket:github:569 -->
 ### Phase 1 — Expose client + wrap sync path (Sections 2–3)
 
 - Add `get_client()` to `analytics.py`
