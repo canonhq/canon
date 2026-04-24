@@ -282,6 +282,7 @@ Routing matches against section-level or frontmatter-level metadata. When no rou
 
 <!-- canon:system:4 status:in_progress -->
 
+<!-- canon:ticket:jira:18 -->
 Support org-wide defaults that individual repos inherit and can override.
 
 <!-- section done: old ticket #267 closed -->
@@ -378,6 +379,7 @@ When `auth_profile` is set, the adapter factory reads credentials from the named
 
 <!-- canon:system:4.3 status:in_progress -->
 
+<!-- canon:ticket:jira:19 -->
 Configurable Jinja2-style templates for ticket body generation, replacing the current hardcoded `section.content[:2000]` truncation.
 
 ```yaml
