@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import logging
 import re
@@ -30,6 +31,14 @@ from .models import (
 from .render import render_markdown_html, render_spec_html
 
 logger = logging.getLogger(__name__)
+
+# Request coalescing: prevent thundering-herd when cache expires and
+# multiple requests hit get_org_overview simultaneously.
+_inflight: dict[str, asyncio.Task] = {}
+
+# Longer TTL for data that changes infrequently.
+_REPO_LIST_TTL = 900  # 15 min — repos rarely added/removed
+_ORG_OVERVIEW_TTL = 600  # 10 min — spec content changes occasionally
 
 
 def _summarize_spec(doc: SpecDocument) -> SpecSummary:
@@ -198,13 +207,49 @@ async def get_org_overview(
     *,
     search_index: object | None = None,
 ) -> OrgOverview:
-    """Get the full org dashboard overview."""
+    """Get the full org dashboard overview.
+
+    Uses request coalescing so concurrent callers share a single in-flight
+    fetch instead of each hitting the GitHub API independently.
+    """
     cache_key = f"org_overview:{org}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    repos = await client.list_installation_repos()
+    # Coalesce: if another request is already fetching this overview, wait
+    # for it instead of issuing duplicate GitHub API calls.
+    inflight = _inflight.get(cache_key)
+    if inflight is not None and not inflight.done():
+        return await inflight
+
+    task = asyncio.create_task(
+        _fetch_org_overview(client, org, cache, cache_key=cache_key, search_index=search_index)
+    )
+    _inflight[cache_key] = task
+    try:
+        return await task
+    finally:
+        # Only remove our own task — a successor may have replaced it.
+        if _inflight.get(cache_key) is task:
+            del _inflight[cache_key]
+
+
+async def _fetch_org_overview(
+    client: GitHubClient,
+    org: str,
+    cache: TTLCache,
+    *,
+    cache_key: str,
+    search_index: object | None = None,
+) -> OrgOverview:
+    """Internal: actually fetch the org overview from GitHub."""
+    # Cache repo list separately with a longer TTL — repos rarely change.
+    repo_cache_key = f"repo_list:{org}"
+    repos = cache.get(repo_cache_key)
+    if repos is None:
+        repos = await client.list_installation_repos()
+        cache.set_with_ttl(repo_cache_key, repos, _REPO_LIST_TTL)
 
     repos_with_specs: list[RepoSummary] = []
     repos_without_specs: list[RepoSummary] = []
@@ -279,7 +324,7 @@ async def get_org_overview(
         total_repos=len(repos),
         total_docs=total_docs,
     )
-    cache.set(cache_key, overview)
+    cache.set_with_ttl(cache_key, overview, _ORG_OVERVIEW_TTL)
     return overview
 
 

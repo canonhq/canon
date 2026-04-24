@@ -8,6 +8,7 @@ import re
 from html import escape as html_escape
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -150,6 +151,64 @@ async def _get_user_orgs(request: Request, user: CurrentUser | None = None) -> l
     if org_login:
         return [org_login]
     return []
+
+
+def _github_error_detail(exc: httpx.HTTPStatusError) -> tuple[str, int]:
+    """Build an error message and status code for a GitHub API failure."""
+    status = exc.response.status_code
+    if status == 403:
+        detail = (
+            "GitHub API returned 403 Forbidden. This usually means the GitHub App "
+            "installation needs updated permissions accepted, or the app has been "
+            "suspended. Check your GitHub App installation settings."
+        )
+    elif status == 401:
+        detail = (
+            "GitHub App authentication failed. The private key may be invalid or "
+            "the app credentials may need to be rotated."
+        )
+    elif status == 429:
+        detail = "GitHub API rate limit exceeded. Please try again in a few minutes."
+    else:
+        detail = f"GitHub API error ({status}). Please try again later."
+
+    url = str(exc.request.url) if exc.request else "(unknown)"
+    body = exc.response.text[:200] if exc.response.text else ""
+    log_level = logging.WARNING if status == 429 else logging.ERROR
+    logger.log(log_level, "GitHub API error %d for %s: %s", status, url, body)
+    return detail, status
+
+
+def _github_error_response(exc: httpx.HTTPStatusError) -> JSONResponse:
+    """Return a structured JSON error response for GitHub API failures."""
+    detail, status = _github_error_detail(exc)
+    return JSONResponse(
+        content={"error": detail, "github_status": status},
+        status_code=502,
+    )
+
+
+def _request_error_response(exc: httpx.RequestError) -> JSONResponse:
+    """Return a structured JSON error response for network/timeout errors."""
+    logger.error("GitHub API request failed: %s: %s", type(exc).__name__, exc)
+    return JSONResponse(
+        content={"error": "GitHub API is unreachable. Please try again later."},
+        status_code=502,
+    )
+
+
+def _github_error_html(exc: httpx.HTTPStatusError | httpx.RequestError) -> HTMLResponse:
+    """Return an HTML error page for GitHub API failures."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        detail, _ = _github_error_detail(exc)
+    else:
+        logger.error("GitHub API request failed: %s: %s", type(exc).__name__, exc)
+        detail = "GitHub API is unreachable. Please try again later."
+    safe_detail = html_escape(detail)
+    return HTMLResponse(
+        content=f"<h1>Service Unavailable</h1><p>{safe_detail}</p>",
+        status_code=502,
+    )
 
 
 async def _get_client_for_org(request: Request, org: str):
@@ -541,8 +600,11 @@ async def org_dashboard(request: Request, org: str):
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
     search_index = getattr(request.app.state, "search_index", None)
-    overview = await get_org_overview(client, org, cache, search_index=search_index)
-    facets = await get_facet_counts(client, org, cache, search_index=search_index)
+    try:
+        overview = await get_org_overview(client, org, cache, search_index=search_index)
+        facets = await get_facet_counts(client, org, cache, search_index=search_index)
+    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+        return _github_error_html(exc)
     orgs = await _get_user_orgs(request)
     return templates.TemplateResponse(
         request,
@@ -565,7 +627,10 @@ async def org_repo_detail(request: Request, org: str, owner: str, repo: str):
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
     search_index = getattr(request.app.state, "search_index", None)
-    detail = await get_repo_detail(client, owner, repo, cache, search_index=search_index)
+    try:
+        detail = await get_repo_detail(client, owner, repo, cache, search_index=search_index)
+    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+        return _github_error_html(exc)
     if detail is None:
         return HTMLResponse(content="Repository not found", status_code=404)
     orgs = await _get_user_orgs(request)
@@ -588,7 +653,10 @@ async def org_spec_detail(request: Request, org: str, owner: str, repo: str, fil
         return spa
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
-    detail = await get_spec_detail(client, owner, repo, file_path, cache)
+    try:
+        detail = await get_spec_detail(client, owner, repo, file_path, cache)
+    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+        return _github_error_html(exc)
     if detail is None:
         return HTMLResponse(content="Spec not found", status_code=404)
     orgs = await _get_user_orgs(request)
@@ -611,7 +679,10 @@ async def org_doc_detail(request: Request, org: str, owner: str, repo: str, file
         return spa
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
-    detail = await get_doc_detail(client, owner, repo, file_path, cache)
+    try:
+        detail = await get_doc_detail(client, owner, repo, file_path, cache)
+    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+        return _github_error_html(exc)
     if detail is None:
         return HTMLResponse(content="Document not found", status_code=404)
     orgs = await _get_user_orgs(request)
@@ -646,26 +717,31 @@ async def api_search(
     search_index = getattr(request.app.state, "search_index", None)
     embed_client = getattr(request.app.state, "embed_client", None)
 
-    results = await search_specs(
-        client,
-        org,
-        cache,
-        query=q,
-        team=team,
-        status=status,
-        tag=tag,
-        repo=repo,
-        search_index=search_index,
-        embed_client=embed_client,
-    )
+    try:
+        results = await search_specs(
+            client,
+            org,
+            cache,
+            query=q,
+            team=team,
+            status=status,
+            tag=tag,
+            repo=repo,
+            search_index=search_index,
+            embed_client=embed_client,
+        )
 
-    facets = await get_facet_counts(
-        client,
-        org,
-        cache,
-        search_index=search_index,
-        repo=repo,
-    )
+        facets = await get_facet_counts(
+            client,
+            org,
+            cache,
+            search_index=search_index,
+            repo=repo,
+        )
+    except httpx.HTTPStatusError as exc:
+        return _github_error_response(exc)
+    except httpx.RequestError as exc:
+        return _request_error_response(exc)
 
     total = len(results)
     paginated = results[offset : offset + limit]
@@ -704,15 +780,20 @@ async def api_coverage(
     cache = _get_cache(request)
     agent_store = getattr(request.app.state, "agent_store", None)
 
-    result = await get_coverage(
-        client,
-        org,
-        cache,
-        repo=repo,
-        team=team,
-        days=days,
-        agent_store=agent_store,
-    )
+    try:
+        result = await get_coverage(
+            client,
+            org,
+            cache,
+            repo=repo,
+            team=team,
+            days=days,
+            agent_store=agent_store,
+        )
+    except httpx.HTTPStatusError as exc:
+        return _github_error_response(exc)
+    except httpx.RequestError as exc:
+        return _request_error_response(exc)
     return JSONResponse(content=result.model_dump())
 
 
@@ -799,7 +880,12 @@ async def api_dashboard(
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
     search_index = getattr(request.app.state, "search_index", None)
-    overview = await get_org_overview(client, org, cache, search_index=search_index)
+    try:
+        overview = await get_org_overview(client, org, cache, search_index=search_index)
+    except httpx.HTTPStatusError as exc:
+        return _github_error_response(exc)
+    except httpx.RequestError as exc:
+        return _request_error_response(exc)
     return JSONResponse(content=overview.model_dump())
 
 
@@ -816,15 +902,20 @@ async def api_tasks(
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
     search_index = getattr(request.app.state, "search_index", None)
-    result = await get_tasks(
-        client,
-        org,
-        cache,
-        status=status,
-        repo_filter=repo,
-        search_index=search_index,
-        expand=expand,
-    )
+    try:
+        result = await get_tasks(
+            client,
+            org,
+            cache,
+            status=status,
+            repo_filter=repo,
+            search_index=search_index,
+            expand=expand,
+        )
+    except httpx.HTTPStatusError as exc:
+        return _github_error_response(exc)
+    except httpx.RequestError as exc:
+        return _request_error_response(exc)
     return JSONResponse(content=result.model_dump())
 
 
@@ -840,7 +931,12 @@ async def api_repo_detail(
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
     search_index = getattr(request.app.state, "search_index", None)
-    detail = await get_repo_detail(client, owner, repo, cache, search_index=search_index)
+    try:
+        detail = await get_repo_detail(client, owner, repo, cache, search_index=search_index)
+    except httpx.HTTPStatusError as exc:
+        return _github_error_response(exc)
+    except httpx.RequestError as exc:
+        return _request_error_response(exc)
     if detail is None:
         return JSONResponse(content={"error": "Repository not found"}, status_code=404)
     return JSONResponse(content=detail.model_dump())
@@ -858,7 +954,12 @@ async def api_spec_detail(
     """JSON spec detail for the Vue SPA."""
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
-    detail = await get_spec_detail(client, owner, repo, file_path, cache)
+    try:
+        detail = await get_spec_detail(client, owner, repo, file_path, cache)
+    except httpx.HTTPStatusError as exc:
+        return _github_error_response(exc)
+    except httpx.RequestError as exc:
+        return _request_error_response(exc)
     if detail is None:
         return JSONResponse(content={"error": "Spec not found"}, status_code=404)
     return JSONResponse(content=detail.model_dump())
@@ -876,7 +977,12 @@ async def api_doc_detail(
     """JSON doc detail for the Vue SPA."""
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
-    detail = await get_doc_detail(client, owner, repo, file_path, cache)
+    try:
+        detail = await get_doc_detail(client, owner, repo, file_path, cache)
+    except httpx.HTTPStatusError as exc:
+        return _github_error_response(exc)
+    except httpx.RequestError as exc:
+        return _request_error_response(exc)
     if detail is None:
         return JSONResponse(content={"error": "Document not found"}, status_code=404)
     return JSONResponse(content=detail.model_dump())

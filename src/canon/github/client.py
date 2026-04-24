@@ -6,6 +6,7 @@ import base64
 import logging
 import time
 from dataclasses import dataclass
+from typing import ClassVar
 
 import httpx
 import jwt
@@ -42,8 +43,16 @@ class DocPRResult:
     pr_url: str
 
 
+_MAX_ETAG_CACHE_SIZE = 500
+
+
 class GitHubClient:
     """Authenticated GitHub API client using App installation tokens."""
+
+    # Shared ETag cache across all instances so for_installation() clients
+    # benefit from prior conditional requests. Keys include owner/repo/path
+    # so there are no cross-installation collisions.
+    _etag_cache: ClassVar[dict[str, tuple[str, dict]]] = {}
 
     def __init__(
         self,
@@ -116,6 +125,37 @@ class GitHubClient:
         resp.raise_for_status()
         return resp.json()
 
+    async def _get_conditional(self, cache_key: str, path: str, **params: str) -> dict:
+        """GET with ETag-based conditional requests.
+
+        304 Not Modified responses don't count against GitHub's rate limit
+        (per GitHub docs: https://docs.github.com/en/rest/using-the-rest-api/best-practices#use-conditional-requests-if-appropriate).
+        """
+        headers = await self._auth_headers()
+        cached = self._etag_cache.get(cache_key)
+        if cached is not None:
+            headers["If-None-Match"] = cached[0]
+
+        resp = await self._http.get(path, headers=headers, params=params)
+        if resp.status_code == 304:
+            if cached is not None:
+                return cached[1]
+            # 304 without a prior ETag should not happen; re-fetch without
+            # conditional headers rather than crashing on an empty body.
+            logger.warning("GitHub returned 304 without prior ETag for %s", path)
+            headers.pop("If-None-Match", None)
+            resp = await self._http.get(path, headers=headers, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+
+        etag = resp.headers.get("etag")
+        if etag:
+            if cache_key not in self._etag_cache and len(self._etag_cache) >= _MAX_ETAG_CACHE_SIZE:
+                oldest = next(iter(self._etag_cache))
+                del self._etag_cache[oldest]
+            self._etag_cache[cache_key] = (etag, data)
+        return data
+
     async def _get_list(self, path: str, **params: str) -> list[dict]:
         """GET that returns a JSON array (issues, files, directory listings)."""
         headers = await self._auth_headers()
@@ -166,19 +206,23 @@ class GitHubClient:
     # ─── Installation ──────────────────────────────────
 
     async def list_installation_repos(self) -> list[dict]:
-        """List all repositories accessible to this installation (paginated)."""
+        """List all repositories accessible to this installation (paginated).
+
+        Uses ETag-based conditional requests so repeat calls that return
+        304 Not Modified don't count against the GitHub rate limit.
+        """
         all_repos: list[dict] = []
         page = 1
 
         while True:
-            headers = await self._auth_headers()
-            resp = await self._http.get(
+            cache_key = f"repos:{self.installation_id}:page:{page}"
+            data = await self._get_conditional(
+                cache_key,
                 "/installation/repositories",
-                headers=headers,
-                params={"per_page": "100", "page": str(page)},
+                per_page="100",
+                page=str(page),
             )
-            resp.raise_for_status()
-            data = resp.json()
+
             repos = data.get("repositories", [])
             all_repos.extend(repos)
 
@@ -201,13 +245,18 @@ class GitHubClient:
     ) -> tuple[str, str]:
         """Fetch a file's content and SHA.
 
+        Uses ETag-based conditional requests so unchanged files return
+        304 Not Modified (free — doesn't count against rate limit).
+
         Returns:
             (content_string, file_sha)
         """
         params = {}
         if ref:
             params["ref"] = ref
-        data = await self._get(f"/repos/{owner}/{repo}/contents/{path}", **params)
+        api_path = f"/repos/{owner}/{repo}/contents/{path}"
+        cache_key = f"file:{owner}/{repo}/{path}:{ref or 'default'}"
+        data = await self._get_conditional(cache_key, api_path, **params)
         content = base64.b64decode(data["content"]).decode("utf-8")
         return content, data["sha"]
 
