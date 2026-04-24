@@ -37,6 +37,7 @@ Canon's current model assumes specs exist before ticket sync begins. The most im
 
 <!-- canon:system:2 status:todo -->
 
+<!-- canon:ticket:jira:5 -->
 A new sync mode where git events (commit, PR open, PR merge, PR close) drive ticket status transitions, independent of spec content. This is the "Phase 0" capability that enterprises need before adopting specs.
 
 ### 2.1 Branch Name → Ticket ID Extraction
@@ -108,6 +109,7 @@ Priority resolution: if a ticket is linked to both a spec section AND a branch, 
 
 <!-- canon:system:3 status:todo -->
 
+<!-- canon:ticket:jira:6 -->
 Support parent-child relationships between specs, enabling the initiative → epic → ticket decomposition pattern used by large organizations.
 
 ### 3.1 Parent Field in Frontmatter
@@ -167,6 +169,7 @@ New MCP tool capabilities:
 
 <!-- canon:system:4 status:todo -->
 
+<!-- canon:ticket:jira:7 -->
 Make the existing `require_review` config flag and `review_status` frontmatter field operational. Currently these are data model placeholders with no runtime enforcement.
 
 ### 4.1 Gated Ticket Creation
@@ -215,6 +218,7 @@ When `required_roles` is set, the review workflow checks that approvers have the
 
 <!-- canon:system:5 status:todo -->
 
+<!-- canon:ticket:jira:8 -->
 Enable tracking of initiatives that span multiple repositories. A spec in one repo can reference implementation across many repos, with aggregated coverage.
 
 ### 5.1 Cross-Repo References
@@ -254,6 +258,7 @@ The web dashboard and MCP tool surface initiative-level views:
 
 <!-- canon:system:6 status:todo -->
 
+<!-- canon:ticket:jira:9 -->
 Enhance the existing web editor to support enterprise adoption patterns where PMs and non-technical stakeholders author specs without CLI/git expertise.
 
 ### 6.1 Spec Templates in Web Editor
@@ -306,6 +311,7 @@ This enables external tools (Google Docs add-ons, Notion integrations, Confluenc
 
 <!-- canon:system:7 status:todo -->
 
+<!-- canon:ticket:jira:10 -->
 Export Canon's operational data to external engineering analytics platforms. Enterprises use tools like Jellyfish, LinearB, and Swarmia for cycle time, investment tracking, and team health — Canon should feed into these systems.
 
 ### 7.1 Event Webhook
@@ -365,6 +371,7 @@ The existing daily coverage snapshot CronJob can optionally push snapshots to th
 
 <!-- canon:system:8 status:todo -->
 
+<!-- canon:ticket:jira:11 -->
 Configurable gates that enforce organizational compliance requirements before ticket status transitions. Enterprises operating under SOC-2, HIPAA, or similar frameworks need certain workflow stages to be manually controlled.
 
 ### 8.1 Protected Ticket States
@@ -419,6 +426,7 @@ This reduces manual data entry while ensuring compliance fields are always popul
 
 <!-- canon:system:9 status:todo -->
 
+<!-- canon:ticket:jira:12 -->
 Enhance the existing Canon Claude Code plugin to support organization-wide distribution through plugin marketplaces (Anthropic plugin registry, org-internal marketplaces).
 
 ### 9.1 Org-Specific Skill Packaging
