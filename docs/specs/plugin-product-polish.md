@@ -260,6 +260,7 @@ Use the canon-verify skill to verify the current branch against linked spec ACs.
 
 <!-- canon:system:6 status:in_progress -->
 
+<!-- canon:ticket:github:588 -->
 Give Canon ambient product presence in the terminal.
 
 > **Platform limitation (2026-04-11):** Claude Code's plugin system does not
