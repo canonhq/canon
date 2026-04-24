@@ -35,6 +35,7 @@ Canon's current architecture handles small-to-medium installations well (1-20 re
 
 <!-- canon:system:2 status:todo -->
 
+<!-- canon:ticket:jira:13 -->
 Move webhook processing from synchronous request handlers to a background job queue. The webhook endpoint accepts, validates, and enqueues; workers process asynchronously.
 
 ### 2.1 Queue Architecture
@@ -115,6 +116,7 @@ If the queue is unhealthy (PostgreSQL connection lost), the webhook endpoint fal
 
 <!-- canon:system:3 status:todo -->
 
+<!-- canon:ticket:jira:14 -->
 Replace the sequential `O(repos × specs)` reverse sync scan with a pre-populated index that maps ticket IDs to their source spec sections.
 
 ### 3.1 Ticket Index Table
@@ -173,6 +175,7 @@ A daily CronJob validates index consistency by sampling — comparing a random s
 
 <!-- canon:system:4 status:todo -->
 
+<!-- canon:ticket:jira:15 -->
 Replace in-process TTL caches with a shared cache for multi-replica deployments. This ensures consistent behavior across replicas and reduces redundant API calls.
 
 ### 4.1 Cache Abstraction
@@ -239,6 +242,7 @@ For the shared cache, add explicit invalidation hooks:
 
 <!-- canon:system:5 status:todo -->
 
+<!-- canon:ticket:jira:16 -->
 Update Helm chart resource defaults and scaling parameters for enterprise workloads.
 
 ### 5.1 Resource Limit Profiles
