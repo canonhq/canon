@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .models import VALID_DOC_TYPES
 
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
+_TEMPLATES_DIR = Path(__file__).parent / "_template_data"
 
 
 def get_template(doc_type: str) -> str:
