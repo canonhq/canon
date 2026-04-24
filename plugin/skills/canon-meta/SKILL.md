@@ -25,6 +25,7 @@ You are helping the user find and use the right Canon skill for their task.
 | **canon-implement** | Executing a multi-task implementation plan with spec traceability, worktrees, and review |
 | **canon-worktree** | Need an isolated workspace for feature work or before executing a plan |
 | **canon-branch** | Done with a development branch — verify, update spec statuses, merge/PR/cleanup |
+| **canon-interrogate** | Adversarial review of a spec or plan — challenges ACs, validates assumptions, surfaces gaps before implementation |
 | **canon-verify** | Checking whether code satisfies spec acceptance criteria (report or gate mode) |
 | **canon-review** | Reviewing code changes against all documentation — specs, ADRs, READMEs |
 | **canon-update** | Updating spec statuses based on code implementation evidence |
@@ -36,7 +37,7 @@ You are helping the user find and use the right Canon skill for their task.
 Common sequences where one skill leads to the next:
 
 ```
-New feature:     canon-plan → canon-worktree → canon-implement → canon-branch
+New feature:     canon-plan → canon-interrogate → canon-worktree → canon-implement → canon-branch
 Single task:     canon-context → canon-task → canon-verify
 Code review:     canon-context → canon-review
 Periodic audit:  canon-audit → canon-status

@@ -21,7 +21,7 @@ read_ide_config() {
 
 if command -v jq >/dev/null 2>&1; then
   ide_config=$(read_ide_config)
-  on_stop=$(echo "$ide_config" | jq -r '.auto_verify.on_stop // true' 2>/dev/null)
+  on_stop=$(echo "$ide_config" | jq -r '.auto_verify.on_stop' 2>/dev/null)
   if [ "$on_stop" = "false" ]; then
     exit 0
   fi

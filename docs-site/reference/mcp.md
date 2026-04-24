@@ -33,7 +33,7 @@ Add to your project's `.mcp.json`:
 
 Add to your MCP configuration with the same command and args.
 
-## Tools (11)
+## Tools (12)
 
 ### `search`
 
@@ -52,7 +52,7 @@ Search the spec knowledge base using hybrid search (vector + BM25). Returns matc
 
 ### `get_spec`
 
-Get a full parsed spec document with frontmatter, sections, acceptance criteria, and status. Returns structured data.
+Get a full parsed spec document with frontmatter, sections, acceptance criteria, and status. Returns structured data. Use `summary_only=true` for lightweight metadata (frontmatter + section titles/status/AC counts). Use `status_filter` to include only top-level sections with specific statuses (children of matching sections are always included).
 
 **Parameters:**
 
@@ -61,6 +61,8 @@ Get a full parsed spec document with frontmatter, sections, acceptance criteria,
 | `owner` | `str` | Yes | — |
 | `repo` | `str` | Yes | — |
 | `file_path` | `str` | Yes | — |
+| `summary_only` | `bool` | No | `false` |
+| `status_filter` | `list[str] \| None` | No | — |
 
 ---
 
@@ -95,7 +97,7 @@ Get raw markdown content of any document from a repository. Use this when you ne
 
 ### `list_specs`
 
-List all spec documents in a repository (using configured doc_paths). Returns metadata (title, status, owner) without full content.
+List all spec documents in a repository (using configured doc_paths). Returns metadata (title, status, owner) without full content. Supports pagination with `page` and `per_page` parameters.
 
 **Parameters:**
 
@@ -103,6 +105,8 @@ List all spec documents in a repository (using configured doc_paths). Returns me
 |------|------|----------|---------|
 | `owner` | `str` | Yes | — |
 | `repo` | `str` | Yes | — |
+| `page` | `int` | No | 1 |
+| `per_page` | `int` | No | 50 |
 
 ---
 
@@ -200,5 +204,19 @@ Bulk update a spec: apply multiple status updates and realizations in a single c
 | `status_updates` | `list[dict] | None` | No | — |
 | `realizations` | `list[dict] | None` | No | — |
 | `commit_message` | `str` | No | '' |
+
+---
+
+### `record_session_evidence`
+
+Record dev-session evidence captured by the Canon plugin. Stores a SessionRecord (spec sections touched, ACs addressed, files modified, verify gate runs) to the Canon backend so the GitHub App's PR analyzer can use it as hint input at PR-open time.
+
+**Parameters:**
+
+| Name | Type | Required | Default |
+|------|------|----------|---------|
+| `repo` | `str` | Yes | — |
+| `branch` | `str` | Yes | — |
+| `session` | `dict` | Yes | — |
 
 ---

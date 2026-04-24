@@ -111,6 +111,7 @@ The script exits silently in non-Canon repos, so you can leave it on globally wi
 | Skill | Description |
 |-------|-------------|
 | `/canon:plan` | Spec-driven planning: explore → propose → spec → design → tasks → implementation plan |
+| `/canon:interrogate` | Adversarial review — red-team a spec or plan before implementing |
 | `/canon:task` | Pick up a single task, implement ACs, mark done |
 | `/canon:implement` | Execute a multi-task implementation plan with spec traceability |
 | `/canon:worktree` | Create an isolated git worktree for spec-driven work |

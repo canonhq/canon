@@ -1,12 +1,12 @@
 ---
 # This file is auto-generated. Do not edit manually.
-# Generated: 2026-04-11 21:34 UTC
+# Generated: 2026-04-23 00:00 UTC
 ---
 
 # CLI Reference
 
 ::: tip Auto-Generated
-This page was auto-generated from `canon --help` on 2026-04-11 21:34 UTC.
+This page was auto-generated from `canon --help` on 2026-04-23 00:00 UTC.
 See [source script](https://github.com/canonhq/canon/blob/main/docs-site/.vitepress/scripts/gen-cli-ref.py).
 :::
 
@@ -265,7 +265,7 @@ usage: canon lint [-h] [--spec SPEC] [--json] [--warnings-as-errors]
 Static verification of acceptance criteria against the codebase. Greps source paths for keywords from each unchecked AC and classifies it as likely realized, not started, or unknown. No Claude spend. Supports `--json` for the verify GitHub Action.
 
 ```bash
-usage: canon verify [-h] [--section SECTION] [--json]
+usage: canon verify [-h] [--section SECTION] [--json] [--gate]
 ```
 
 **Options:**
@@ -275,6 +275,7 @@ usage: canon verify [-h] [--section SECTION] [--json]
 | `-h, --help` | show this help message and exit |
 | `--section SECTION` | Filter to a single section ID |
 | `--json` | Emit machine-readable JSON instead of human-friendly output |
+| `--gate` | Gate mode — exit nonzero if any in-scope ACs are unchecked |
 
 
 ---
@@ -284,7 +285,7 @@ usage: canon verify [-h] [--section SECTION] [--json]
 Audit spec statuses against the codebase using Claude. Checks off realized ACs, inserts evidence comments, and optionally runs ticket sync.
 
 ```bash
-usage: canon audit [-h] [--dry-run] [--sync] [--spec SPEC] [--no-ac-updates]
+usage: canon audit [-h] [--dry-run] [--sync] [--spec SPEC] [--no-ac-updates] [--json]
 ```
 
 **Options:**
@@ -296,6 +297,7 @@ usage: canon audit [-h] [--dry-run] [--sync] [--spec SPEC] [--no-ac-updates]
 | `--sync` | Run ticket sync after audit |
 | `--spec SPEC` | Filter to a single spec file |
 | `--no-ac-updates` | Skip checking off ACs and inserting evidence |
+| `--json` | Emit machine-readable JSON instead of human-friendly output |
 
 
 ---
@@ -321,6 +323,432 @@ usage: canon plan [-h] [--output OUTPUT] spec_file
 |--------|-------------|
 | `-h, --help` | show this help message and exit |
 | `--output OUTPUT` | Write plan to file instead of stdout |
+
+
+---
+
+### `canon new`
+
+Scaffold a new spec file from a template. Non-interactive — every input is a flag. Used by the new-spec GitHub Action to produce consistent output.
+
+```bash
+usage: canon new [-h] --title TITLE [--type {adr,design,runbook,spec}] [--owner OWNER] [--team TEAM] [--output OUTPUT] [--force]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--title TITLE` | Spec title (e.g. "Auth Hardening") |
+| `--type {adr,design,runbook,spec}` | Document type (default: spec) |
+| `--owner OWNER` | Owner GitHub handle or name |
+| `--team TEAM` | Owning team |
+| `--output OUTPUT` | Explicit output path. Defaults to `<doc_paths_directory>/<slug>.md` based on CANON.yaml's first `doc_paths` entry |
+| `--force` | Overwrite the output file if it already exists |
+
+
+---
+
+### `canon release-notes`
+
+Generate spec-driven release notes between two git refs. Diffs spec files at the section level and reports sections that transitioned to `done`, new realization evidence, and new/removed spec files.
+
+```bash
+usage: canon release-notes [-h] [--from FROM_REF] [--to TO_REF] [--json] [--output OUTPUT]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--from FROM_REF` | Git ref (tag, branch, or SHA) to compare from. Defaults to the previous tag from `git describe --tags --abbrev=0 HEAD^` |
+| `--to TO_REF` | Git ref to compare to (default: HEAD) |
+| `--json` | Emit machine-readable JSON instead of human-friendly markdown |
+| `--output OUTPUT` | Write output to file instead of stdout |
+
+
+---
+
+### `canon stale`
+
+Find specs whose realization code has churned but the spec itself has not been updated. Uses git log timestamps and line-count deltas — no Claude spend, no network. Feeds the `stale-spec-check` GitHub Action.
+
+A spec is flagged as stale when: its file has not been touched in N days AND at least one file referenced in its `<!-- canon:realized-in -->` comments has changed AND the combined churn exceeds the configured threshold.
+
+```bash
+usage: canon stale [-h] [--stale-days STALE_DAYS] [--code-churn-threshold CODE_CHURN_THRESHOLD] [--json]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--stale-days STALE_DAYS` | Spec is candidate-stale when not touched in this many days (default: 90) |
+| `--code-churn-threshold CODE_CHURN_THRESHOLD` | Combined changed lines across realization files required to flag (default: 50) |
+| `--json` | Emit machine-readable JSON instead of human-friendly output |
+
+
+---
+
+### `canon export`
+
+Emit a compliance-grade audit trail of every acceptance criterion across every spec. One row per AC with spec coordinates, owner, team, realization references, and last-modified date. Designed for regulated environments.
+
+```bash
+usage: canon export [-h] [--format {json,csv}] [--output OUTPUT] [--spec SPEC]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--format {json,csv}` | Output format (default: json). CSV joins list fields with semicolons |
+| `--output OUTPUT` | Write to file instead of stdout |
+| `--spec SPEC` | Filter to a single spec file (substring match) |
+
+
+---
+
+### `canon dedup`
+
+Find and resolve duplicate tickets for spec sections. Rewrites `ticket:unknown` links to `ticket:github` and detects duplicate open tickets for the same section.
+
+```bash
+usage: canon dedup [-h] [--dry-run] [--spec SPEC]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--dry-run` | Preview changes without acting |
+| `--spec SPEC` | Path to specific spec file |
+
+
+---
+
+### `canon ide-config`
+
+Emit the resolved `ide:` section from `CANON.yaml` as JSON for hook scripts. Always exits 0 — missing or malformed `CANON.yaml` degrades to defaults so hooks never need to handle error cases.
+
+```bash
+usage: canon ide-config [-h] [--json]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--json` | Emit JSON to stdout (currently the only output mode; reserved for future formats) |
+
+
+---
+
+### `canon evidence`
+
+Capture and inspect dev-session evidence for the plugin evidence pipeline. Manages session records in `.canon/session-evidence.json` and verify logs in `.canon/verify-log.jsonl`.
+
+```bash
+usage: canon evidence [-h] {record,list-verify-runs,show,push} ...
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `record` | Compose a SessionRecord and append to `.canon/session-evidence.json` |
+| `list-verify-runs` | Print records from `.canon/verify-log.jsonl` |
+| `show` | Pretty-print `.canon/session-evidence.json` |
+| `push` | Persist evidence per `commit_on_push` mode (called by pre-push hook) |
+
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+
+
+#### `canon evidence list-verify-runs`
+
+```bash
+usage: canon evidence list-verify-runs [-h] [--since SINCE]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--since SINCE` | Only show records with `at` >= this ISO 8601 timestamp |
+
+
+#### `canon evidence push`
+
+```bash
+usage: canon evidence push [-h] [--mode {auto,always,ask,never}]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--mode {auto,always,ask,never}` | Override `commit_on_push` mode (default: read from CANON.yaml) |
+
+
+---
+
+### `canon integrations`
+
+Manage ticket system and service connections. Alias: `canon int`.
+
+```bash
+usage: canon integrations [-h] {list,add,remove,test} ...
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `list` | List configured integrations |
+| `add` | Connect a ticket system or service |
+| `remove` | Disconnect an integration |
+| `test` | Health check integration connections |
+
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+
+
+#### `canon integrations list`
+
+```bash
+usage: canon integrations list [-h] [--json] [--source {backend,local,env}]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--json` | JSON output |
+| `--source {backend,local,env}` | Filter by credential source |
+
+
+#### `canon integrations add`
+
+```bash
+usage: canon integrations add [-h] [--token TOKEN] [--non-interactive] {github,jira,linear}
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `provider` | Provider to connect (`github`, `jira`, or `linear`) |
+
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--token TOKEN` | API token (skip interactive prompt) |
+| `--non-interactive` | Fail if prompts are needed |
+
+
+#### `canon integrations remove`
+
+```bash
+usage: canon integrations remove [-h] [--yes] {github,jira,linear}
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `provider` | Provider to disconnect |
+
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--yes, -y` | Skip confirmation |
+
+
+#### `canon integrations test`
+
+```bash
+usage: canon integrations test [-h] [--json] [{github,jira,linear}]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `provider` | Provider to test (default: all configured) |
+
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--json` | JSON output |
+
+
+---
+
+### `canon extension`
+
+Manage Canon extensions — install, remove, list, create, validate, search, and update extensions.
+
+```bash
+usage: canon extension [-h] {add,remove,list,create,validate,search,info,update,enable,disable} ...
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `add` | Install an extension from a local directory |
+| `remove` | Remove an installed extension |
+| `list` | List installed extensions |
+| `create` | Scaffold a new extension |
+| `validate` | Validate an extension manifest |
+| `search` | Search extension catalogs |
+| `info` | Show detailed extension information |
+| `update` | Update an installed extension |
+| `enable` | Enable a disabled extension |
+| `disable` | Disable an extension without removing it |
+
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+
+
+#### `canon extension add`
+
+```bash
+usage: canon extension add [-h] [--dev] source
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `source` | Path to extension directory |
+
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--dev` | Symlink instead of copy (dev mode — edits propagate instantly) |
+
+
+#### `canon extension create`
+
+```bash
+usage: canon extension create [-h] [--skill] [--command] [--hook] [--adapter] [--author AUTHOR] [-o OUTPUT] ext_id
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `ext_id` | Extension ID (lowercase, hyphens) |
+
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--skill` | Include skill template |
+| `--command` | Include command template |
+| `--hook` | Include hook template |
+| `--adapter` | Include adapter skeleton |
+| `--author AUTHOR` | Author name |
+| `-o, --output OUTPUT` | Output directory (default: `./<ext_id>`) |
+
+
+#### `canon extension search`
+
+```bash
+usage: canon extension search [-h] [--tag TAG] [--category CATEGORY] [query]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `query` | Search query (substring match) |
+
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--tag TAG` | Filter by tag |
+| `--category CATEGORY` | Filter by category |
+
+
+#### `canon extension update`
+
+```bash
+usage: canon extension update [-h] [--all] [ext_id]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `ext_id` | Extension ID to update |
+
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--all` | Update all extensions |
+
+
+---
+
+### `canon doctor`
+
+Run diagnostic checks on your Canon installation. Checks config (`CANON.yaml`, `.mcp.json`, spec files), authentication (Canon token, GitHub CLI), integrations, and MCP server availability.
+
+```bash
+usage: canon doctor [-h] [--json] [--fix]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--json` | JSON output |
+| `--fix` | Attempt to auto-fix issues where possible |
 
 
 ---

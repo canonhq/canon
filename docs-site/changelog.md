@@ -6,6 +6,329 @@ title: Changelog
 
 Notable changes to Canon, grouped by minor release.
 
+## v1.57
+
+### Features
+
+- Sync UI for ticket mapping and sync management
+- Fix UserPromptSubmit hook blocking fresh repos + add canon-interrogate skill
+
+### Bug Fixes
+
+- Address review findings — grep fallback, variable naming, test gaps (plugin)
+
+## v1.56
+
+### Features
+
+- Automatic Jira OAuth token refresh on 401 and via cron
+- Add refresh-tokens CronJob (every 30 min) to Helm chart
+
+### Bug Fixes
+
+- Disable refreshTokensCronJob in preview values (chart)
+
+### Documentation
+
+- Update CLAUDE.md with current project structure and gotchas
+
+## v1.55
+
+### Features
+
+- CLI integration management, doctor command, and guided onboarding
+
+### Bug Fixes
+
+- Suppress misleading org_id warning for device-flow tokens (doctor)
+
+## v1.54
+
+### Features
+
+- Plugin ecosystem Phase 2-3 — adapters, catalog, hooks, MCP tools, agents
+
+### Bug Fixes
+
+- Exclude non-package directories from sdist to stay under PyPI 100MB limit
+- Allow bearer tokens without org_id to access org-scoped routes
+- Resolve org_login from request URL when JWT lacks org_id
+
+### Documentation
+
+- Add extension system documentation pages and testing extensions locally guide
+
+## v1.53
+
+### Features
+
+- Plugin ecosystem with extension system and Slack extraction
+
+## v1.52
+
+### Features
+
+- Expand integration test coverage to 192 tests + fix 3 auth bugs
+
+### Bug Fixes
+
+- Sync missing OSS modules and guard cloud-only imports
+- Fix choose-org page showing no orgs due to SPA intercepting JSON fetch
+- Cast IPv4Address to str in audit event response (admin)
+- Resolve ticket sync adapters using GitHub App token and DB credentials
+- Env var / auth_profile credentials take precedence over installation token
+- Add cancel-in-progress to Release & Publish workflow (ci)
+- Skip reverse sync commit when file content is unchanged (cron)
+
+## v1.51
+
+### Features
+
+- Canon plugin product polish + dev-to-PR evidence pipeline
+
+### Bug Fixes
+
+- PostHog reliability gaps — schema, JWT, instrumentation, security
+
+## v1.50
+
+### Features
+
+- GitHub Actions Suite — 14 actions, 2 reusable workflows, full V1.2 spec
+
+### Bug Fixes
+
+- Upgrade to Sonnet 4.6 + dynamic prompt budgeting (agent)
+
+## v1.49
+
+### Features
+
+- User & organization management — P0 admin spec implementation
+
+### Bug Fixes
+
+- Address review findings from admin UI PR
+
+## v1.48
+
+### Features
+
+- Per-spec sync events with adapter tagging for ticket sync dashboard (observability)
+
+## v1.47
+
+### Features
+
+- Apply tracked_cron to 6 missing crons + instrument device auth flow (observability)
+
+## v1.46
+
+### Features
+
+- Centralize Jira/Linear sync through Canon backend
+
+### Bug Fixes
+
+- OIDC live-provider smoke harness, Basic auth at device endpoint, localhost issuer exception, CI job
+- Robust parser for Claude analysis responses + structured failure reporting (agent)
+- Fix Jira search endpoint and parser start_line off-by-one
+- Stop pytest from spawning chromium tabs on every run (cli)
+
+## v1.45
+
+### Features
+
+- Admin UI enhancements — user deactivation, org suspension, auth fixes
+
+### Bug Fixes
+
+- Enable GitHub/Google/email connections for CLI client (auth0)
+- Resolve org in device auth flow for multi-org tenants
+- Wire class-based dark mode in Tailwind v4 (ui)
+
+## v1.44
+
+### Features
+
+- Super admin interface for platform management
+
+### Bug Fixes
+
+- Resolve org in device auth flow for multi-org tenants
+
+### Documentation
+
+- Add admin-actions spec (impersonation, deactivation, suspension)
+
+## v1.43
+
+### Features
+
+- Development execution workflow skills for Canon plugin
+
+### Bug Fixes
+
+- Close auth bypass allowing any user to access any org
+
+## v1.42
+
+### Features
+
+- Integration management UI with OAuth for Jira and Linear
+
+## v1.41
+
+### Bug Fixes
+
+- Wire GitHub OAuth App into Auth0 social connection (infra)
+- Import core infra into Terraform state (infra)
+
+## v1.40
+
+### Features
+
+- Migrate Auth0 from gv-os to canonhq tenant (infra)
+
+## v1.39
+
+### Features
+
+- Complete Slack product experience — 57 ACs across 9 systems
+
+## v1.38
+
+### Features
+
+- Complete Slack App spec — 68/68 ACs implemented
+
+## v1.37
+
+### Features
+
+- Implement /canon slash command handlers (slack)
+- Web app UX polish
+
+### Bug Fixes
+
+- Add Helm repo before dependency build in publish workflow (ci)
+- Fix Starlette Request handler instead of raw ASGI mount (slack)
+
+### Documentation
+
+- Fix Claude Code plugin installation instructions
+
+## v1.36
+
+### Features
+
+- Add interactive Slack app (§2-§9)
+
+### Documentation
+
+- Add multi-org & personal account support spec
+
+## v1.35
+
+### Features
+
+- Add LLM observability via PostHog $ai_generation events
+
+### Bug Fixes
+
+- Handle empty SMTP_PORT env var to prevent startup crash
+
+## v1.34
+
+### Features
+
+- Multi-target forward sync with shadow ticket creation
+- Cross-system drift detection for multi-target sync
+- Configure multi-target routing rules in CANON.yaml
+- Wire multi-target sync into push handler
+- Make sync failures loud with PostHog tracking and detailed logging
+- Auto-commit spec updates directly to default branch on merge
+
+### Bug Fixes
+
+- Prevent project_key mutation from bleeding into fallback path
+- Use original file SHA for auto-commit to prevent data loss
+- Log warning when section not found during shadow sync
+
+## v1.33
+
+### Features
+
+- Add Stripe, SMTP, and Auth0 M2M secrets to Helm chart and deploy workflow
+
+### Bug Fixes
+
+- Add Zitadel Helm repo before dependency build in CI workflows
+
+### Documentation
+
+- Add web-app-ux-polish spec for Tasks, Explorer, Nav, Editor, and Global UX improvements
+
+## v1.32
+
+### Features
+
+- Analytics dashboard with health score, events, and frontend
+- Add Canon-owned infrastructure (Terraform + SaaS automation)
+- Add GitHub API client integration tests (spec section 3)
+
+### Bug Fixes
+
+- Retry on stale SHA conflict (409) in reverse sync webhook processor
+- Make 0002 migration idempotent when target column already exists
+- Remove canon-github-tickets secret ref that breaks deploy
+
+### Documentation
+
+- Add spec for closing SDLC loop + multi-target ticket sync
+- Expand slack-integration spec into full Slack app design
+- Add analytics dashboard spec and infrastructure independence spec
+
+## v1.31
+
+### Bug Fixes
+
+- Reduce PostHog log noise from opaque tokens and missing web_org
+- Add comment-posting tools to Claude code review workflow
+- Increase Claude code review max-turns from 15 to 25
+- Make Claude code review more robust
+
+### Documentation
+
+- Expand infrastructure independence spec with Stripe, PostHog, Auth0 provisioning, and GitHub App sections
+
+## v1.30
+
+### Features
+
+- Add changelog automation for docs site
+- Add Auth0 M2M credentials to deploy and preview workflows
+
+### Bug Fixes
+
+- Detect opaque JWT tokens and add GitHub ticket sync Helm plumbing
+
+### Documentation
+
+- Add platform observability coverage spec
+- Add infrastructure independence spec
+
+## v1.29
+
+### Features
+
+- Complete user profile page spec
+
+### Bug Fixes
+
+- Strip libpq-only params (channel_binding) from asyncpg URLs
+- Restore allowedTools for claude code review gh commands
+
 ## v1.28
 
 ### Features

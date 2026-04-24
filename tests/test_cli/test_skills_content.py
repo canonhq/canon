@@ -18,6 +18,7 @@ EXPECTED_SKILLS = [
     "canon-branch",
     "canon-context",
     "canon-implement",
+    "canon-interrogate",
     "canon-meta",
     "canon-new",
     "canon-plan",
@@ -199,6 +200,19 @@ class TestHookFiles:
         content = (HOOKS_DIR / "session-start.sh").read_text()
         assert "No specs found" in content or "no specs" in content.lower()
 
+    def test_hooks_json_has_user_prompt_submit(self):
+        import json
+
+        data = json.loads((HOOKS_DIR / "hooks.json").read_text())
+        assert "UserPromptSubmit" in data["hooks"]
+
+    def test_user_prompt_check_script_exists(self):
+        assert (HOOKS_DIR / "user-prompt-check.sh").exists()
+
+    def test_user_prompt_check_script_is_bash(self):
+        content = (HOOKS_DIR / "user-prompt-check.sh").read_text()
+        assert content.startswith("#!/usr/bin/env bash")
+
     def test_hooks_reference_existing_scripts(self):
         """All command hooks in hooks.json should reference scripts that exist."""
         import json
@@ -236,6 +250,14 @@ class TestSkillCrossReferences:
     def test_canon_implement_mentions_verify(self):
         content = (SKILLS_DIR / "canon-implement" / "SKILL.md").read_text()
         assert "canon verify" in content or "canon-verify" in content
+
+    def test_canon_plan_mentions_interrogate(self):
+        content = (SKILLS_DIR / "canon-plan" / "SKILL.md").read_text()
+        assert "canon:interrogate" in content or "canon-interrogate" in content
+
+    def test_canon_interrogate_mentions_implement(self):
+        content = (SKILLS_DIR / "canon-interrogate" / "SKILL.md").read_text()
+        assert "canon-implement" in content or "canon:implement" in content
 
     def test_canon_plan_mentions_implement(self):
         content = (SKILLS_DIR / "canon-plan" / "SKILL.md").read_text()
@@ -481,12 +503,70 @@ class TestHookOutput:
         assert rc == 0
         assert elapsed < 2.0, f"stop.sh took {elapsed:.2f}s"
 
+    def test_user_prompt_check_silent_without_canon_yaml(self, tmp_path: Path):
+        """user-prompt-check.sh should exit silently when no CANON.yaml exists."""
+        rc, out, _, _ = self._run_hook("user-prompt-check.sh", tmp_path)
+        assert rc == 0
+        assert out.strip() == ""
+
+    def test_user_prompt_check_silent_without_specs_dir(self, empty_project: Path):
+        """user-prompt-check.sh should exit silently when CANON.yaml exists but no specs dir."""
+        rc, out, _, _ = self._run_hook("user-prompt-check.sh", empty_project)
+        assert rc == 0
+        assert out.strip() == ""
+
+    def test_user_prompt_check_emits_with_specs(self, canon_project: Path):
+        """user-prompt-check.sh should emit spec-search instruction when specs exist."""
+        rc, out, _, _ = self._run_hook("user-prompt-check.sh", canon_project)
+        assert rc == 0
+        assert "Canon specs" in out
+        assert "search" in out.lower()
+
+    def test_user_prompt_check_under_2s(self, canon_project: Path):
+        rc, _, _, elapsed = self._run_hook("user-prompt-check.sh", canon_project)
+        assert rc == 0
+        assert elapsed < 2.0, f"user-prompt-check.sh took {elapsed:.2f}s"
+
+    def test_user_prompt_check_silent_with_empty_specs_dir(self, tmp_path: Path):
+        """user-prompt-check.sh should exit silently when specs dir exists but has no .md files."""
+        (tmp_path / "CANON.yaml").write_text("specs:\n  doc_paths:\n    - docs/specs/*.md\n")
+        (tmp_path / "docs" / "specs").mkdir(parents=True)
+        rc, out, _, _ = self._run_hook("user-prompt-check.sh", tmp_path)
+        assert rc == 0
+        assert out.strip() == ""
+
+    def test_user_prompt_check_silent_when_on_prompt_false(self, canon_project: Path):
+        """user-prompt-check.sh should exit silently when on_prompt is disabled via grep fallback."""
+        (canon_project / "CANON.yaml").write_text(
+            "specs:\n  doc_paths:\n    - docs/specs/*.md\n"
+            "ide:\n  auto_context:\n    on_prompt: false\n"
+        )
+        # Remove canon from PATH to force the grep fallback branch
+        env = os.environ.copy()
+        env["CLAUDE_PROJECT_DIR"] = str(canon_project)
+        env["PATH"] = ":".join(
+            p
+            for p in env.get("PATH", "").split(":")
+            if not os.path.isfile(os.path.join(p, "canon"))
+        )
+        proc = subprocess.run(
+            ["bash", str(HOOKS_DIR / "user-prompt-check.sh")],
+            env=env,
+            cwd=canon_project,
+            capture_output=True,
+            text=True,
+            input="",
+            timeout=5,
+        )
+        assert proc.returncode == 0
+        assert proc.stdout.strip() == ""
+
 
 class TestWorkflowChains:
     """Verify the documented workflow chains are supported by skill content."""
 
     def test_new_feature_chain(self):
-        """canon-plan → canon-worktree → canon-implement → canon-branch"""
+        """canon-plan → canon-interrogate → canon-worktree → canon-implement → canon-branch"""
         # plan mentions worktree or implementation plan handoff
         plan = (SKILLS_DIR / "canon-plan" / "SKILL.md").read_text()
         assert "canon-implement" in plan or "canon:implement" in plan

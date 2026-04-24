@@ -138,6 +138,26 @@ Start a spec-driven planning workflow from exploration through spec creation to 
 - **Phase 5:** Generates task list mapped to spec sections
 - **Phase 6:** Produces a file-level implementation plan with exact file paths, code approach, and complexity estimates — ready for `/canon:implement`
 
+### `/canon:interrogate` — Adversarial Spec Review
+
+Adversarial review of specs and implementation plans. Challenges ACs for testability, validates codebase assumptions, surfaces missing edge cases, and flags scope issues — before implementation begins. Use after `/canon:plan` or when reviewing an existing spec for quality.
+
+**Usage:**
+```
+/canon:interrogate
+/canon:interrogate docs/specs/auth-hardening.md
+/canon:interrogate docs/canon/plans/2026-03-31-auth-hardening.md
+```
+
+**What it does:**
+- **Pass 1 — AC Quality:** Evaluates each acceptance criterion for testability, specificity, measurability, independence, and scope
+- **Pass 2 — Codebase Assumptions:** Validates every file path, function, pattern, and dependency referenced in the spec or plan
+- **Pass 3 — Missing Concerns:** Checks whether the spec addresses error handling, edge cases, security, migration, backwards compatibility, observability, rollback, and performance
+- **Pass 4 — Plan Coherence (plans only):** Verifies AC coverage, task-to-AC mapping, dependency ordering, scope creep, placeholders, and file conflicts
+- Produces a findings report (Blockers / Warnings / Questions) and a clear **PASS** or **FAIL** verdict
+- **PASS:** no blockers — recommends proceeding to `/canon:implement`
+- **FAIL:** lists blockers that must be fixed before implementation; re-run to confirm fixes
+
 ### `/canon:task` — Work on a Task
 
 Pick up a spec-driven task, work through its acceptance criteria, and mark it done. Best for single-section, interactive work.

@@ -27,7 +27,7 @@ read_ide_config() {
 
 if command -v jq >/dev/null 2>&1; then
   ide_config=$(read_ide_config)
-  on_session_start=$(echo "$ide_config" | jq -r '.auto_context.on_session_start // true' 2>/dev/null)
+  on_session_start=$(echo "$ide_config" | jq -r '.auto_context.on_session_start' 2>/dev/null)
   if [ "$on_session_start" = "false" ]; then
     exit 0
   fi
@@ -94,19 +94,20 @@ If you find yourself thinking any of these, STOP and run the right Canon skill:
   - \"I know what to do, I don't need the spec\"  → /canon:context
 
 Canon skills:
-  /canon:context   — Load spec context for current task (start here)
-  /canon:task      — Pick up a single task, implement its ACs
-  /canon:implement — Execute a multi-task plan end-to-end
-  /canon:plan      — Plan: explore → propose → spec → design → tasks → implementation plan
-  /canon:new       — Create a new spec, proposal, ADR, or design doc
-  /canon:worktree  — Create isolated git worktree for spec work
-  /canon:branch    — Complete a branch: verify, update statuses, merge/PR
-  /canon:verify    — Check if code satisfies spec acceptance criteria
-  /canon:review    — Review changes against all documentation
-  /canon:update    — Update spec statuses from code evidence
-  /canon:audit     — Full spec audit with ticket sync
-  /canon:status    — Spec coverage dashboard
-  /canon:meta      — Skill discovery: find the right Canon skill for your task
+  /canon:context     — Load spec context for current task (start here)
+  /canon:task        — Pick up a single task, implement its ACs
+  /canon:implement   — Execute a multi-task plan end-to-end
+  /canon:plan        — Plan: explore → propose → spec → design → tasks → implementation plan
+  /canon:interrogate — Red-team a spec or plan before implementing
+  /canon:new         — Create a new spec, proposal, ADR, or design doc
+  /canon:worktree    — Create isolated git worktree for spec work
+  /canon:branch      — Complete a branch: verify, update statuses, merge/PR
+  /canon:verify      — Check if code satisfies spec acceptance criteria
+  /canon:review      — Review changes against all documentation
+  /canon:update      — Update spec statuses from code evidence
+  /canon:audit       — Full spec audit with ticket sync
+  /canon:status      — Spec coverage dashboard
+  /canon:meta        — Skill discovery: find the right Canon skill for your task
 
 Use /canon:context before starting work."
 else
@@ -114,7 +115,7 @@ else
 
 No specs found yet. Run /canon:new to create your first spec, or /canon:plan to plan a new feature.
 
-Canon skills: context, task, implement, plan, new, worktree, branch, verify, review, update, audit, status, meta."
+Canon skills: context, task, implement, plan, interrogate, new, worktree, branch, verify, review, update, audit, status, meta."
 fi
 
 echo "$msg"

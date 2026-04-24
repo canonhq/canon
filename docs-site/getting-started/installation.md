@@ -120,14 +120,19 @@ canon setup --agent claude
 | Skill | Description |
 |-------|-------------|
 | `/canon:context` | Load spec context for your current task |
-| `/canon:task` | Pick up a task, implement ACs, mark done |
-| `/canon:verify` | Verify code against spec acceptance criteria |
-| `/canon:new` | Create a new spec from template |
-| `/canon:review` | Review changes against all documentation |
-| `/canon:status` | Show spec coverage dashboard |
 | `/canon:plan` | Spec-driven planning workflow |
+| `/canon:new` | Create a new spec from template |
+| `/canon:interrogate` | Adversarial review of specs and plans before implementation |
+| `/canon:worktree` | Create an isolated git worktree for spec-driven work |
+| `/canon:implement` | Execute a multi-task implementation plan with spec traceability |
+| `/canon:task` | Pick up a task, implement ACs, mark done |
+| `/canon:branch` | Complete a branch: verify, update spec statuses, merge/PR/cleanup |
+| `/canon:verify` | Verify code against spec acceptance criteria |
+| `/canon:review` | Review changes against all documentation |
 | `/canon:update` | Update spec statuses from code evidence |
-| `/canon:audit` | Full spec audit with ticket sync |
+| `/canon:audit` | Full spec audit: update statuses, sync tickets, commit |
+| `/canon:status` | Show spec coverage dashboard |
+| `/canon:meta` | Skill discovery: find the right Canon skill for your task |
 
 ::: tip
 `canon setup --agent claude` configures MCP and agent instructions but doesn't install the plugin marketplace entry. For slash commands, install the plugin separately.

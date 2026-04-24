@@ -132,7 +132,16 @@ Before presenting the plan to the user:
 
 ### Handoff
 
-Once the plan is approved, the user can execute it with `/canon:implement`.
+Before implementing, suggest an adversarial review:
+
+```
+Plan ready. Before implementing, consider running /canon:interrogate to
+red-team this plan — it will challenge AC quality, validate codebase
+assumptions, and surface missing edge cases.
+```
+
+Once the plan is approved (and optionally interrogated), the user can execute
+it with `/canon:implement`.
 
 ## Workflow Tips
 
