@@ -272,7 +272,7 @@ Canon should play well with external development discipline plugins (superpowers
 
 ## 10. Rollout Plan
 
-<!-- canon:system:10 status:in_progress -->
+<!-- canon:system:10 status:todo -->
 
 <!-- canon:ticket:github:587 -->
 ### Phase 1: Foundation (SessionStart + Worktrees) — DONE
