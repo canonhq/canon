@@ -10,6 +10,7 @@ from .pool import close_pool, create_pool
 from .registry import InstallationRegistry
 from .schema import ensure_schema
 from .session_store import SessionStore
+from .sync_history_store import SyncHistoryStore
 from .user_store import UserStore
 
 __all__ = [
@@ -18,6 +19,7 @@ __all__ = [
     "InstallationRegistry",
     "IntegrationStore",
     "SessionStore",
+    "SyncHistoryStore",
     "UserConnectionStore",
     "UserStore",
     "close_pool",

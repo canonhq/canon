@@ -8,10 +8,13 @@ All config is optional — when omitted, behavior matches the original hardcoded
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from canon import analytics
 from canon.parser.models import SpecDocument, SpecSection
+
+if TYPE_CHECKING:
+    from canon.db.sync_history_store import SyncHistoryStore
 from canon.parser.writer import (
     StatusUpdate,
     TicketLinkInsertion,
@@ -81,6 +84,8 @@ async def forward_sync(
     lifecycle_sync: bool | Literal["close_only"] = True,
     repo: str = "",
     org: str = "",
+    sync_store: SyncHistoryStore | None = None,
+    sync_trigger: str = "manual",
 ) -> tuple[str, SyncResult]:
     """Forward sync: create tickets for sections without one.
 
@@ -95,6 +100,22 @@ async def forward_sync(
 
     Returns (updated_markdown, sync_result).
     """
+    # Create sync run record if store is provided
+    run_id: str | None = None
+    system = _detect_system(adapter, system_config)
+    if sync_store:
+        try:
+            run_id = await sync_store.create_run(
+                org_login=org,
+                repo=repo,
+                spec_path=doc.file_path,
+                system=system,
+                direction="forward",
+                trigger=sync_trigger,
+            )
+        except Exception:
+            logger.warning("Failed to create sync run record", exc_info=True)
+
     # Per-spec sync control via frontmatter `sync` field
     spec_sync = doc.frontmatter.sync
     if spec_sync == "false":
@@ -102,6 +123,8 @@ async def forward_sync(
         result.skipped.append(
             SyncSkipped(section_id="__document__", reason="sync disabled via frontmatter")
         )
+        if sync_store and run_id:
+            await _persist_sync_result(sync_store, run_id, result)
         return doc.raw, result
 
     # sync: "true" bypasses require_review; sync: "auto" defers to global config
@@ -118,6 +141,8 @@ async def forward_sync(
                     ),
                 )
             )
+            if sync_store and run_id:
+                await _persist_sync_result(sync_store, run_id, result)
             return doc.raw, result
 
     result = SyncResult()
@@ -327,28 +352,63 @@ async def forward_sync(
         # failed parent won't get a spurious parent ID.
         processed_sections.append(section)
 
-    markdown = insert_ticket_links(doc, insertions) if insertions else doc.raw
+    _sync_failed = False
+    try:
+        markdown = insert_ticket_links(doc, insertions) if insertions else doc.raw
 
-    # Post-sync: update parent issues with sub-task lists
-    if hierarchy_cfg and hierarchy_cfg.auto_parent and result.created and not dry_run:
-        await _update_parent_task_lists(adapter, result, all_sections, insertions)
+        # Post-sync: update parent issues with sub-task lists
+        if hierarchy_cfg and hierarchy_cfg.auto_parent and result.created and not dry_run:
+            await _update_parent_task_lists(adapter, result, all_sections, insertions)
 
-    # Lifecycle sync: close/reopen tickets based on section state transitions.
-    # Only checks sections in actionable states (_CLOSABLE or _REOPENABLE)
-    # to avoid unnecessary API calls for draft/blocked/todo sections.
-    if lifecycle_sync:
-        for section in all_sections:
-            if not section.ticket_link or not section.section_number:
-                continue
+        # Lifecycle sync: close/reopen tickets based on section state transitions.
+        # Only checks sections in actionable states (_CLOSABLE or _REOPENABLE)
+        # to avoid unnecessary API calls for draft/blocked/todo sections.
+        if lifecycle_sync:
+            for section in all_sections:
+                if not section.ticket_link or not section.section_number:
+                    continue
 
-            # Close tickets for done/deprecated sections
-            if section.status.state in _CLOSABLE_STATES:
-                if lifecycle_sync is True or lifecycle_sync == "close_only":
+                # Close tickets for done/deprecated sections
+                if section.status.state in _CLOSABLE_STATES:
+                    if lifecycle_sync is True or lifecycle_sync == "close_only":
+                        try:
+                            current = await adapter.get_ticket_status(section.ticket_link.ticket_id)
+                            is_closed = current.status.state in ("done", "deprecated")
+
+                            if not is_closed:
+                                if not dry_run:
+                                    await adapter.update_ticket(
+                                        UpdateTicketInput(
+                                            ticket_id=section.ticket_link.ticket_id,
+                                            status=section.status,
+                                        )
+                                    )
+                                result.closed.append(
+                                    SyncClosed(
+                                        section_id=section.id,
+                                        ticket_id=section.ticket_link.ticket_id,
+                                    )
+                                )
+                                analytics.track(
+                                    "ticket_closed",
+                                    properties={
+                                        "repo": repo,
+                                        "spec_path": doc.file_path,
+                                        "section_id": section.id,
+                                        "ticket_id": section.ticket_link.ticket_id,
+                                        "reason": section.status.state,
+                                    },
+                                    groups={"organization": org} if org else None,
+                                )
+                        except Exception as err:
+                            result.errors.append(SyncError(section_id=section.id, error=str(err)))
+
+                # Reopen tickets for sections that moved back to todo/in_progress
+                elif section.status.state in _REOPENABLE_STATES and lifecycle_sync is True:
                     try:
                         current = await adapter.get_ticket_status(section.ticket_link.ticket_id)
                         is_closed = current.status.state in ("done", "deprecated")
-
-                        if not is_closed:
+                        if is_closed:
                             if not dry_run:
                                 await adapter.update_ticket(
                                     UpdateTicketInput(
@@ -356,59 +416,134 @@ async def forward_sync(
                                         status=section.status,
                                     )
                                 )
-                            result.closed.append(
-                                SyncClosed(
+                            result.reopened.append(
+                                SyncReopened(
                                     section_id=section.id,
                                     ticket_id=section.ticket_link.ticket_id,
                                 )
                             )
                             analytics.track(
-                                "ticket_closed",
+                                "ticket_reopened",
                                 properties={
                                     "repo": repo,
                                     "spec_path": doc.file_path,
                                     "section_id": section.id,
                                     "ticket_id": section.ticket_link.ticket_id,
-                                    "reason": section.status.state,
                                 },
                                 groups={"organization": org} if org else None,
                             )
                     except Exception as err:
                         result.errors.append(SyncError(section_id=section.id, error=str(err)))
-
-            # Reopen tickets for sections that moved back to todo/in_progress
-            elif section.status.state in _REOPENABLE_STATES and lifecycle_sync is True:
-                try:
-                    current = await adapter.get_ticket_status(section.ticket_link.ticket_id)
-                    is_closed = current.status.state in ("done", "deprecated")
-                    if is_closed:
-                        if not dry_run:
-                            await adapter.update_ticket(
-                                UpdateTicketInput(
-                                    ticket_id=section.ticket_link.ticket_id,
-                                    status=section.status,
-                                )
-                            )
-                        result.reopened.append(
-                            SyncReopened(
-                                section_id=section.id,
-                                ticket_id=section.ticket_link.ticket_id,
-                            )
-                        )
-                        analytics.track(
-                            "ticket_reopened",
-                            properties={
-                                "repo": repo,
-                                "spec_path": doc.file_path,
-                                "section_id": section.id,
-                                "ticket_id": section.ticket_link.ticket_id,
-                            },
-                            groups={"organization": org} if org else None,
-                        )
-                except Exception as err:
-                    result.errors.append(SyncError(section_id=section.id, error=str(err)))
+    except Exception:
+        _sync_failed = True
+        markdown = doc.raw
+        raise
+    finally:
+        if sync_store and run_id:
+            if _sync_failed:
+                result.errors.append(
+                    SyncError(section_id="__document__", error="Unhandled exception during sync")
+                )
+            await _persist_sync_result(sync_store, run_id, result)
 
     return markdown, result
+
+
+async def _persist_sync_result(
+    store: SyncHistoryStore,
+    run_id: str,
+    result: SyncResult,
+) -> None:
+    """Persist a SyncResult to the sync history store."""
+    try:
+        events: list[dict] = []
+        for c in result.created:
+            events.append(
+                {
+                    "event_type": "created",
+                    "section_title": c.section_id,
+                    "ticket_id": c.ticket_id,
+                    "ticket_url": c.ticket_url,
+                }
+            )
+        for u in result.updated:
+            events.append(
+                {
+                    "event_type": "updated",
+                    "section_title": u.section_id,
+                    "ticket_id": u.ticket_id,
+                }
+            )
+        for sc in result.status_changed:
+            events.append(
+                {
+                    "event_type": "status_changed",
+                    "section_title": sc.section_id,
+                    "ticket_id": sc.ticket_id,
+                    "detail": {"old_state": sc.old_state, "new_state": sc.new_state},
+                }
+            )
+        for cl in result.closed:
+            events.append(
+                {
+                    "event_type": "closed",
+                    "section_title": cl.section_id,
+                    "ticket_id": cl.ticket_id,
+                }
+            )
+        for ro in result.reopened:
+            events.append(
+                {
+                    "event_type": "reopened",
+                    "section_title": ro.section_id,
+                    "ticket_id": ro.ticket_id,
+                }
+            )
+        for sk in result.skipped:
+            events.append(
+                {
+                    "event_type": "skipped",
+                    "section_title": sk.section_id,
+                    "detail": {"reason": sk.reason},
+                }
+            )
+        for err in result.errors:
+            events.append(
+                {
+                    "event_type": "error",
+                    "section_title": err.section_id,
+                    "detail": {"error": err.error},
+                }
+            )
+
+        if events:
+            await store.add_events_batch(run_id, events)
+
+        # Determine overall status
+        status = "success"
+        if result.errors:
+            status = (
+                "partial"
+                if result.created
+                or result.updated
+                or result.status_changed
+                or result.closed
+                or result.reopened
+                else "failed"
+            )
+
+        await store.complete_run(
+            run_id,
+            status=status,
+            created_count=len(result.created),
+            updated_count=len(result.updated),
+            closed_count=len(result.closed),
+            reopened_count=len(result.reopened),
+            skipped_count=len(result.skipped),
+            error_count=len(result.errors),
+        )
+    except Exception:
+        logger.warning("Failed to persist sync result for run %s", run_id, exc_info=True)
 
 
 async def forward_sync_multi(
@@ -671,6 +806,8 @@ async def reverse_sync(
     system_config: TicketSystemConfig | None = None,
     repo: str = "",
     org: str = "",
+    sync_store: SyncHistoryStore | None = None,
+    sync_trigger: str = "manual",
 ) -> tuple[str, SyncResult]:
     """Reverse sync: poll ticket statuses and update spec status comments.
 
@@ -686,50 +823,78 @@ async def reverse_sync(
     system = _detect_system(adapter, system_config)
     status_map_cfg = system_config.status_map if system_config else None
 
-    for section in all_sections:
-        if not section.ticket_link or not section.section_number:
-            continue
-
+    # Create sync run record if store is provided
+    run_id: str | None = None
+    if sync_store:
         try:
-            ticket_status = await adapter.get_ticket_status(section.ticket_link.ticket_id)
+            run_id = await sync_store.create_run(
+                org_login=org,
+                repo=repo,
+                spec_path=doc.file_path,
+                system=system,
+                direction="reverse",
+                trigger=sync_trigger,
+            )
+        except Exception:
+            logger.warning("Failed to create sync run record", exc_info=True)
 
-            # Use configurable status resolution when available
-            if status_map_cfg and status_map_cfg.reverse:
-                resolved = resolve_reverse(system, ticket_status.raw_status, status_map_cfg)
-                new_state = resolved.state
-            else:
-                new_state = ticket_status.status.state
+    _sync_failed = False
+    try:
+        for section in all_sections:
+            if not section.ticket_link or not section.section_number:
+                continue
 
-            if new_state != section.status.state:
-                updates.append(
-                    StatusUpdate(
-                        section_number=section.section_number,
-                        new_state=new_state,
+            try:
+                ticket_status = await adapter.get_ticket_status(section.ticket_link.ticket_id)
+
+                # Use configurable status resolution when available
+                if status_map_cfg and status_map_cfg.reverse:
+                    resolved = resolve_reverse(system, ticket_status.raw_status, status_map_cfg)
+                    new_state = resolved.state
+                else:
+                    new_state = ticket_status.status.state
+
+                if new_state != section.status.state:
+                    updates.append(
+                        StatusUpdate(
+                            section_number=section.section_number,
+                            new_state=new_state,
+                        )
                     )
-                )
-                result.status_changed.append(
-                    SyncStatusChanged(
-                        section_id=section.id,
-                        ticket_id=section.ticket_link.ticket_id,
-                        old_state=section.status.state,
-                        new_state=new_state,
+                    result.status_changed.append(
+                        SyncStatusChanged(
+                            section_id=section.id,
+                            ticket_id=section.ticket_link.ticket_id,
+                            old_state=section.status.state,
+                            new_state=new_state,
+                        )
                     )
-                )
-                analytics.track(
-                    "ticket_status_synced",
-                    properties={
-                        "repo": repo,
-                        "spec_path": doc.file_path,
-                        "section_id": section.id,
-                        "ticket_id": section.ticket_link.ticket_id,
-                        "old_state": section.status.state,
-                        "new_state": new_state,
-                        "ticket_system": system,
-                    },
-                    groups={"organization": org} if org else None,
-                )
-        except Exception as err:
-            result.errors.append(SyncError(section_id=section.id, error=str(err)))
+                    analytics.track(
+                        "ticket_status_synced",
+                        properties={
+                            "repo": repo,
+                            "spec_path": doc.file_path,
+                            "section_id": section.id,
+                            "ticket_id": section.ticket_link.ticket_id,
+                            "old_state": section.status.state,
+                            "new_state": new_state,
+                            "ticket_system": system,
+                        },
+                        groups={"organization": org} if org else None,
+                    )
+            except Exception as err:
+                result.errors.append(SyncError(section_id=section.id, error=str(err)))
 
-    markdown = update_status_comments(doc, updates) if updates else doc.raw
+        markdown = update_status_comments(doc, updates) if updates else doc.raw
+    except Exception:
+        _sync_failed = True
+        raise
+    finally:
+        if sync_store and run_id:
+            if _sync_failed:
+                result.errors.append(
+                    SyncError(section_id="__document__", error="Unhandled exception during sync")
+                )
+            await _persist_sync_result(sync_store, run_id, result)
+
     return markdown, result

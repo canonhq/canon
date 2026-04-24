@@ -86,6 +86,7 @@ from .web.middleware import (
 from .web.profile_routes import profile_router
 from .web.routes import app_router, spa_router
 from .web.routes import router as web_router
+from .web.sync_routes import sync_router
 from .web.ticket_routes import ticket_router
 from .webhooks.router import router as webhooks_router
 
@@ -615,6 +616,7 @@ app.include_router(integration_router)
 # Mount public v1 API routes consumed by GitHub Actions
 app.include_router(api_v1_actions_router)
 app.include_router(ticket_router)
+app.include_router(sync_router)
 # Admin API router must come before the SPA catch-all (cloud-only)
 if admin_router is not None:
     app.include_router(admin_router)
