@@ -30,7 +30,7 @@ from .models import (
 NUMBERED_HEADING_RE = re.compile(r"^(\d+(?:\.\d+)*)\.?\s+(.+)$")
 
 STATUS_RE = re.compile(r"<!--\s*(?:specwright|canon):system:(\S+)\s+status:(\S+)\s*-->")
-TICKET_RE = re.compile(r"<!--\s*(?:specwright|canon):ticket:(\w+):(\S+)\s*-->")
+TICKET_RE = re.compile(r"<!--\s*(?:specwright|canon):ticket:(\w+):(\S+?)(?:\s+url:(\S+))?\s*-->")
 REALIZATION_RE = re.compile(
     r"<!--\s*(?:specwright|canon):realized-in:(?:PR#(\d+)|(audit))\s+file:([^\s]+?)(?::(\S+))?\s*-->"
 )
@@ -118,7 +118,7 @@ def parse_ticket_comment(text: str) -> TicketLink | None:
             text.strip(),
         )
         return None
-    return TicketLink(system=system, ticket_id=match.group(2))  # type: ignore[arg-type]
+    return TicketLink(system=system, ticket_id=match.group(2), url=match.group(3))  # type: ignore[arg-type]
 
 
 def extract_comments_from_content(

@@ -73,7 +73,7 @@ The GitHub App adds automated PR analysis — Canon comments on every PR with sp
 
 ### 1. Install the App
 
-Visit the [Canon GitHub App](https://github.com/apps/canon) page and click **Install**. Select your organization and choose which repositories to enable.
+Visit the [Canon GitHub App](https://github.com/apps/canonhq) page and click **Install**. Select your organization and choose which repositories to enable.
 
 ### 2. Ensure CANON.yaml exists
 

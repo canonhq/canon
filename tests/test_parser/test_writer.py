@@ -80,6 +80,70 @@ class TestInsertTicketLinks:
         )
         assert "<!-- canon:ticket:github:42 -->" in result
 
+    def test_inserts_ticket_link_with_url(self):
+        raw = "---\ntitle: T\n---\n\n## 1. Section\n\nContent."
+        doc = _make_doc(raw)
+        result = insert_ticket_links(
+            doc,
+            [
+                TicketLinkInsertion(
+                    heading_line=5,
+                    system="jira",
+                    ticket_id="PAY-1",
+                    url="https://acme.atlassian.net/browse/PAY-1",
+                )
+            ],
+        )
+        assert (
+            "<!-- canon:ticket:jira:PAY-1 url:https://acme.atlassian.net/browse/PAY-1 -->" in result
+        )
+
+    def test_inserts_ticket_link_without_url(self):
+        raw = "---\ntitle: T\n---\n\n## 1. Section\n\nContent."
+        doc = _make_doc(raw)
+        result = insert_ticket_links(
+            doc,
+            [TicketLinkInsertion(heading_line=5, system="jira", ticket_id="PAY-1")],
+        )
+        assert "<!-- canon:ticket:jira:PAY-1 -->" in result
+        assert "url:" not in result
+
+    def test_url_with_comment_close_sequence_is_dropped(self):
+        raw = "---\ntitle: T\n---\n\n## 1. Section\n\nContent."
+        doc = _make_doc(raw)
+        result = insert_ticket_links(
+            doc,
+            [
+                TicketLinkInsertion(
+                    heading_line=5,
+                    system="jira",
+                    ticket_id="PAY-1",
+                    url="https://evil.com/a-->b",
+                )
+            ],
+        )
+        # URL containing --> should be dropped to avoid breaking the comment
+        assert "<!-- canon:ticket:jira:PAY-1 -->" in result
+        assert "url:" not in result
+
+    def test_round_trip_write_then_parse(self):
+        from canon.parser.parse import parse_ticket_comment
+
+        raw = "---\ntitle: T\n---\n\n## 1. Section\n\nContent."
+        doc = _make_doc(raw)
+        url = "https://acme.atlassian.net/browse/PAY-1"
+        result = insert_ticket_links(
+            doc,
+            [TicketLinkInsertion(heading_line=5, system="jira", ticket_id="PAY-1", url=url)],
+        )
+        # Find the comment line and parse it back
+        comment_line = next(line for line in result.split("\n") if "canon:ticket:" in line)
+        parsed = parse_ticket_comment(comment_line)
+        assert parsed is not None
+        assert parsed.system == "jira"
+        assert parsed.ticket_id == "PAY-1"
+        assert parsed.url == url
+
 
 class TestUpdateStatusComments:
     def test_no_change_on_empty_updates(self):

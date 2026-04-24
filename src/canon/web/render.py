@@ -43,10 +43,11 @@ def _ticket_link_html(ticket: object, *, repo_owner: str = "", repo_name: str = 
         return ""
     tid = esc(ticket.ticket_id)
     link_class = "text-blue-600 dark:text-blue-400 hover:underline text-sm"
-    if ticket.system == "jira":
-        return f'<a href="https://jira.atlassian.net/browse/{tid}" class="{link_class}" target="_blank">{tid}</a>'
-    if ticket.system == "linear":
-        return f'<a href="https://linear.app/issue/{tid}" class="{link_class}" target="_blank">{tid}</a>'
+
+    # Use stored URL when available (written by sync engine)
+    if ticket.url and ticket.url.startswith(("https://", "http://")):
+        return f'<a href="{esc(ticket.url)}" class="{link_class}" target="_blank" rel="noopener">{tid}</a>'
+
     if ticket.system == "github":
         # Parse "owner/repo#N" or "#N" format
         raw_id = ticket.ticket_id
@@ -60,8 +61,9 @@ def _ticket_link_html(ticket: object, *, repo_owner: str = "", repo_name: str = 
             num = raw_id[1:]
             url = f"https://github.com/{esc(repo_owner)}/{esc(repo_name)}/issues/{esc(num)}"
             return f'<a href="{url}" class="{link_class}" target="_blank">{tid}</a>'
-        return f'<span class="text-blue-600 dark:text-blue-400 text-sm">{tid}</span>'
-    return ""
+
+    # Fallback: render as plain text when we can't construct a valid URL
+    return f'<span class="text-blue-600 dark:text-blue-400 text-sm">{tid}</span>'
 
 
 DELTA_COLORS: dict[str, str] = {

@@ -274,6 +274,7 @@ async def forward_sync(
                             heading_line=section.start_line,
                             system=_detect_system(adapter, system_config),
                             ticket_id=dedup_match.ticket_id,
+                            url=dedup_match.ticket_url,
                         )
                     )
                     result.updated.append(
@@ -316,6 +317,7 @@ async def forward_sync(
                         heading_line=section.start_line,
                         system=_detect_system(adapter, system_config),
                         ticket_id=ticket.ticket_id,
+                        url=ticket.ticket_url,
                     )
                 )
                 result.created.append(

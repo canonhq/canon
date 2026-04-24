@@ -108,15 +108,56 @@ class TestTicketLinkHtml:
         assert "<span " in html
         assert "<a " not in html
 
-    def test_jira_ticket(self):
+    def test_jira_ticket_without_url(self):
         ticket = TicketLink(system="jira", ticket_id="PROJ-123")
         html = _ticket_link_html(ticket)
-        assert 'href="https://jira.atlassian.net/browse/PROJ-123"' in html
+        assert "PROJ-123" in html
+        assert "<a " not in html  # no link without URL
 
-    def test_linear_ticket(self):
+    def test_jira_ticket_with_url(self):
+        ticket = TicketLink(
+            system="jira", ticket_id="PROJ-123", url="https://acme.atlassian.net/browse/PROJ-123"
+        )
+        html = _ticket_link_html(ticket)
+        assert 'href="https://acme.atlassian.net/browse/PROJ-123"' in html
+
+    def test_linear_ticket_without_url(self):
         ticket = TicketLink(system="linear", ticket_id="ENG-456")
         html = _ticket_link_html(ticket)
-        assert 'href="https://linear.app/issue/ENG-456"' in html
+        assert "ENG-456" in html
+        assert "<a " not in html  # no link without URL
+
+    def test_linear_ticket_with_url(self):
+        ticket = TicketLink(
+            system="linear", ticket_id="ENG-456", url="https://linear.app/team/issue/ENG-456"
+        )
+        html = _ticket_link_html(ticket)
+        assert 'href="https://linear.app/team/issue/ENG-456"' in html
+
+    def test_javascript_url_rejected(self):
+        ticket = TicketLink(system="jira", ticket_id="PROJ-1", url="javascript:alert(1)")
+        html = _ticket_link_html(ticket)
+        assert "<a " not in html
+        assert "PROJ-1" in html
+
+    def test_data_url_rejected(self):
+        ticket = TicketLink(system="jira", ticket_id="PROJ-1", url="data:text/html,<h1>x</h1>")
+        html = _ticket_link_html(ticket)
+        assert "<a " not in html
+
+    def test_url_includes_rel_noopener(self):
+        ticket = TicketLink(
+            system="jira", ticket_id="PROJ-1", url="https://acme.atlassian.net/browse/PROJ-1"
+        )
+        html = _ticket_link_html(ticket)
+        assert 'rel="noopener"' in html
+
+    def test_github_ticket_with_stored_url_uses_it(self):
+        ticket = TicketLink(
+            system="github", ticket_id="#42", url="https://github.com/org/repo/issues/42"
+        )
+        html = _ticket_link_html(ticket)
+        assert 'href="https://github.com/org/repo/issues/42"' in html
 
     def test_non_ticket_returns_empty(self):
         html = _ticket_link_html("not a ticket")

@@ -284,6 +284,35 @@ class TestParseTicketComment:
         assert result.system == "github"
         assert result.ticket_id == "acme/widgets#7"
 
+    def test_old_format_has_no_url(self):
+        result = parse_ticket_comment("<!-- canon:ticket:jira:PAY-142 -->")
+        assert result is not None
+        assert result.ticket_id == "PAY-142"
+        assert result.url is None
+
+    def test_parses_jira_ticket_with_url(self):
+        comment = "<!-- canon:ticket:jira:PAY-142 url:https://acme.atlassian.net/browse/PAY-142 -->"
+        result = parse_ticket_comment(comment)
+        assert result is not None
+        assert result.system == "jira"
+        assert result.ticket_id == "PAY-142"
+        assert result.url == "https://acme.atlassian.net/browse/PAY-142"
+
+    def test_parses_linear_ticket_with_url(self):
+        comment = "<!-- canon:ticket:linear:ENG-42 url:https://linear.app/team/issue/ENG-42 -->"
+        result = parse_ticket_comment(comment)
+        assert result is not None
+        assert result.ticket_id == "ENG-42"
+        assert result.url == "https://linear.app/team/issue/ENG-42"
+
+    def test_parses_url_with_query_params(self):
+        comment = (
+            "<!-- canon:ticket:jira:X-1 url:https://x.atlassian.net/browse/X-1?foo=1&bar=2 -->"
+        )
+        result = parse_ticket_comment(comment)
+        assert result is not None
+        assert result.url == "https://x.atlassian.net/browse/X-1?foo=1&bar=2"
+
 
 class TestExtractCommentsFromContent:
     def test_extracts_status_and_ticket(self):

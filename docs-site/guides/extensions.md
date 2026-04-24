@@ -104,7 +104,7 @@ This checks:
 Browse and install extensions from the official catalog.
 
 
-Browse community extensions at [github.com/canonhq/canon-extensions](https://github.com/canonhq/canon-extensions) (once available).
+Browse community extensions at [github.com/canonhq/canon/tree/main/extensions](https://github.com/canonhq/canon/tree/main/extensions).
 
 ## File Layout
 

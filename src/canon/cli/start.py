@@ -140,7 +140,10 @@ def _handle_issue(config, root, doc, section):
             updated_doc,
             [
                 TicketLinkInsertion(
-                    heading_line=section.start_line, system="github", ticket_id=ticket.ticket_id
+                    heading_line=section.start_line,
+                    system="github",
+                    ticket_id=ticket.ticket_id,
+                    url=ticket.ticket_url,
                 )
             ],
         )

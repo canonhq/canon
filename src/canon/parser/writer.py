@@ -26,6 +26,7 @@ class TicketLinkInsertion(BaseModel):
     heading_line: int  # 1-based
     system: str
     ticket_id: str
+    url: str | None = None
 
 
 class StatusUpdate(BaseModel):
@@ -46,7 +47,9 @@ def insert_ticket_links(doc: SpecDocument, insertions: list[TicketLinkInsertion]
 
     offset = 0
     for ins in sorted_insertions:
-        comment = f"<!-- canon:ticket:{ins.system}:{ins.ticket_id} -->"
+        url = ins.url if ins.url and "-->" not in ins.url else None
+        url_part = f" url:{url}" if url else ""
+        comment = f"<!-- canon:ticket:{ins.system}:{ins.ticket_id}{url_part} -->"
         heading_idx = ins.heading_line - 1 + offset
 
         # Skip past heading, blank lines, and existing canon/specwright comments

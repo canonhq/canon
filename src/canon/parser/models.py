@@ -30,6 +30,7 @@ class SectionStatus(BaseModel):
 class TicketLink(BaseModel):
     system: Literal["jira", "linear", "github"]
     ticket_id: str
+    url: str | None = None
 
 
 # --- Realization Reference ---

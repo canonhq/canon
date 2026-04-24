@@ -25,7 +25,7 @@ from ..auth.models import CurrentUser
 from ..auth.permissions import Permission
 from ..github.user_client import UserGitHubClient
 from ..parser.models import ParseOptions, SpecSection
-from ..parser.parse import parse_spec
+from ..parser.parse import TICKET_RE, parse_spec
 from .cache import TTLCache
 from .models import AiEditRequest, EditorParseRequest, EditorSavePRRequest, EditorSaveRequest
 from .render import render_spec_html
@@ -493,7 +493,7 @@ _REALIZATION_RE = re.compile(
     r"<!--\s*(?:specwright|canon):realized-in:(?:PR#(\d+)|(audit))\s+file:([^\s]+?)(?::(\S+))?\s*-->"
 )
 _STATUS_RE = re.compile(r"<!--\s*(?:specwright|canon):system:(\S+)\s+status:(\S+)\s*-->")
-_TICKET_RE = re.compile(r"<!--\s*(?:specwright|canon):ticket:(\w+):(\S+)\s*-->")
+_TICKET_RE = TICKET_RE
 _AC_HEADING_RE = re.compile(r"^###\s+Acceptance\s+Criteria\s*$", re.IGNORECASE)
 
 
@@ -552,6 +552,7 @@ def _section_to_dict(section: SpecSection) -> dict:
         result["ticket_link"] = {
             "system": section.ticket_link.system,
             "ticket_id": section.ticket_link.ticket_id,
+            "url": section.ticket_link.url,
         }
     return result
 

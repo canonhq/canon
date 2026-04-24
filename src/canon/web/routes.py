@@ -515,7 +515,7 @@ async def org_welcome(request: Request, org: str):
         except Exception:
             logger.debug("Failed to load welcome page state for org %s", org, exc_info=True)
 
-    install_url = "https://github.com/apps/canon-hq/installations/new"
+    install_url = "https://github.com/apps/canonhq/installations/select_target"
     orgs = await _get_user_orgs(request)
 
     return templates.TemplateResponse(
@@ -915,7 +915,7 @@ async def api_welcome(
             "user_name": user_name,
             "app_installed": app_installed,
             "has_specs": has_specs,
-            "install_url": "https://github.com/apps/canon-hq/installations/new",
+            "install_url": "https://github.com/apps/canonhq/installations/select_target",
         }
     )
 
