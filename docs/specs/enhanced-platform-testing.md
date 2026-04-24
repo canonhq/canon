@@ -18,6 +18,7 @@ Establish a robust testing ecosystem for Canon's platform that validates all dep
 
 <!-- canon:system:1 status:todo -->
 
+<!-- canon:ticket:github:231 -->
 Canon has 1,800+ unit tests with strong coverage of individual modules, but significant gaps in validating how the platform works as an assembled system. With the OIDC provider abstraction (PR #386) introducing a multi-provider auth world and the imminent OSS export of the auth/web/db modules, Canon now has four distinct deployment profiles with different auth configurations, secret shapes, and feature flags — none of which are tested end-to-end in CI.
 
 ### Current gaps
@@ -50,6 +51,7 @@ Canon has 1,800+ unit tests with strong coverage of individual modules, but sign
 
 <!-- canon:system:2 status:in_progress -->
 
+<!-- canon:ticket:github:392 -->
 Test that the Settings model and provider factory correctly handle all valid (and invalid) configuration combinations. These are fast, in-process tests with no external dependencies.
 
 ### 2.1 Settings Auto-Detection
@@ -100,6 +102,7 @@ def config_profile(request) -> Settings:
 
 <!-- canon:system:3 status:in_progress -->
 
+<!-- canon:ticket:github:393 -->
 Test the full authentication request cycle through the real FastAPI app, covering middleware, route handlers, session management, and permission resolution — for each auth provider mode.
 
 ### 3.1 Test Infrastructure
@@ -180,6 +183,7 @@ Test middleware ordering and behavior:
 
 <!-- canon:system:4 status:in_progress -->
 
+<!-- canon:ticket:github:394 -->
 Validate that Helm chart templates render correct Kubernetes manifests for each deployment profile. Uses `helm template` to render locally — no cluster required.
 
 ### 4.1 Test Approach
@@ -239,6 +243,7 @@ Add a `helm-template-test` job to CI that runs these tests. Faster than `helm li
 
 <!-- canon:system:5 status:in_progress -->
 
+<!-- canon:ticket:github:395 -->
 Build the Docker image and verify it starts, responds to health checks, and handles basic API requests. Catches import errors, missing dependencies, and startup failures before deployment.
 
 ### 5.1 Smoke Test Script
@@ -312,6 +317,7 @@ Add after the existing `docker build` step in CI:
 
 <!-- canon:system:6 status:in_progress -->
 
+<!-- canon:ticket:github:396 -->
 Validate that the OSS export script produces a working, self-contained repository that builds, passes tests, and runs.
 
 ### 6.1 Export + Build Pipeline
@@ -412,6 +418,7 @@ oss-validation:
 
 <!-- canon:system:7 status:in_progress -->
 
+<!-- canon:ticket:github:537 -->
 Test Alembic migrations against a real PostgreSQL instance to verify they apply cleanly, handle edge cases, and are reversible.
 
 ### 7.1 Test Infrastructure
@@ -503,6 +510,7 @@ integration-test:
 
 <!-- canon:system:8 status:in_progress -->
 
+<!-- canon:ticket:github:538 -->
 Update the GitHub Actions CI pipeline to orchestrate all new test types alongside existing ones, keeping total CI time under 10 minutes.
 
 ### 8.1 Updated Job Graph
@@ -567,6 +575,7 @@ Add Postgres service container and migration tests to the existing `integration-
 
 <!-- canon:system:9 status:in_progress -->
 
+<!-- canon:ticket:github:539 -->
 Create shared test infrastructure that makes writing configuration-aware tests easy and consistent.
 
 ### 9.1 Configuration Profile Fixtures
@@ -647,6 +656,7 @@ def helm_template(
 
 <!-- canon:system:10 status:todo -->
 
+<!-- canon:ticket:github:540 -->
 ### Phase 1: Foundation (this PR)
 
 1. Create test utilities and fixtures (§9)
