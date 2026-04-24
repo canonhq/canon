@@ -76,6 +76,7 @@ Set up Terraform project structure and state management in this repo.
 
 <!-- canon:system:2 status:in_progress -->
 
+<!-- canon:ticket:github:560 -->
 Provision Canon's own Kubernetes cluster on DigitalOcean. During migration, Canon uses the existing gv-shared cluster and registry to avoid disruption. A dedicated cluster and registry will be provisioned in a future phase.
 
 ### Acceptance Criteria
@@ -98,6 +99,7 @@ Provision Canon's own Kubernetes cluster on DigitalOcean. During migration, Cano
 
 <!-- canon:system:3 status:in_progress -->
 
+<!-- canon:ticket:github:561 -->
 Set up Canon's own container registry on DigitalOcean.
 
 ### Acceptance Criteria
@@ -115,6 +117,7 @@ Set up Canon's own container registry on DigitalOcean.
 
 <!-- canon:system:4 status:in_progress -->
 
+<!-- canon:ticket:github:562 -->
 Move DNS record management for `canonhq.co` into this repo's Terraform. The domain is registered with and hosted on AWS Route 53 (not DigitalOcean DNS).
 
 ### Acceptance Criteria
@@ -249,6 +252,7 @@ Move GCP service account and Vertex AI configuration into this repo's Terraform.
 
 <!-- canon:system:8 status:in_progress -->
 
+<!-- canon:ticket:github:563 -->
 Update all GitHub Actions workflows to use Canon-owned infrastructure.
 
 ### Acceptance Criteria
@@ -270,6 +274,7 @@ Update all GitHub Actions workflows to use Canon-owned infrastructure.
 
 <!-- canon:system:9 status:in_progress -->
 
+<!-- canon:ticket:github:564 -->
 Execute the actual cutover from shared to dedicated infrastructure.
 
 ### Acceptance Criteria
@@ -382,6 +387,7 @@ The biggest gap blocking true SaaS onboarding. Currently, when a customer instal
 
 <!-- canon:system:13 status:in_progress -->
 
+<!-- canon:ticket:github:565 -->
 The Canon GitHub App is configured manually in the GitHub UI. This section documents the required configuration and verifies it matches production needs. Not Terraform-managed, but must be audited and locked down.
 
 ### Acceptance Criteria
