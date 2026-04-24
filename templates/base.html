@@ -16,30 +16,30 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700;9..144,800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         fontFamily: {
-          sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-          display: ['Space Grotesk', 'system-ui', '-apple-system', 'sans-serif'],
-          mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          sans: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'],
+          display: ['Fraunces', 'Georgia', 'Times New Roman', 'serif'],
+          mono: ['IBM Plex Mono', 'ui-monospace', 'monospace'],
         },
         extend: {
           colors: {
             brand: {
-              50: '#f0f9ff', 100: '#e0f2fe', 200: '#b9e6fe', 300: '#7cd4fd',
-              400: '#36bffa', 500: '#0ba5ec', 600: '#0077cc', 700: '#005fa3',
-              800: '#054985', 900: '#0a3d6e',
+              50: '#F0F4F8', 100: '#DCE4EE', 200: '#B9C9DD', 300: '#96AECC',
+              400: '#7A9DBF', 500: '#5B7FA5', 600: '#4C6A8B', 700: '#3D5571',
+              800: '#2E4057', 900: '#253445',
             },
             accent: {
-              50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7',
-              400: '#34d399', 500: '#10b981', 600: '#059669', 700: '#047857',
-              800: '#065f46', 900: '#064e3b',
+              50: '#FDF5E6', 100: '#FAEACC', 200: '#F5D599', 300: '#F0C066',
+              400: '#E8A030', 500: '#D4880A', 600: '#B8760A', 700: '#9B6308',
+              800: '#7E5106', 900: '#614005',
             },
-            surface: { DEFAULT: '#0a0f1a', alt: '#111827', elevated: '#1e293b' },
+            surface: { DEFAULT: '#1A1816', alt: '#242120', elevated: '#2E2B29' },
           },
         },
       },
@@ -58,15 +58,15 @@
   </script>
   {% endif %}
 </head>
-<body class="h-full bg-white dark:bg-[#0a0f1a] font-sans text-slate-800 dark:text-slate-200 antialiased">
+<body class="h-full bg-[#FAF8F5] dark:bg-[#1A1816] font-sans text-slate-800 dark:text-slate-200 antialiased">
   <!-- Accent bar -->
-  <div class="h-0.5 bg-gradient-to-r from-accent-500 to-cyan-400"></div>
+  <div class="h-0.5 bg-accent-500"></div>
 
-  <nav class="bg-gray-50/80 dark:bg-[#111827]/80 backdrop-blur border-b border-gray-200 dark:border-slate-800">
+  <nav class="bg-[#F3F0EB]/80 dark:bg-[#242120]/80 backdrop-blur border-b border-[#E2DDD5] dark:border-[#3D3835]">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between h-14 items-center">
         <div class="flex items-center gap-5">
-          <a href="/" class="text-lg font-bold font-display bg-gradient-to-r from-accent-400 to-cyan-400 bg-clip-text text-transparent">Canon</a>
+          <a href="/" class="text-lg font-bold font-display text-accent-500">Canon</a>
           <span class="text-xs font-mono text-slate-400 dark:text-slate-500 uppercase tracking-wider hidden sm:inline">Explorer</span>
         </div>
 
@@ -75,7 +75,7 @@
           {% if orgs is defined and orgs | length > 1 %}
           <select
             onchange="window.location.href='/app/' + this.value + '/'"
-            class="bg-white dark:bg-[#0a0f1a] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+            class="bg-white dark:bg-[#1A1816] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
           >
             {% for o in orgs %}
             <option value="{{ o }}" {% if current_org is defined and o == current_org %}selected{% endif %}>{{ o }}</option>
@@ -88,7 +88,7 @@
               type="search"
               name="q"
               placeholder="Search specs..."
-              class="bg-white dark:bg-[#0a0f1a] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent w-64"
+              class="bg-white dark:bg-[#1A1816] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent w-64"
               hx-get="/app/{{ current_org | default('') }}/search"
               hx-trigger="keyup changed delay:300ms"
               hx-target="#search-results"
@@ -126,7 +126,7 @@
         {% if orgs is defined and orgs | length > 1 %}
         <select
           onchange="window.location.href='/app/' + this.value + '/'"
-          class="w-full bg-white dark:bg-[#0a0f1a] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+          class="w-full bg-white dark:bg-[#1A1816] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
         >
           {% for o in orgs %}
           <option value="{{ o }}" {% if current_org is defined and o == current_org %}selected{% endif %}>{{ o }}</option>
@@ -139,7 +139,7 @@
             type="search"
             name="q"
             placeholder="Search specs..."
-            class="w-full bg-white dark:bg-[#0a0f1a] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+            class="w-full bg-white dark:bg-[#1A1816] border border-gray-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
             hx-get="/app/{{ current_org | default('') }}/search"
             hx-trigger="keyup changed delay:300ms"
             hx-target="#search-results"
@@ -174,7 +174,7 @@
   <footer class="border-t border-gray-200 dark:border-slate-800 mt-auto">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
       <p class="text-sm text-slate-500 text-center">
-        <span class="font-display font-semibold bg-gradient-to-r from-accent-500 to-cyan-400 bg-clip-text text-transparent">Canon</span>
+        <span class="font-display font-semibold text-accent-500">Canon</span>
         by <a href="https://gernerventures.com" class="hover:text-accent-400 transition-colors">Gerner Ventures</a>
       </p>
     </div>
