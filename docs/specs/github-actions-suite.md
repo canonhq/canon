@@ -91,6 +91,7 @@ self-host the full pipeline.
 ### 3.1 Directory Restructure and Setup Action Preservation
 <!-- canon:system:3.1 status:todo -->
 
+<!-- canon:ticket:github:541 -->
 Move from a single top-level `action/action.yml` to a suite layout. The
 top-level `action.yml` (note: at repo root, not under `action/`) remains the
 "Setup Canon" marketplace listing so existing users' `uses: canonhq/canon@v1`
@@ -115,6 +116,7 @@ references keep working.
 ### 3.2 Canon Backend Authentication for Actions
 <!-- canon:system:3.2 status:todo -->
 
+<!-- canon:ticket:github:542 -->
 Actions that need Claude intelligence route through the Canon backend using a
 `CANON_TOKEN` secret, not a user-supplied Anthropic key.
 
@@ -141,6 +143,7 @@ Actions that need Claude intelligence route through the Canon backend using a
 ### 3.3 `audit` Action — Scheduled Drift Detection
 <!-- canon:system:3.3 status:todo -->
 
+<!-- canon:ticket:github:543 -->
 Runs `canon audit` against the repo on a cron schedule (or manual dispatch) and
 reports drift between code and spec statuses. This is the anchor use case.
 
@@ -167,6 +170,7 @@ reports drift between code and spec statuses. This is the anchor use case.
 ### 3.4 `verify` Action — PR-Time Static Verification
 <!-- canon:system:3.4 status:todo -->
 
+<!-- canon:ticket:github:544 -->
 Runs `canon verify` on a PR and emits a check-run that branch protection can
 mark required. No Claude spend, no token required.
 
@@ -185,6 +189,7 @@ mark required. No Claude spend, no token required.
 ### 3.5 `spec-lint` Action — Frontmatter & Structure Validation
 <!-- canon:system:3.5 status:todo -->
 
+<!-- canon:ticket:github:545 -->
 Validates spec file structure: frontmatter schema, section numbering, AC
 checkbox format, status comment syntax, dependency resolvability. Pure parser,
 no network.
@@ -221,6 +226,7 @@ checks (lint + verify) vs. scheduled runs (audit).
 ### 3.6 `coverage-report` Action — Scheduled Coverage Snapshot
 <!-- canon:system:3.6 status:todo -->
 
+<!-- canon:ticket:github:546 -->
 Publishes a coverage snapshot on a schedule. Outputs to committed markdown, a
 rolling tracking issue, or a webhook.
 
@@ -239,6 +245,7 @@ rolling tracking issue, or a webhook.
 ### 3.7 `coverage-delta` Action — PR-Time Coverage Diff
 <!-- canon:system:3.7 status:todo -->
 
+<!-- canon:ticket:github:547 -->
 Comments on PRs with the delta in spec coverage between base and head refs.
 
 #### Acceptance Criteria
@@ -254,6 +261,7 @@ Comments on PRs with the delta in spec coverage between base and head refs.
 ### 3.8 `sync` Action — CI-Side Ticket Sync
 <!-- canon:system:3.8 status:todo -->
 
+<!-- canon:ticket:github:548 -->
 Runs `canon sync` in CI so that orgs wanting their ticket-system credentials to
 live in GitHub secrets (not the Canon backend) can still get bidirectional
 sync.
@@ -273,6 +281,7 @@ sync.
 ### 3.9 `release-notes` Action — Spec-Driven Release Notes
 <!-- canon:system:3.9 status:todo -->
 
+<!-- canon:ticket:github:549 -->
 On release tag, generate release notes from specs that reached `done` status in
 the version range, linked to realization evidence. Coordinates with the
 `changelog-automation` spec: that spec generates the docs-site changelog from
@@ -296,6 +305,7 @@ state.
 ### 3.10 Reusable Workflow — `pr-checks.yml`
 <!-- canon:system:3.10 status:todo -->
 
+<!-- canon:ticket:github:550 -->
 A reusable workflow that bundles `verify` + `spec-lint` + `coverage-delta` for
 one-line opt-in.
 
@@ -310,6 +320,7 @@ one-line opt-in.
 ### 3.11 Reusable Workflow — `weekly-audit.yml`
 <!-- canon:system:3.11 status:todo -->
 
+<!-- canon:ticket:github:551 -->
 A reusable workflow that bundles `audit` + `coverage-report` + `stale-spec-check`
 + `dedup` on a weekly cron.
 
@@ -323,6 +334,7 @@ A reusable workflow that bundles `audit` + `coverage-report` + `stale-spec-check
 ### 3.12 `plan` Action — Generate Tasks from a Spec
 <!-- canon:system:3.12 status:todo -->
 
+<!-- canon:ticket:github:552 -->
 `workflow_dispatch`-triggered action that takes a spec file and opens a
 tracking issue (or sub-issues) containing tasks extracted by `canon plan`.
 
@@ -339,6 +351,7 @@ tracking issue (or sub-issues) containing tasks extracted by `canon plan`.
 ### 3.13 `new-spec` Action — Scaffold a Spec from a Prompt
 <!-- canon:system:3.13 status:todo -->
 
+<!-- canon:ticket:github:553 -->
 `workflow_dispatch`-triggered action that scaffolds a new spec file and opens a
 PR. Lowers the barrier for non-technical authors.
 
@@ -355,6 +368,7 @@ PR. Lowers the barrier for non-technical authors.
 ### 3.14 `compliance-export` Action — Audit Trail Export
 <!-- canon:system:3.14 status:todo -->
 
+<!-- canon:ticket:github:554 -->
 Exports a compliance-grade audit trail of every AC → status → evidence PR/file
 for regulated environments. Addresses the compliance hook noted in
 `enterprise-adoption-enablement.md` §8.
@@ -372,6 +386,7 @@ for regulated environments. Addresses the compliance hook noted in
 ### 3.15 `dedup` Action — Scheduled Ticket Deduplication
 <!-- canon:system:3.15 status:todo -->
 
+<!-- canon:ticket:github:555 -->
 Runs `canon dedup --dry-run` on a schedule and opens a PR with proposed cleanup.
 
 #### Acceptance Criteria
@@ -385,6 +400,7 @@ Runs `canon dedup --dry-run` on a schedule and opens a PR with proposed cleanup.
 ### 3.16 `upgrade` Action — Canon Version Bump
 <!-- canon:system:3.16 status:todo -->
 
+<!-- canon:ticket:github:556 -->
 Monthly or manually-triggered action that bumps the pinned `canonhq` CLI
 version, runs `canon db migrate` if needed, and opens a PR.
 
@@ -399,6 +415,7 @@ version, runs `canon db migrate` if needed, and opens a PR.
 ### 3.17 `stale-spec-check` Action — Find Unreviewed Drift
 <!-- canon:system:3.17 status:todo -->
 
+<!-- canon:ticket:github:557 -->
 Finds specs whose last commit is older than N days while their referenced code
 paths have continued to change, and opens an issue asking the owner to review.
 
@@ -413,6 +430,7 @@ paths have continued to change, and opens an issue asking the owner to review.
 ### 3.18 Docs Site — New `github-actions/` Guide Section
 <!-- canon:system:3.18 status:todo -->
 
+<!-- canon:ticket:github:558 -->
 Create a dedicated docs section for the Actions suite and fold the existing
 `ci-integration.md` guide into it.
 
@@ -434,6 +452,7 @@ Create a dedicated docs section for the Actions suite and fold the existing
 ### 3.19 Publishing, Versioning, and Smoke Tests
 <!-- canon:system:3.19 status:todo -->
 
+<!-- canon:ticket:github:559 -->
 Extend the existing `sync-oss` pipeline to publish the new actions with proper
 version tagging, and add a post-sync smoke test.
 
