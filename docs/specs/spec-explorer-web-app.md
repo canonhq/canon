@@ -112,6 +112,9 @@ The page includes:
 <!-- canon:realized-in:PR#296 file:frontend/src/components/spec/SpecSectionCard.vue -->
 - [x] Per-section status badges
 - [x] Ticket links rendered as hyperlinks (Jira, Linear, GitHub Issues)
+<!-- canon:realized-in:PR#623 file:src/canon/web/render.py -->
+<!-- canon:realized-in:PR#623 file:src/canon/parser/models.py -->
+<!-- canon:realized-in:PR#623 file:src/canon/parser/parse.py -->
 <!-- canon:realized-in:PR#84 file: -->
 - [x] Blocked-by indicators shown in red
 - [x] Acceptance criteria as readonly checkboxes (checked items struck-through)
