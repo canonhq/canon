@@ -45,6 +45,7 @@ Canon's core request path is well-instrumented (HTTP requests, webhooks, agent c
 
 <!-- canon:system:2 status:todo -->
 
+<!-- canon:ticket:github:580 -->
 The `lifespan` function in `main.py` initializes DB pool, embedding client, search index, Stripe, and OIDC. Failures are caught with a broad `except Exception` and logged as warnings, but no discrete PostHog event is emitted. This means startup failures are only visible by scanning raw logs.
 
 ### 2.1 Startup Failure Event
@@ -79,6 +80,7 @@ Emit a `startup_completed` event on successful initialization:
 
 <!-- canon:system:3 status:todo -->
 
+<!-- canon:ticket:github:581 -->
 Five CronJobs are defined in the Helm chart. Only `weekly_digest` uses the `@tracked_cron` decorator. The other four run unobserved — if they fail silently, PostHog shows nothing.
 
 ### 3.1 CronJobs to Instrument
@@ -110,6 +112,7 @@ For `canon.search.reindex`, which may not be a simple function wrapper, add expl
 
 <!-- canon:system:4 status:todo -->
 
+<!-- canon:ticket:github:582 -->
 Canon calls several external APIs. None are instrumented. An outage or rate limit exhaustion at any of these is invisible.
 
 ### 4.1 GitHub API Client
@@ -161,6 +164,7 @@ Rate limit headers (`X-RateLimit-Remaining`, `X-RateLimit-Reset`) should be extr
 
 <!-- canon:system:5 status:todo -->
 
+<!-- canon:ticket:github:583 -->
 The asyncpg connection pool in `src/canon/db/pool.py` has no observability. Pool exhaustion, connection timeouts, and reconnection failures are invisible.
 
 ### 5.1 Connection Pool Events
@@ -198,6 +202,7 @@ When `_sanitise_asyncpg_params` strips libpq-only parameters (like `channel_bind
 
 <!-- canon:system:6 status:todo -->
 
+<!-- canon:ticket:github:584 -->
 SSE streaming routes (`/generate`, `/ai-edit`) catch exceptions inside their generator functions because errors occur after HTTP headers are sent. The global exception handler never sees these. Currently these exceptions are logged but not sent to PostHog as events.
 
 ### Acceptance Criteria
@@ -211,6 +216,7 @@ SSE streaming routes (`/generate`, `/ai-edit`) catch exceptions inside their gen
 
 <!-- canon:system:7 status:todo -->
 
+<!-- canon:ticket:github:585 -->
 Kubernetes-level events (OOM kills, pod evictions, CronJob failures, node pressure) are invisible to PostHog. These events happen outside the application and can't be caught by in-process instrumentation.
 
 ### 7.1 Recommended Approach
@@ -251,6 +257,7 @@ These items improve reliability alongside observability:
 
 <!-- canon:system:8 status:todo -->
 
+<!-- canon:ticket:github:586 -->
 Canon's infrastructure is managed in `gv-infra/experiments/canon/`. The Terraform config provisions Auth0, GCP Vertex AI, DNS, Stripe, and PostHog — but no infrastructure-level monitoring.
 
 ### 8.1 Database Connection String Validation
@@ -280,6 +287,7 @@ No automated drift detection exists. If someone modifies Auth0, DNS, or PostHog 
 
 <!-- canon:system:9 status:todo -->
 
+<!-- canon:ticket:github:587 -->
 **Phase 1 — Quick wins (Sections 2, 3)**
 - Add startup failure/success events in `main.py` lifespan
 - Add `@tracked_cron` to the 4 uninstrumented CronJobs
