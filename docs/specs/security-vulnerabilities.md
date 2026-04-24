@@ -64,6 +64,7 @@ When Auth0 is not configured, all users receive anonymous access with full admin
 
 <!-- canon:system:4 status:todo -->
 
+<!-- canon:ticket:github:589 -->
 **Severity: HIGH**
 
 The `SessionMiddleware` falls back to the hardcoded value `"dev-not-secret"` when Auth0 is not configured. This enables session forgery since the secret is publicly known in source code.

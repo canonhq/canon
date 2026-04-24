@@ -299,6 +299,7 @@ slack:
 
 <!-- canon:system:9 status:todo -->
 
+<!-- canon:ticket:linear:17 -->
 ### Phase 1: Wire the Living System (Track 1)
 
 Ship sections 2, 3, and 5. This delivers the highest-impact change: users start receiving proactive notifications and getting spec-aware answers from `@canon` without any new UI.
