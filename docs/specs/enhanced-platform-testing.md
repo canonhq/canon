@@ -16,7 +16,7 @@ Establish a robust testing ecosystem for Canon's platform that validates all dep
 <!-- canon:ticket:github:231 -->
 ## 1. Background
 
-<!-- canon:system:1 status:todo -->
+<!-- canon:system:1 status:done -->
 
 <!-- canon:ticket:github:231 -->
 Canon has 1,800+ unit tests with strong coverage of individual modules, but significant gaps in validating how the platform works as an assembled system. With the OIDC provider abstraction (PR #386) introducing a multi-provider auth world and the imminent OSS export of the auth/web/db modules, Canon now has four distinct deployment profiles with different auth configurations, secret shapes, and feature flags — none of which are tested end-to-end in CI.
