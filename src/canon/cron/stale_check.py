@@ -54,15 +54,8 @@ async def run_stale_check() -> list[dict]:
     results: list[dict] = []
 
     try:
-        # Get installation token and list repos
-        headers = await client._auth_headers()
-        resp = await client._http.get(
-            "/installation/repositories",
-            headers=headers,
-            params={"per_page": "100"},
-        )
-        resp.raise_for_status()
-        repos = resp.json().get("repositories", [])
+        # List repos via paginated client method (ETag-cached)
+        repos = await client.list_installation_repos()
 
         for repo_data in repos:
             owner = repo_data["owner"]["login"]

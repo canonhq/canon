@@ -71,14 +71,19 @@ async def run_reverse_sync() -> list[dict]:
     try:
         # Get installation token for GitHub adapter reuse and list repos
         github_token = await client.get_installation_token()
-        headers = await client._auth_headers()
-        resp = await client._http.get(
-            "/installation/repositories",
-            headers=headers,
-            params={"per_page": "100"},
-        )
-        resp.raise_for_status()
-        repos = resp.json().get("repositories", [])
+
+        try:
+            repos = await client.list_installation_repos()
+        except Exception:
+            logger.exception(
+                "Failed to list installation repositories — "
+                "check GitHub App installation permissions and repository access"
+            )
+            analytics.track(
+                "reverse_sync_repo_list_failed",
+                properties={"installation_id": settings.gh_installation_id},
+            )
+            raise
 
         for repo_data in repos:
             owner = repo_data["owner"]["login"]
@@ -92,25 +97,72 @@ async def run_reverse_sync() -> list[dict]:
                 matches_doc_patterns,
             )
 
-            repo_config = await load_repo_config(client, owner, repo_name)
+            try:
+                repo_config = await load_repo_config(client, owner, repo_name)
+            except Exception:
+                logger.warning(
+                    "Failed to load config for %s/%s — skipping repo",
+                    owner,
+                    repo_name,
+                    exc_info=True,
+                )
+                continue
             doc_paths = repo_config.specs.doc_paths
 
-            # List spec files using configurable patterns
-            directories = extract_directories(doc_paths)
-            entries: list[dict] = []
-            for directory, _is_recursive in directories:
-                entries.extend(await client.list_directory(owner, repo_name, directory))
-            if not entries:
+            # List spec files using Git Trees API (1 call per repo)
+            # instead of per-directory Contents API calls
+            try:
+                tree_data = await client._get(
+                    f"/repos/{owner}/{repo_name}/git/trees/{default_branch}",
+                    recursive="true",
+                )
+                if tree_data.get("truncated"):
+                    logger.warning(
+                        "Git Trees API truncated for %s/%s — falling back to Contents API",
+                        owner,
+                        repo_name,
+                    )
+                    raise ValueError("truncated tree")
+                tree_entries = tree_data.get("tree", [])
+                spec_files = [
+                    item["path"]
+                    for item in tree_entries
+                    if item["type"] == "blob"
+                    and item["path"].endswith(".md")
+                    and not item["path"].rsplit("/", 1)[-1].startswith("_")
+                    and matches_doc_patterns(item["path"], doc_paths)
+                ]
+            except Exception:
+                # Fallback to per-directory listing if Trees API fails
+                logger.warning(
+                    "Git Trees API failed for %s/%s — falling back to Contents API",
+                    owner,
+                    repo_name,
+                    exc_info=True,
+                )
+                directories = extract_directories(doc_paths)
+                entries: list[dict] = []
+                for directory, _is_recursive in directories:
+                    try:
+                        entries.extend(await client.list_directory(owner, repo_name, directory))
+                    except Exception:
+                        logger.warning(
+                            "Failed to list directory %s in %s/%s — skipping",
+                            directory,
+                            owner,
+                            repo_name,
+                            exc_info=True,
+                        )
+                spec_files = [
+                    e.get("path", f"{e.get('name', '')}")
+                    for e in entries
+                    if e.get("type") == "file"
+                    and e.get("name", "").endswith(".md")
+                    and not e.get("name", "").startswith("_")
+                    and matches_doc_patterns(e.get("path", e.get("name", "")), doc_paths)
+                ]
+            if not spec_files:
                 continue
-
-            spec_files = [
-                e.get("path", f"{e.get('name', '')}")
-                for e in entries
-                if e.get("type") == "file"
-                and e.get("name", "").endswith(".md")
-                and not e.get("name", "").startswith("_")
-                and matches_doc_patterns(e.get("path", e.get("name", "")), doc_paths)
-            ]
             mapping, _deprecated = synthesize_mapping_config(
                 ticket_system=repo_config.ticket_system,
                 project_key=repo_config.project_key,
@@ -122,6 +174,7 @@ async def run_reverse_sync() -> list[dict]:
             if org_mapping:
                 mapping = deep_merge_configs(org_mapping, mapping)
 
+            full_repo = f"{owner}/{repo_name}"
             for file_path in spec_files:
                 try:
                     content, file_sha = await client.get_file_content(owner, repo_name, file_path)
@@ -135,6 +188,7 @@ async def run_reverse_sync() -> list[dict]:
                     # 3. DB org_integrations (from_org, for OAuth-connected orgs)
                     adapter = None
                     resolved_sys_config = None
+                    reason = "no_explicit_mapping"
                     if not mapping.is_empty():
                         target_name = resolve_target(
                             None, result.document, mapping.routing, mapping.ticket_systems
@@ -146,7 +200,10 @@ async def run_reverse_sync() -> list[dict]:
                                 resolved_sys_config,
                                 mapping.auth_profiles or None,
                                 github_token=github_token,
+                                repo_context=full_repo,
                             )
+                            if not adapter:
+                                reason = "from_config_failed"
                             if not adapter and integration_store and resolved_sys_config.system:
                                 try:
                                     adapter = await from_org(
@@ -166,6 +223,7 @@ async def run_reverse_sync() -> list[dict]:
                                     )
                             project_key = project_key or resolved_sys_config.project or ""
                         else:
+                            reason = "no_routing_target_matched"
                             single = mapping.single_system()
                             if single:
                                 resolved_sys_config = single
@@ -175,7 +233,10 @@ async def run_reverse_sync() -> list[dict]:
                                     single,
                                     mapping.auth_profiles or None,
                                     github_token=github_token,
+                                    repo_context=full_repo,
                                 )
+                                if not adapter:
+                                    reason = "from_config_failed"
                                 if not adapter and integration_store and single.system:
                                     try:
                                         adapter = await from_org(
@@ -197,19 +258,24 @@ async def run_reverse_sync() -> list[dict]:
 
                     if not adapter:
                         if not project_key:
-                            continue
-                        adapter = create_adapter(
-                            ticket_project=project_key, github_token=github_token
-                        )
+                            reason = "no_project_key_and_no_routing"
+                        else:
+                            adapter = create_adapter(
+                                ticket_project=project_key,
+                                github_token=github_token,
+                                repo_context=full_repo,
+                            )
+                            reason = "create_adapter_returned_none"
 
                     if not adapter:
                         logger.warning(
-                            "No ticket adapter resolved for %s/%s/%s (project_key=%r) "
+                            "No ticket adapter resolved for %s/%s/%s (project_key=%r, reason=%s) "
                             "— skipping reverse sync",
                             owner,
                             repo_name,
                             file_path,
                             project_key,
+                            reason,
                         )
                         analytics.track(
                             "sync_adapter_resolution_failed",
@@ -217,6 +283,7 @@ async def run_reverse_sync() -> list[dict]:
                                 "repo": f"{owner}/{repo_name}",
                                 "file_path": file_path,
                                 "project_key": project_key,
+                                "reason": reason,
                                 "context": "reverse_sync",
                             },
                             groups={"organization": owner},

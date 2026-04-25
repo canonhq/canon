@@ -79,16 +79,12 @@ class TestRunReindex:
         mock_client_cls.return_value = mock_client
 
         # Simulate listing repos
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "repositories": [
+        mock_client.list_installation_repos = AsyncMock(
+            return_value=[
                 {"owner": {"login": "org"}, "name": "repo1"},
                 {"owner": {"login": "org"}, "name": "repo2"},
-            ],
-        }
-        mock_resp.raise_for_status = MagicMock()
-        mock_client._http.get.return_value = mock_resp
-        mock_client._auth_headers.return_value = {"Authorization": "token abc"}
+            ]
+        )
 
         doc1 = _make_doc(title="Auth", file_path="docs/specs/auth.md")
         doc2 = _make_doc(title="API", file_path="docs/specs/api.md")
@@ -149,15 +145,11 @@ class TestRunReindex:
         mock_client = AsyncMock()
         mock_client_cls.return_value = mock_client
 
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "repositories": [
+        mock_client.list_installation_repos = AsyncMock(
+            return_value=[
                 {"owner": {"login": "org"}, "name": "repo1"},
-            ],
-        }
-        mock_resp.raise_for_status = MagicMock()
-        mock_client._http.get.return_value = mock_resp
-        mock_client._auth_headers.return_value = {"Authorization": "token abc"}
+            ]
+        )
 
         doc1 = _make_doc(title="Good", file_path="docs/specs/good.md")
         doc2 = _make_doc(title="Bad", file_path="docs/specs/bad.md")
@@ -214,15 +206,11 @@ class TestRunReindex:
         mock_client = AsyncMock()
         mock_client_cls.return_value = mock_client
 
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = {
-            "repositories": [
+        mock_client.list_installation_repos = AsyncMock(
+            return_value=[
                 {"owner": {"login": "org"}, "name": "empty-repo"},
-            ],
-        }
-        mock_resp.raise_for_status = MagicMock()
-        mock_client._http.get.return_value = mock_resp
-        mock_client._auth_headers.return_value = {"Authorization": "token abc"}
+            ]
+        )
 
         mock_load_specs.return_value = []
         mock_embed = MagicMock()

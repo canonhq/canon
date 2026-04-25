@@ -31,6 +31,7 @@ def create_adapter(
     ticket_project: str,
     system: Literal["jira", "linear", "github"] | None = None,
     github_token: str = "",
+    repo_context: str = "",
 ) -> TicketAdapter | None:
     """Return a TicketAdapter if credentials are configured, None otherwise.
 
@@ -40,6 +41,8 @@ def create_adapter(
         github_token: Optional GitHub token (e.g. from a GitHub App installation).
             Used as fallback when GITHUB_TOKEN env var is not set.
             When provided, owner/repo are extracted from ``ticket_project``.
+        repo_context: Current repo in "owner/repo" format. Used as fallback
+            for GitHub adapter when ticket_project doesn't specify a target repo.
     """
     resolved = system or _detect_system(github_token=github_token)
 
@@ -61,10 +64,12 @@ def create_adapter(
         token = os.environ.get("GITHUB_TOKEN", "") or github_token
         default_owner = os.environ.get("GITHUB_OWNER", "")
         default_repo = os.environ.get("GITHUB_REPO", "")
-        if (not default_owner or not default_repo) and ticket_project and "/" in ticket_project:
-            parts = ticket_project.split("/", 1)
-            default_owner = default_owner or parts[0]
-            default_repo = default_repo or parts[1]
+        # Try ticket_project first, then repo_context as fallback
+        for candidate in (ticket_project, repo_context):
+            if (not default_owner or not default_repo) and candidate and "/" in candidate:
+                parts = candidate.split("/", 1)
+                default_owner = default_owner or parts[0]
+                default_repo = default_repo or parts[1]
         if not token or not default_owner or not default_repo:
             return None
         return GitHubAdapter(
@@ -86,6 +91,7 @@ def from_config(
     auth_profiles: dict[str, AuthProfile] | None = None,
     *,
     github_token: str = "",
+    repo_context: str = "",
 ) -> TicketAdapter | None:
     """Create an adapter from a TicketSystemConfig.
 
@@ -95,6 +101,8 @@ def from_config(
         auth_profiles: Optional auth profiles for credential resolution.
         github_token: Optional GitHub token (e.g. from a GitHub App installation).
             Used as fallback when auth_profile / env var token is not set.
+        repo_context: Current repo in "owner/repo" format. Used as fallback
+            for GitHub adapter when config.project doesn't specify a target repo.
 
     Resolves credentials from an auth profile (if set) or falls back to
     the standard env var auto-detection.
@@ -122,10 +130,12 @@ def from_config(
         # For GitHub, project is "owner/repo" format
         default_owner = os.environ.get(f"{prefix}OWNER", "")
         default_repo = os.environ.get(f"{prefix}REPO", "")
-        if config.project and "/" in config.project:
-            parts = config.project.split("/", 1)
-            default_owner = default_owner or parts[0]
-            default_repo = default_repo or parts[1]
+        # Try config.project first, then repo_context as fallback
+        for candidate in (config.project, repo_context):
+            if (not default_owner or not default_repo) and candidate and "/" in candidate:
+                parts = candidate.split("/", 1)
+                default_owner = default_owner or parts[0]
+                default_repo = default_repo or parts[1]
         if not token or not default_owner or not default_repo:
             logger.warning("Ticket system %r: missing GitHub credentials (prefix=%s)", name, prefix)
             return None
