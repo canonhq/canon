@@ -1,6 +1,6 @@
 [project]
 name = "canonhq"
-version = "1.59.0"
+version = "1.59.1"
 description = "Canon — spec-driven development platform"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -105,8 +105,11 @@ exclude = [
 testpaths = ["tests"]
 # auto-mode: async test functions run without explicit @pytest.mark.asyncio
 asyncio_mode = "auto"
-markers = ["integration: integration tests (deselected by default)"]
-addopts = "-m 'not integration'"
+markers = [
+    "integration: integration tests (deselected by default)",
+    "scenario: scenario-based adoption lifecycle tests (deselected by default)",
+]
+addopts = "-m 'not integration and not scenario'"
 
 [tool.coverage.run]
 source = ["canon"]
