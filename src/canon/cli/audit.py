@@ -147,7 +147,29 @@ def run_audit(
         skip_states = {"done", "deprecated", "blocked"}
         sections_to_audit = [s for s in all_sections if s.status.state not in skip_states]
 
-        if not sections_to_audit:
+        # Auto-promote context sections (0 ACs) to done — Background, Design,
+        # Rollout Plan, Open Questions, etc. are informational and have no
+        # measurable completion signal, so neither Claude nor the heuristic
+        # can confidently assess them.
+        context_promotions: list[AuditRecommendation] = []
+        remaining: list[SpecSection] = []
+        for sec in sections_to_audit:
+            if not sec.acceptance_criteria and sec.section_number:
+                context_promotions.append(
+                    AuditRecommendation(
+                        section_id=sec.id,
+                        section_number=sec.section_number,
+                        current_status=sec.status.state,
+                        recommended_status="done",
+                        confidence="high",
+                        reasoning="Context/background section with no acceptance criteria",
+                    )
+                )
+            else:
+                remaining.append(sec)
+        sections_to_audit = remaining
+
+        if not sections_to_audit and not context_promotions:
             if not json_output:
                 print(f"{doc.frontmatter.title}: all sections done/deprecated, skipping.")
             continue
@@ -185,8 +207,12 @@ def run_audit(
             if r.recommended_status != r.current_status and r.confidence in ("high", "medium")
         ]
 
+        # Merge context section auto-promotions into changes
+        changes.extend(context_promotions)
+
         # Collect all medium/high confidence recs for AC updates (includes unchanged-status sections)
         ac_eligible = [r for r in recommendations if r.confidence in ("high", "medium")]
+        ac_eligible.extend(context_promotions)
 
         # In JSON mode, accumulate per-spec records and skip the human-print path.
         if json_output:

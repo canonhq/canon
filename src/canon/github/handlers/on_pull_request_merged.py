@@ -243,7 +243,21 @@ async def on_pull_request_merged(client, payload: dict) -> None:
 
         status_updates: list[StatusUpdate] = []
         for section in all_sections:
-            if not section.acceptance_criteria or not section.section_number:
+            if not section.section_number:
+                continue
+            # Context sections (0 ACs) — auto-promote to done since they
+            # are informational (Background, Design, Rollout Plan, etc.)
+            if not section.acceptance_criteria:
+                if section.status.state in ("draft", "todo"):
+                    status_updates.append(
+                        StatusUpdate(section_number=section.section_number, new_state="done")
+                    )
+                    logger.info(
+                        "Auto-advancing %s §%s to done — context section, no ACs (PR #%d)",
+                        spec_file,
+                        section.section_number,
+                        pr_number,
+                    )
                 continue
             # Only auto-advance from actionable states. Blocked sections
             # require a human to clear the blocker first.
