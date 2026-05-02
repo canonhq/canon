@@ -10,7 +10,13 @@ from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+)
 from fastapi.templating import Jinja2Templates
 
 from canon import analytics
@@ -306,7 +312,9 @@ async def landing(request: Request):
     )
     if resp is not None:
         return resp
-    return templates.TemplateResponse(request, "landing.html")
+    settings = request.app.state.settings
+    base_url = (settings.canon_base_url or str(request.base_url)).rstrip("/")
+    return templates.TemplateResponse(request, "landing.html", {"base_url": base_url})
 
 
 @router.get("/changelog", response_class=HTMLResponse)
@@ -333,6 +341,52 @@ async def pricing(request: Request):
     if resp is not None:
         return resp
     return HTMLResponse(content="SPA not built", status_code=503)
+
+
+@router.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt(request: Request) -> PlainTextResponse:
+    """Root robots.txt — directs crawlers to both marketing and docs sitemaps."""
+    settings = request.app.state.settings
+    base_url = (settings.canon_base_url or str(request.base_url)).rstrip("/")
+    # Strip CR/LF to prevent header-injection via Host-derived base_url
+    base_url = base_url.replace("\r", "").replace("\n", "")
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /app/\n"
+        "Disallow: /api/\n"
+        "Disallow: /auth/\n"
+        "Disallow: /webhook\n"
+        "Disallow: /webhooks/\n"
+        f"Sitemap: {base_url}/sitemap.xml\n"
+        f"Sitemap: {base_url}/docs/sitemap.xml\n"
+    )
+    return PlainTextResponse(content=body, media_type="text/plain")
+
+
+@router.get("/sitemap.xml")
+async def sitemap_xml(request: Request) -> Response:
+    """Sitemap of public marketing pages. Docs pages have their own sitemap at /docs/sitemap.xml."""
+    settings = request.app.state.settings
+    base_url = (settings.canon_base_url or str(request.base_url)).rstrip("/")
+    pages = [
+        ("/", "1.0", "weekly"),
+        ("/pricing", "0.8", "monthly"),
+        ("/changelog", "0.6", "weekly"),
+    ]
+    urls = "".join(
+        f"  <url><loc>{html_escape(base_url + path)}</loc>"
+        f"<changefreq>{freq}</changefreq>"
+        f"<priority>{priority}</priority></url>\n"
+        for path, priority, freq in pages
+    )
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{urls}"
+        "</urlset>\n"
+    )
+    return Response(content=body, media_type="application/xml")
 
 
 @router.post("/api/waitlist", response_class=JSONResponse)

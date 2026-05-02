@@ -7,6 +7,55 @@
   <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
   <link rel="icon" type="image/png" href="/static/favicon.png">
   <meta name="description" content="Canon is an AI-native documentation platform. Write structured specs, get AI-powered PR reviews, bidirectional ticket sync, and code-aware verification that your docs match reality.">
+  <link rel="canonical" href="{{ base_url }}/">
+  <meta name="robots" content="index, follow">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Canon">
+  <meta property="og:title" content="Canon — Documentation that keeps up.">
+  <meta property="og:description" content="AI-native documentation platform. Living specs, AI-powered PR reviews, bidirectional ticket sync, and code-aware verification that your docs match reality.">
+  <meta property="og:url" content="{{ base_url }}/">
+  <meta property="og:image" content="{{ base_url }}/static/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Canon — Documentation that keeps up.">
+  <meta name="twitter:description" content="AI-native documentation platform. Living specs, AI-powered PR reviews, bidirectional ticket sync, and code-aware verification that your docs match reality.">
+  <meta name="twitter:image" content="{{ base_url }}/static/og-image.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "{{ base_url }}/#organization",
+        "name": "Canon",
+        "url": "{{ base_url }}/",
+        "logo": "{{ base_url }}/static/logo.svg",
+        "sameAs": ["https://github.com/canonhq/canon"]
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "Canon",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Linux, macOS, Windows",
+        "description": "AI-native enterprise documentation platform. Living specs, agent-maintained docs, repo-native knowledge, bidirectional ticket sync, and AI-powered PR reviews.",
+        "url": "{{ base_url }}/",
+        "publisher": { "@id": "{{ base_url }}/#organization" },
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD",
+          "description": "Self-hosted free forever; managed cloud from $9/user/month."
+        }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "{{ base_url }}/#website",
+        "url": "{{ base_url }}/",
+        "name": "Canon",
+        "publisher": { "@id": "{{ base_url }}/#organization" }
+      }
+    ]
+  }
+  </script>
   <script>
     (function(){
       var s = localStorage.getItem('sw-theme');
