@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     google_cloud_location: str = "us-central1"
     gcp_service_account_key: str = ""
 
+    # Content cache — serve specs from Postgres instead of GitHub
+    content_cache_enabled: bool = False
+
+    # OpenSearch (optional — replaces pgvector + ParadeDB for search)
+    opensearch_url: str = ""
+    opensearch_username: str = ""
+    opensearch_password: SecretStr = SecretStr("")
+    opensearch_specs_index: str = "canon-specs"
+    opensearch_sections_index: str = "canon-sections"
+    opensearch_enabled: bool = False
+
     # Auth0 (optional — gates /app/* when configured)
     auth0_domain: str = ""
     auth0_client_id: str = ""

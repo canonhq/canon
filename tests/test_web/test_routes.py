@@ -307,6 +307,59 @@ class TestHealthEndpoints:
         assert resp.status_code == 503
         assert resp.json()["status"] == "error"
 
+    async def test_readyz_omits_opensearch_when_disabled(self, client: AsyncClient):
+        """A disabled OpenSearch client must not surface the field at all —
+        the field's presence indicates the backend is configured."""
+        app.state.db_pool = None
+        opensearch = MagicMock()
+        opensearch.is_enabled = False
+        opensearch.ping = AsyncMock(return_value=False)
+        app.state.opensearch_client = opensearch
+
+        resp = await client.get("/readyz")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "opensearch" not in body
+        opensearch.ping.assert_not_called()
+        app.state.opensearch_client = None
+
+    async def test_readyz_reports_opensearch_ok_when_reachable(self, client: AsyncClient):
+        """Enabled + ping=True → 200 with `opensearch: ok`."""
+        app.state.db_pool = None
+        opensearch = MagicMock()
+        opensearch.is_enabled = True
+        opensearch.ping = AsyncMock(return_value=True)
+        app.state.opensearch_client = opensearch
+
+        resp = await client.get("/readyz")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["opensearch"] == "ok"
+        assert body["status"] == "ok"
+        app.state.opensearch_client = None
+
+    async def test_readyz_returns_200_with_unreachable_field_when_opensearch_down(
+        self, client: AsyncClient
+    ):
+        """OpenSearch reachability is informational on /readyz, never 503.
+        Search is a partial dependency — failing readiness on an OS blip
+        would simultaneously remove every pod from the Service endpoint
+        slice (shared cluster) and DoS webhooks/auth/billing/agent paths
+        that don't depend on OpenSearch at all. Operators alert on the
+        `opensearch` field via PostHog or Prometheus instead."""
+        app.state.db_pool = None
+        opensearch = MagicMock()
+        opensearch.is_enabled = True
+        opensearch.ping = AsyncMock(return_value=False)
+        app.state.opensearch_client = opensearch
+
+        resp = await client.get("/readyz")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "ok"
+        assert body["opensearch"] == "unreachable"
+        app.state.opensearch_client = None
+
 
 class TestGlobalExceptionHandler:
     """Unit tests for _global_exception_handler.

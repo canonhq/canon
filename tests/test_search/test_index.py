@@ -140,7 +140,7 @@ class TestUpsertSpec:
         mock_pool = _mock_pool_with_conn(mock_conn)
 
         content = "# Test Spec\nSome content here"
-        expected_hash = hashlib.sha256(content.encode()).hexdigest()
+        expected_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
 
         index = SearchIndex(mock_pool)
         await index.upsert_spec(

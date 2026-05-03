@@ -20,7 +20,7 @@ from ..db.schema import ensure_schema
 from ..github.client import GitHubClient
 from ..github.spec_utils import load_repo_config, load_repo_specs
 from ..settings import Settings
-from ..web.services import _summarize_spec
+from ..web.services import _load_specs_from_cache, _summarize_spec
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,11 @@ async def run_coverage_snapshot() -> list[dict]:
     await ensure_schema(pool, settings.database_url)
     agent_store = AgentStore(pool)
 
+    # Content cache for Postgres-first reads
+    from ..db.content_cache_store import ContentCacheStore
+
+    content_cache = ContentCacheStore(pool) if settings.content_cache_enabled else None
+
     client = GitHubClient(
         app_id=settings.gh_app_id,
         private_key=settings.gh_private_key,
@@ -65,9 +70,17 @@ async def run_coverage_snapshot() -> list[dict]:
 
             try:
                 repo_config = await load_repo_config(client, owner, repo_name)
-                specs = await load_repo_specs(
-                    client, owner, repo_name, patterns=repo_config.specs.doc_paths
-                )
+
+                # Try content cache first, fall back to GitHub
+                specs = None
+                if content_cache is not None:
+                    specs = await _load_specs_from_cache(
+                        content_cache, owner, repo_name, repo_config.specs.doc_paths
+                    )
+                if specs is None:
+                    specs = await load_repo_specs(
+                        client, owner, repo_name, patterns=repo_config.specs.doc_paths
+                    )
 
                 for spec_data in specs:
                     doc = spec_data["document"]

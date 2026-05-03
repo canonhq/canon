@@ -50,6 +50,8 @@ class BackgroundIndexer:
         search_index,
         embed_client=None,
         registry=None,
+        content_cache_store=None,
+        opensearch_client=None,
     ) -> str:
         """Schedule a full org index. Returns the task_id."""
         self._prune_old_tasks()
@@ -62,7 +64,15 @@ class BackgroundIndexer:
         )
         self._tasks[task_id] = idx_task
 
-        coro = self._run_org_index(idx_task, client, search_index, embed_client, registry)
+        coro = self._run_org_index(
+            idx_task,
+            client,
+            search_index,
+            embed_client,
+            registry,
+            content_cache_store,
+            opensearch_client,
+        )
         self._asyncio_tasks[task_id] = asyncio.create_task(coro)
 
         logger.info("Scheduled org index: task_id=%s org=%s", task_id, org_login)
@@ -78,6 +88,7 @@ class BackgroundIndexer:
         search_index,
         embed_client=None,
         registry=None,
+        opensearch_client=None,
     ) -> str:
         """Schedule indexing for specific repos. Returns the task_id."""
         self._prune_old_tasks()
@@ -91,7 +102,9 @@ class BackgroundIndexer:
         )
         self._tasks[task_id] = idx_task
 
-        coro = self._run_repos_index(idx_task, repos, client, search_index, embed_client, registry)
+        coro = self._run_repos_index(
+            idx_task, repos, client, search_index, embed_client, registry, opensearch_client
+        )
         self._asyncio_tasks[task_id] = asyncio.create_task(coro)
 
         logger.info("Scheduled repos index: task_id=%s repos=%d", task_id, len(repos))
@@ -116,6 +129,8 @@ class BackgroundIndexer:
         search_index,
         embed_client,
         registry,
+        content_cache_store=None,
+        opensearch_client=None,
     ) -> None:
         """Index all repos for an org installation."""
         task.status = "running"
@@ -129,7 +144,43 @@ class BackgroundIndexer:
                 await registry.update_last_indexed(task.installation_id, repos_count=len(repos))
 
             repo_names = [r["full_name"] for r in repos]
-            await self._index_repos(task, repo_names, client, search_index, embed_client, registry)
+
+            # Bootstrap content cache alongside search indexing
+            if content_cache_store is not None:
+                try:
+                    from ..sync.content_sync import ContentSyncEngine
+
+                    engine = ContentSyncEngine(content_cache_store, client)
+                    installations = [
+                        {
+                            "id": task.installation_id,
+                            "repos": [
+                                {"owner": r["owner"]["login"], "name": r["name"]} for r in repos
+                            ],
+                        }
+                    ]
+                    await engine.reconcile_all(installations)
+                    logger.info(
+                        "Content cache bootstrapped for org %s (%d repos)",
+                        task.org_login,
+                        len(repos),
+                    )
+                except Exception:
+                    logger.warning(
+                        "Content cache bootstrap failed for org %s",
+                        task.org_login,
+                        exc_info=True,
+                    )
+
+            await self._index_repos(
+                task,
+                repo_names,
+                client,
+                search_index,
+                embed_client,
+                registry,
+                opensearch_client,
+            )
 
             task.status = "completed"
         except Exception as exc:
@@ -147,13 +198,16 @@ class BackgroundIndexer:
         search_index,
         embed_client,
         registry,
+        opensearch_client=None,
     ) -> None:
         """Index specific repos."""
         task.status = "running"
         task.started_at = time.time()
 
         try:
-            await self._index_repos(task, repos, client, search_index, embed_client, registry)
+            await self._index_repos(
+                task, repos, client, search_index, embed_client, registry, opensearch_client
+            )
             task.status = "completed"
         except Exception as exc:
             task.status = "failed"
@@ -170,6 +224,7 @@ class BackgroundIndexer:
         search_index,
         embed_client,
         registry,
+        opensearch_client=None,
     ) -> None:
         """Index a list of repos, updating task progress."""
         from ..config.parse import parse_canon_yaml
@@ -214,6 +269,7 @@ class BackgroundIndexer:
                             repo=full_name,
                             search_index=search_index,
                             embed_client=embed_client,
+                            opensearch_client=opensearch_client,
                         )
                         specs_count += 1
                     except Exception:

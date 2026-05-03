@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import asyncpg
 
@@ -13,7 +13,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SearchResult:
-    """A single hybrid search result."""
+    """A single hybrid search result.
+
+    ``highlights`` is populated by backends that compute snippet highlighting
+    server-side (currently OpenSearch). For Postgres the field stays ``None``
+    and callers fall back to client-side snippet extraction.
+    """
 
     section_id: int
     document_id: int
@@ -24,6 +29,31 @@ class SearchResult:
     body: str
     status: str
     rrf_score: float
+    highlights: list[str] | None = None
+
+
+@dataclass
+class RelatedSpec:
+    """A spec returned by kNN-based "similar specs" lookups.
+
+    Order is the contract: most similar first. We deliberately omit a numeric
+    similarity score because backends measure it in different units (Postgres
+    pgvector returns 1 - cosine_distance; OpenSearch returns a backend-specific
+    ``_score``). A future Phase 3 GraphRAG step will compute normalized
+    similarity at index time when thresholds are needed.
+
+    ``ai_exposure`` and ``tags`` carry just enough metadata for the MCP
+    layer to apply per-spec exposure filtering (frontmatter override +
+    repo restricted_tags) without an extra round-trip to the cache store.
+    Backends that can't surface them (Postgres pgvector path) leave both
+    empty.
+    """
+
+    repo: str
+    path: str
+    title: str
+    ai_exposure: str = ""
+    tags: list[str] = field(default_factory=list)
 
 
 class SearchIndex:
@@ -44,15 +74,31 @@ class SearchIndex:
         sections: list[dict],
         commit_sha: str = "",
         doc_type: str = "spec",
+        ai_exposure: str = "",
+        tags: list[str] | None = None,
     ) -> int:
-        """Upsert a spec document and its sections. Returns the document ID."""
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        """Upsert a spec document and its sections. Returns the document ID.
+
+        ``ai_exposure`` and ``tags`` are stored so the kNN-based
+        ``PostgresSearchBackend.get_related`` can surface them on
+        :class:`RelatedSpec` results — without that metadata, the MCP
+        layer can't enforce per-spec exposure on neighbour lists when
+        Postgres is the active read backend.
+        """
+        # 16-char truncation, matching ContentSyncEngine.sync_spec and the
+        # OpenSearch dual-write in indexer.py — see the reconcile cron's
+        # hash comparison for why these must agree on length.
+        content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
 
         async with self._pool.acquire() as conn, conn.transaction():
             doc_id = await conn.fetchval(
                 """
-                    INSERT INTO spec_documents (repo, path, title, status, content_hash, commit_sha, embedding, doc_type, last_doc_change_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+                    INSERT INTO spec_documents (
+                        repo, path, title, status, content_hash, commit_sha,
+                        embedding, doc_type, ai_exposure, tags,
+                        last_doc_change_at
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
                     ON CONFLICT (repo, path)
                     DO UPDATE SET
                         title = EXCLUDED.title,
@@ -61,6 +107,8 @@ class SearchIndex:
                         commit_sha = EXCLUDED.commit_sha,
                         embedding = EXCLUDED.embedding,
                         doc_type = EXCLUDED.doc_type,
+                        ai_exposure = EXCLUDED.ai_exposure,
+                        tags = EXCLUDED.tags,
                         last_doc_change_at = now(),
                         indexed_at = now()
                     RETURNING id
@@ -73,6 +121,8 @@ class SearchIndex:
                 commit_sha,
                 _to_pgvector(doc_embedding),
                 doc_type,
+                ai_exposure,
+                tags or [],
             )
 
             await conn.execute(

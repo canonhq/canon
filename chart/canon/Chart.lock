@@ -2,5 +2,8 @@ dependencies:
 - name: zitadel
   repository: https://charts.zitadel.com
   version: 8.6.3
-digest: sha256:24be02304443f2bbbf5d704404f6ad8611823e68aeea09ff0c8043d93a35392a
-generated: "2026-03-26T01:28:31.971706175-04:00"
+- name: opensearch
+  repository: https://opensearch-project.github.io/helm-charts
+  version: 3.6.0
+digest: sha256:c7c56626da7df8d5a888724806ffc29144157c0a49c28c182d29f4e7f6a468cd
+generated: "2026-04-25T21:08:52.211220387-04:00"

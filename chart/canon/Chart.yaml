@@ -17,3 +17,7 @@ dependencies:
     version: "~8.6.0"
     repository: https://charts.zitadel.com
     condition: zitadel.enabled
+  - name: opensearch
+    version: "~3.6.0"
+    repository: https://opensearch-project.github.io/helm-charts
+    condition: opensearch.internal.enabled

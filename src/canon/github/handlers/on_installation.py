@@ -84,6 +84,8 @@ async def on_installation(client, payload: dict, *, _app_state=None) -> None:
                 search_index=search_index,
                 embed_client=embed_client,
                 registry=registry,
+                content_cache_store=getattr(state, "content_cache_store", None),
+                opensearch_client=getattr(state, "opensearch_client", None),
             )
             logger.info("Scheduled background indexing for %s", org_login)
 

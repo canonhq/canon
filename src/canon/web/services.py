@@ -177,7 +177,7 @@ async def _list_indexed_docs(
                     )
                 )
     except Exception:
-        pass
+        logger.debug("Failed to list root directory for %s/%s", owner, repo, exc_info=True)
 
     try:
         entries = await client.list_directory(owner, repo, "docs")
@@ -195,7 +195,7 @@ async def _list_indexed_docs(
                     )
                 )
     except Exception:
-        pass
+        logger.debug("Failed to list docs directory for %s/%s", owner, repo, exc_info=True)
 
     return docs
 
@@ -206,11 +206,15 @@ async def get_org_overview(
     cache: TTLCache,
     *,
     search_index: object | None = None,
+    content_cache_store: object | None = None,
 ) -> OrgOverview:
     """Get the full org dashboard overview.
 
     Uses request coalescing so concurrent callers share a single in-flight
     fetch instead of each hitting the GitHub API independently.
+
+    When content_cache_store is provided, loads specs from Postgres instead
+    of GitHub, eliminating API rate-limit pressure.
     """
     cache_key = f"org_overview:{org}"
     cached = cache.get(cache_key)
@@ -224,7 +228,14 @@ async def get_org_overview(
         return await inflight
 
     task = asyncio.create_task(
-        _fetch_org_overview(client, org, cache, cache_key=cache_key, search_index=search_index)
+        _fetch_org_overview(
+            client,
+            org,
+            cache,
+            cache_key=cache_key,
+            search_index=search_index,
+            content_cache_store=content_cache_store,
+        )
     )
     _inflight[cache_key] = task
     try:
@@ -242,8 +253,13 @@ async def _fetch_org_overview(
     *,
     cache_key: str,
     search_index: object | None = None,
+    content_cache_store: object | None = None,
 ) -> OrgOverview:
-    """Internal: actually fetch the org overview from GitHub."""
+    """Internal: actually fetch the org overview.
+
+    When content_cache_store is provided, loads specs from Postgres
+    (parsing cached raw_markdown) instead of fetching from GitHub.
+    """
     # Cache repo list separately with a longer TTL — repos rarely change.
     repo_cache_key = f"repo_list:{org}"
     repos = cache.get(repo_cache_key)
@@ -273,7 +289,17 @@ async def _fetch_org_overview(
 
         config = await _load_config(client, owner, repo_name, cache)
         doc_paths = config.specs.doc_paths if config else None
-        specs_data = await load_repo_specs(client, owner, repo_name, patterns=doc_paths)
+
+        # Try content cache first, fall back to GitHub
+        specs_data = None
+        if content_cache_store is not None:
+            specs_data = await _load_specs_from_cache(
+                content_cache_store, owner, repo_name, doc_paths
+            )
+
+        if specs_data is None:
+            specs_data = await load_repo_specs(client, owner, repo_name, patterns=doc_paths)
+
         # Cache full documents for section-level search
         for sd in specs_data:
             doc_cache_key = f"spec_doc:{full_name}/{sd['document'].file_path}"
@@ -328,6 +354,63 @@ async def _fetch_org_overview(
     return overview
 
 
+async def _load_specs_from_cache(
+    content_cache_store: object,
+    owner: str,
+    repo: str,
+    doc_paths: list[str] | None,
+) -> list[dict] | None:
+    """Load specs from Postgres content cache.
+
+    Returns list of dicts matching the shape of load_repo_specs() output:
+    [{"file_path": str, "document": SpecDocument, "raw": str, "sha": str}]
+
+    Returns None if no cached specs found (triggers GitHub fallback).
+    """
+    from ..parser.models import ParseOptions
+    from ..parser.parse import parse_spec
+
+    try:
+        from ..github.spec_utils import filter_spec_files
+
+        full_repo = f"{owner}/{repo}"
+        # Single query includes raw_markdown — no N+1 round trips
+        cached_specs = await content_cache_store.list_specs_with_content(full_repo)
+
+        if not cached_specs:
+            return None  # No cached data — fall back to GitHub
+
+        # Apply doc_paths filter to match the GitHub read path behaviour.
+        # Without this, repos with custom doc_paths patterns would show
+        # extra specs from the cache that load_repo_specs() would filter out.
+        if doc_paths is not None:
+            allowed_paths = set(
+                filter_spec_files([s["path"] for s in cached_specs], patterns=doc_paths)
+            )
+            cached_specs = [s for s in cached_specs if s["path"] in allowed_paths]
+
+        results = []
+        for spec_meta in cached_specs:
+            raw = spec_meta.get("raw_markdown")
+            if not raw:
+                continue
+            result = parse_spec(raw, ParseOptions(file_path=spec_meta["path"]))
+            results.append(
+                {
+                    "file_path": spec_meta["path"],
+                    "document": result.document,
+                    "raw": raw,
+                    "sha": spec_meta.get("github_sha", ""),
+                }
+            )
+        return results or None  # Empty list triggers GitHub fallback
+    except Exception:
+        logger.debug(
+            "Failed to load specs from content cache for %s/%s", owner, repo, exc_info=True
+        )
+        return None
+
+
 async def get_repo_detail(
     client: GitHubClient,
     owner: str,
@@ -335,6 +418,7 @@ async def get_repo_detail(
     cache: TTLCache,
     *,
     search_index: object | None = None,
+    content_cache_store: object | None = None,
 ) -> RepoSummary | None:
     """Get detailed view of a single repo's specs."""
     cache_key = f"repo:{owner}/{repo}"
@@ -357,7 +441,12 @@ async def get_repo_detail(
 
     config = await _load_config(client, owner, repo, cache)
     doc_paths = config.specs.doc_paths if config else None
-    specs_data = await load_repo_specs(client, owner, repo, patterns=doc_paths)
+    # Try content cache first, fall back to GitHub
+    specs_data = None
+    if content_cache_store is not None:
+        specs_data = await _load_specs_from_cache(content_cache_store, owner, repo, doc_paths)
+    if specs_data is None:
+        specs_data = await load_repo_specs(client, owner, repo, patterns=doc_paths)
     docs = await _list_indexed_docs(
         client,
         owner,
@@ -387,18 +476,57 @@ async def get_repo_detail(
 
 
 async def get_spec_detail(
-    client: GitHubClient, owner: str, repo: str, file_path: str, cache: TTLCache
+    client: GitHubClient,
+    owner: str,
+    repo: str,
+    file_path: str,
+    cache: TTLCache,
+    *,
+    content_cache_store: object | None = None,
 ) -> SpecDetail | None:
-    """Get full spec detail with rendered HTML."""
+    """Get full spec detail with rendered HTML.
+
+    When content_cache_store is provided, reads from Postgres first
+    and falls back to GitHub on cache miss.
+    """
     cache_key = f"spec:{owner}/{repo}/{file_path}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    try:
-        content, _ = await client.get_file_content(owner, repo, file_path)
-    except Exception:
-        return None
+    content: str | None = None
+
+    # Try Postgres content cache first
+    if content_cache_store is not None:
+        try:
+            content = await content_cache_store.get_spec_raw(f"{owner}/{repo}", file_path)
+        except Exception:
+            logger.warning(
+                "Content cache read failed for %s/%s/%s", owner, repo, file_path, exc_info=True
+            )
+
+    # Fall back to GitHub
+    if content is None:
+        try:
+            content, _ = await client.get_file_content(owner, repo, file_path)
+        except Exception:
+            return None
+
+        # Write-through: cache the content we just fetched from GitHub
+        if content_cache_store is not None:
+            try:
+                from ..sync.content_sync import ContentSyncEngine
+
+                engine = ContentSyncEngine(content_cache_store, client)
+                await engine.sync_spec(owner, repo, file_path, content)
+            except Exception:
+                logger.debug(
+                    "Write-through cache population failed for %s/%s/%s",
+                    owner,
+                    repo,
+                    file_path,
+                    exc_info=True,
+                )
 
     from ..parser.models import ParseOptions
     from ..parser.parse import parse_spec
@@ -1037,9 +1165,12 @@ async def get_tasks(
     repo_filter: str | None = None,
     search_index: object | None = None,
     expand: str | None = None,
+    content_cache_store: object | None = None,
 ) -> TasksApiResponse:
     """Extract actionable tasks from all specs across the org."""
-    overview = await get_org_overview(client, org, cache, search_index=search_index)
+    overview = await get_org_overview(
+        client, org, cache, search_index=search_index, content_cache_store=content_cache_store
+    )
     tasks: list[TaskItem] = []
 
     target_statuses = {status} if status else ACTIVE_STATUSES
@@ -1051,7 +1182,12 @@ async def get_tasks(
         for spec_summary in repo.specs:
             try:
                 detail = await get_spec_detail(
-                    client, repo.owner, repo.repo, spec_summary.file_path, cache
+                    client,
+                    repo.owner,
+                    repo.repo,
+                    spec_summary.file_path,
+                    cache,
+                    content_cache_store=content_cache_store,
                 )
                 if not detail:
                     continue

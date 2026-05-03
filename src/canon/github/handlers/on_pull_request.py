@@ -184,15 +184,21 @@ async def _load_session_evidence(
 
 
 def _get_search_deps() -> tuple | None:
-    """Return (search_index, embed_client) from app.state, or None if unavailable."""
+    """Return (search_backend, embed_client) from app.state, or None if unavailable.
+
+    Falls back to the raw ``search_index`` when no backend has been wired,
+    keeping pre-Phase-2c boots and tests working.
+    """
     try:
         from canon.main import app
 
-        search_index = getattr(app.state, "search_index", None)
-        if search_index is None:
+        backend = getattr(app.state, "search_backend", None) or getattr(
+            app.state, "search_index", None
+        )
+        if backend is None:
             return None
         embed_client = getattr(app.state, "embed_client", None)
-        return (search_index, embed_client)
+        return (backend, embed_client)
     except Exception:
         return None
 

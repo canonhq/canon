@@ -21,6 +21,7 @@ from .deps import McpDeps
 logger = logging.getLogger(__name__)
 
 MAX_BODY_SNIPPET = 500
+MAX_RELATED_SPECS = 100
 
 # TTL cache for ai_exposure config to avoid repeated GitHub API calls per tool invocation.
 # Keyed by (owner, repo), values are (timestamp, (default, restricted_tags)).
@@ -157,6 +158,30 @@ def _resolve_exposure(
     return resolve_ai_exposure(frontmatter, restricted_tags, cd)
 
 
+def _resolve_related_exposure(
+    related: Any,
+    config_default: str,
+    restricted_tags: list[str],
+) -> AiExposure:
+    """Resolve ai_exposure for a RelatedSpec without re-parsing its frontmatter.
+
+    Mirrors :func:`canon.parser.models.resolve_ai_exposure` on the slim
+    metadata that ``RelatedSpec`` carries (``ai_exposure`` override and
+    ``tags`` for restricted-tag matching). Used by ``find_related_specs``
+    so a spec with ``ai_exposure: none`` in its own frontmatter can be
+    filtered out of neighbour lists, even when its repo default is "full".
+    """
+    override = getattr(related, "ai_exposure", "")
+    if override in ("full", "metadata", "none"):
+        return override  # type: ignore[return-value]
+    tags = getattr(related, "tags", []) or []
+    if restricted_tags and any(t in restricted_tags for t in tags):
+        return "metadata"
+    if config_default in ("full", "metadata", "none"):
+        return config_default  # type: ignore[return-value]
+    return "full"
+
+
 def create_mcp_server(deps: McpDeps) -> FastMCP:
     """Create a FastMCP server with spec tools wired to the given dependencies."""
 
@@ -199,7 +224,8 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
             groups={"organization": _org} if _org else None,
         )
         d = _get_deps(ctx)
-        if d.search_index is None:
+        backend = d.search_backend or d.search_index
+        if backend is None:
             return {"error": "Search index not available"}
 
         # Embed query if possible
@@ -208,9 +234,11 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
             try:
                 query_embedding = d.embed_client.embed_query(query)
             except Exception:
-                logger.debug("Embedding failed, falling back to text-only search")
+                # Silent text-only mode is exactly the kind of quality
+                # regression the parity tooling is meant to detect — flag it.
+                logger.warning("Embedding failed, falling back to text-only search", exc_info=True)
 
-        results = await d.search_index.hybrid_search(
+        results = await backend.hybrid_search(
             query_embedding=query_embedding,
             query_text=query,
             repo=repo,
@@ -244,7 +272,131 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
             }
             if config_default != "metadata":
                 entry["body"] = r.body[:MAX_BODY_SNIPPET] if r.body else ""
+                if r.highlights:
+                    entry["highlights"] = r.highlights
             filtered.append(entry)
+        return filtered
+
+    # ─── Tool: find_related_specs ──────────────────────────
+
+    @mcp.tool(
+        name="find_related_specs",
+        description=(
+            "Find specs semantically similar to a given spec, using kNN over "
+            "spec embeddings. Returns up to ``limit`` related specs (repo, path, "
+            "title) ordered most-similar first. Useful for cross-spec navigation "
+            "when a single search query doesn't capture the relationship. "
+            "Returns an error if the source spec doesn't exist."
+        ),
+    )
+    async def find_related_specs(
+        owner: str,
+        repo: str,
+        file_path: str,
+        limit: int = 10,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> list[dict] | dict:
+        analytics.track(
+            "mcp_tool_called",
+            properties={"tool": "find_related_specs", "repo": f"{owner}/{repo}"},
+            groups={"organization": owner},
+        )
+        d = _get_deps(ctx)
+        backend = d.search_backend or d.search_index
+        if backend is None or not hasattr(backend, "get_related"):
+            return {"error": "Search backend does not support related specs"}
+        if d.content_cache_store is None:
+            # Without the cache we can't honour the documented "spec not found"
+            # contract — a missing spec would silently return [] from kNN,
+            # which the AI client would misread as "no related specs".
+            return {"error": "Related-spec lookup unavailable: cache store not configured"}
+
+        # Cap limit — kNN scans are far more expensive than text search; an
+        # unbounded value (or one tracked back from a misbehaving caller)
+        # would trigger a full pgvector scan or expensive ANN sweep.
+        limit = max(1, min(limit, MAX_RELATED_SPECS))
+
+        full_repo = f"{owner}/{repo}"
+
+        # Distinguish "spec not found" (caller error), "lookup failed"
+        # (infrastructure error), and "no neighbours" (genuine empty result)
+        # so the AI client gets actionable feedback for each.
+        try:
+            source = await d.content_cache_store.get_spec(full_repo, file_path)
+        except Exception:
+            logger.warning(
+                "content_cache lookup failed during find_related_specs",
+                exc_info=True,
+            )
+            return {"error": f"Spec lookup failed: {full_repo}:{file_path}"}
+        if source is None:
+            return {"error": f"Spec not found: {full_repo}:{file_path}"}
+
+        # Verify the SOURCE spec is exposed to AI tooling. Without this gate,
+        # an AI client that knows the path of an `ai_exposure: none` spec
+        # could still use it as a kNN pivot and learn the spec's semantic
+        # neighbourhood (titles + paths) — same leak `get_spec` blocks.
+        source_raw = source.get("raw_markdown")
+        if not source_raw:
+            return {"error": f"Spec {file_path} is not available (no content)"}
+        import yaml
+
+        from ..parser.models import ParseOptions
+        from ..parser.parse import parse_spec
+
+        try:
+            source_doc = parse_spec(source_raw, ParseOptions(file_path=file_path)).document
+        except (yaml.YAMLError, ValueError) as exc:
+            # Narrow to parser-domain exceptions: malformed YAML / frontmatter
+            # validation failures. Programming errors (TypeError, KeyError,
+            # AttributeError from a refactored field) propagate so Sentry
+            # surfaces them — the previous broader catch reported them as a
+            # benign "parse failed" with no operator signal.
+            logger.warning(
+                "Failed to parse source spec for ai_exposure check: %s:%s (%s)",
+                full_repo,
+                file_path,
+                exc,
+            )
+            return {"error": f"Spec {file_path} is not available (parse failed)"}
+        # Guard the source-exposure loader the same way the per-result loop
+        # does: when no GitHub client is wired (tests/CLI), default to "full"
+        # exposure rather than firing a fail-closed-to-metadata warning per
+        # call. The source spec's frontmatter `restricted_tags` are still
+        # resolved against an empty restricted list — same parity with the
+        # default-no-client behaviour.
+        if d.github_client and "/" in full_repo:
+            source_default, source_restricted = await _get_ai_exposure_config(d, owner, repo)
+        else:
+            source_default, source_restricted = ("full", [])
+        source_exposure = _resolve_exposure(
+            source_doc.frontmatter, source_default, source_restricted
+        )
+        if source_exposure == "none":
+            return {"error": f"Spec {file_path} is not available (ai_exposure: none)"}
+
+        related = await backend.get_related(repo=full_repo, path=file_path, limit=limit)
+
+        # Apply ai_exposure filtering on each result, using the same
+        # resolution order as `_resolve_exposure`/`get_spec`:
+        # frontmatter override > restricted_tags match > repo default.
+        # Without per-spec checking, a spec with `ai_exposure: none` in
+        # its OWN frontmatter — in a repo whose default is "full" —
+        # would leak its title and path through the neighbour list.
+        config_cache: dict[str, tuple[str, list[str]]] = {}
+        filtered: list[dict] = []
+        for r in related:
+            if r.repo not in config_cache:
+                if d.github_client and "/" in r.repo:
+                    o, rp = r.repo.split("/", 1)
+                    config_cache[r.repo] = await _get_ai_exposure_config(d, o, rp)
+                else:
+                    config_cache[r.repo] = ("full", [])
+            config_default, restricted = config_cache[r.repo]
+            exposure = _resolve_related_exposure(r, config_default, restricted)
+            if exposure == "none":
+                continue
+            filtered.append({"repo": r.repo, "path": r.path, "title": r.title})
         return filtered
 
     # ─── Tool: get_spec ──────────────────────────────────
@@ -279,10 +431,19 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         from ..parser.models import ParseOptions
         from ..parser.parse import parse_spec
 
-        try:
-            content, _sha = await d.github_client.get_file_content(owner, repo, file_path)
-        except Exception:
-            return {"error": f"File not found: {owner}/{repo}/{file_path}"}
+        # Try content cache first, fall back to GitHub
+        content: str | None = None
+        if d.content_cache_store is not None:
+            try:
+                content = await d.content_cache_store.get_spec_raw(f"{owner}/{repo}", file_path)
+            except Exception:
+                logger.debug("Content cache miss for get_spec %s/%s/%s", owner, repo, file_path)
+
+        if content is None:
+            try:
+                content, _sha = await d.github_client.get_file_content(owner, repo, file_path)
+            except Exception:
+                return {"error": f"File not found: {owner}/{repo}/{file_path}"}
 
         result = parse_spec(content, ParseOptions(file_path=file_path))
         doc = result.document
@@ -360,10 +521,19 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         from ..parser.models import ParseOptions
         from ..parser.parse import parse_spec
 
-        try:
-            content, _sha = await d.github_client.get_file_content(owner, repo, file_path)
-        except Exception:
-            return {"error": f"File not found: {owner}/{repo}/{file_path}"}
+        # Try content cache first, fall back to GitHub
+        content: str | None = None
+        if d.content_cache_store is not None:
+            try:
+                content = await d.content_cache_store.get_spec_raw(f"{owner}/{repo}", file_path)
+            except Exception:
+                logger.debug("Content cache miss for get_section %s/%s/%s", owner, repo, file_path)
+
+        if content is None:
+            try:
+                content, _sha = await d.github_client.get_file_content(owner, repo, file_path)
+            except Exception:
+                return {"error": f"File not found: {owner}/{repo}/{file_path}"}
 
         result = parse_spec(content, ParseOptions(file_path=file_path))
 
@@ -403,10 +573,19 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
         if d.github_client is None:
             return {"error": "GitHub client not available"}
 
-        try:
-            content, _sha = await d.github_client.get_file_content(owner, repo, file_path)
-        except Exception:
-            return {"error": f"File not found: {owner}/{repo}/{file_path}"}
+        # Try content cache first, fall back to GitHub
+        content: str | None = None
+        if d.content_cache_store is not None:
+            try:
+                content = await d.content_cache_store.get_spec_raw(f"{owner}/{repo}", file_path)
+            except Exception:
+                logger.debug("Content cache miss for get_doc %s/%s/%s", owner, repo, file_path)
+
+        if content is None:
+            try:
+                content, _sha = await d.github_client.get_file_content(owner, repo, file_path)
+            except Exception:
+                return {"error": f"File not found: {owner}/{repo}/{file_path}"}
 
         # Check ai_exposure for spec files — parse errors are caught narrowly,
         # but security checks must not be swallowed by a catch-all.
@@ -468,12 +647,35 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
             return {"error": "per_page must be between 1 and 200"}
 
         from ..github.spec_utils import load_repo_config, load_repo_specs
+        from ..parser.models import ParseOptions
+        from ..parser.parse import parse_spec
 
         config = await load_repo_config(d.github_client, owner, repo)
-        specs = await load_repo_specs(d.github_client, owner, repo, patterns=config.specs.doc_paths)
-
         config_default = config.ide.ai_exposure.default
         restricted_tags = config.ide.ai_exposure.restricted_tags
+
+        # Try content cache first, fall back to GitHub
+        specs: list[dict] | None = None
+        if d.content_cache_store is not None:
+            try:
+                full_repo = f"{owner}/{repo}"
+                cached_list = await d.content_cache_store.list_specs_with_content(full_repo)
+                if cached_list:
+                    specs = []
+                    for spec_meta in cached_list:
+                        raw = spec_meta.get("raw_markdown")
+                        if raw is None:
+                            continue
+                        result = parse_spec(raw, ParseOptions(file_path=spec_meta["path"]))
+                        specs.append({"file_path": spec_meta["path"], "document": result.document})
+            except Exception:
+                logger.debug("Content cache miss for list_specs %s/%s", owner, repo)
+                specs = None
+
+        if specs is None:
+            specs = await load_repo_specs(
+                d.github_client, owner, repo, patterns=config.specs.doc_paths
+            )
 
         result_list: list[dict] = []
         for s in specs:
@@ -527,10 +729,11 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
             groups={"organization": _org} if _org else None,
         )
         d = _get_deps(ctx)
-        if d.search_index is None:
+        backend = d.search_backend or d.search_index
+        if backend is None:
             return {"error": "Search index not available"}
 
-        paths = await d.search_index.get_indexed_paths(repo=repo)
+        paths = await backend.get_indexed_paths(repo=repo)
 
         return [
             {
@@ -664,6 +867,23 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
                 content,
                 f"docs: create spec — {title}",
             )
+
+            # Write-through: update content cache (parses sections properly)
+            if d.content_cache_store is not None:
+                try:
+                    from ..sync.content_sync import ContentSyncEngine
+
+                    engine = ContentSyncEngine(d.content_cache_store, d.github_client)
+                    await engine.sync_spec(
+                        owner,
+                        repo,
+                        path,
+                        content,
+                        commit_sha=result.get("content", {}).get("sha", ""),
+                    )
+                except Exception:
+                    logger.debug("Failed to update content cache for create_spec %s", path)
+
             return {
                 "path": path,
                 "sha": result.get("content", {}).get("sha", ""),
@@ -734,7 +954,7 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
             )
 
         try:
-            await d.github_client.create_or_update_file(
+            commit_result = await d.github_client.create_or_update_file(
                 owner,
                 repo,
                 file_path,
@@ -742,6 +962,26 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
                 f"docs: update {section.title} status to {new_state}",
                 sha=sha,
             )
+
+            # Write-through: update content cache (parses sections properly)
+            if d.content_cache_store is not None:
+                try:
+                    from ..sync.content_sync import ContentSyncEngine
+
+                    engine = ContentSyncEngine(d.content_cache_store, d.github_client)
+                    await engine.sync_spec(
+                        owner,
+                        repo,
+                        file_path,
+                        updated,
+                        commit_sha=commit_result.get("content", {}).get("sha", ""),
+                    )
+                except Exception:
+                    logger.debug(
+                        "Failed to update content cache for update_section_status %s",
+                        file_path,
+                    )
+
             return {
                 "section_id": section_id,
                 "new_state": new_state,
@@ -806,7 +1046,7 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
             return {"error": f"AC not found in section: {ac_text}"}
 
         try:
-            await d.github_client.create_or_update_file(
+            commit_result = await d.github_client.create_or_update_file(
                 owner,
                 repo,
                 file_path,
@@ -814,6 +1054,26 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
                 f"docs: add realization for PR#{pr_number} in {section.title}",
                 sha=sha,
             )
+
+            # Write-through: update content cache (parses sections properly)
+            if d.content_cache_store is not None:
+                try:
+                    from ..sync.content_sync import ContentSyncEngine
+
+                    engine = ContentSyncEngine(d.content_cache_store, d.github_client)
+                    await engine.sync_spec(
+                        owner,
+                        repo,
+                        file_path,
+                        updated,
+                        commit_sha=commit_result.get("content", {}).get("sha", ""),
+                    )
+                except Exception:
+                    logger.debug(
+                        "Failed to update content cache for add_realization %s",
+                        file_path,
+                    )
+
             return {
                 "section_id": section_id,
                 "ac_text": ac_text,
@@ -933,9 +1193,29 @@ def create_mcp_server(deps: McpDeps) -> FastMCP:
 
         msg = commit_message or f"docs: sync spec status for {file_path}"
         try:
-            await d.github_client.create_or_update_file(
+            commit_result = await d.github_client.create_or_update_file(
                 owner, repo, file_path, updated, msg, sha=sha
             )
+
+            # Write-through: update content cache (parses sections properly)
+            if d.content_cache_store is not None:
+                try:
+                    from ..sync.content_sync import ContentSyncEngine
+
+                    engine = ContentSyncEngine(d.content_cache_store, d.github_client)
+                    await engine.sync_spec(
+                        owner,
+                        repo,
+                        file_path,
+                        updated,
+                        commit_sha=commit_result.get("content", {}).get("sha", ""),
+                    )
+                except Exception:
+                    logger.debug(
+                        "Failed to update content cache for sync_spec_status %s",
+                        file_path,
+                    )
+
             return {
                 "applied_statuses": applied_statuses,
                 "applied_realizations": applied_realizations,

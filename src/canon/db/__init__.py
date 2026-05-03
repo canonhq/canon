@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .agent_store import AgentStore
 from .connection_store import UserConnectionStore
+from .content_cache_store import ContentCacheStore
 from .error_store import ErrorStore
 from .integration_store import IntegrationStore
 from .pool import close_pool, create_pool
@@ -15,6 +16,7 @@ from .user_store import UserStore
 
 __all__ = [
     "AgentStore",
+    "ContentCacheStore",
     "ErrorStore",
     "InstallationRegistry",
     "IntegrationStore",

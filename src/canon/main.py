@@ -300,9 +300,51 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     # Search index (requires DB pool)
     app.state.search_index = None
+    app.state.content_cache_store = None
     if app.state.db_pool is not None:
         app.state.search_index = SearchIndex(app.state.db_pool)
         logger.info("Search index initialised")
+
+        # Content cache store (requires DB pool + feature flag)
+        if settings.content_cache_enabled:
+            from .db.content_cache_store import ContentCacheStore
+
+            app.state.content_cache_store = ContentCacheStore(app.state.db_pool)
+            logger.info("Content cache store initialised")
+
+    # OpenSearch client (optional — feature-flagged)
+    from .search.backend import build_backend
+    from .search.opensearch_client import build_client_from_settings
+
+    app.state.opensearch_client = build_client_from_settings(settings)
+    if app.state.opensearch_client.is_enabled:
+        try:
+            await app.state.opensearch_client.ensure_indexes()
+            logger.info("OpenSearch client initialised")
+        except Exception:
+            logger.warning("OpenSearch index bootstrap failed", exc_info=True)
+
+    app.state.search_backend = build_backend(
+        search_index=app.state.search_index,
+        opensearch_client=app.state.opensearch_client,
+        opensearch_enabled=settings.opensearch_enabled,
+    )
+    if app.state.search_backend is not None:
+        logger.info(
+            "Search backend: %s",
+            type(app.state.search_backend).__name__,
+        )
+    elif settings.opensearch_enabled:
+        # Misconfig surface: flag is on but the backend couldn't be built
+        # (most likely opensearch-py import failure or client init error
+        # already logged above). Reads will silently fall back to the raw
+        # SearchIndex via _get_search_backend; surface this so operators
+        # don't see "OpenSearch enabled" in config and Postgres-shaped
+        # metrics in the dashboard.
+        logger.warning(
+            "OPENSEARCH_ENABLED=true but search backend is None — "
+            "reads will fall back to Postgres SearchIndex"
+        )
 
     # Background indexer
     from .search.background import BackgroundIndexer
@@ -318,12 +360,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
         mcp_deps = McpDeps(
             search_index=app.state.search_index,
+            search_backend=getattr(app.state, "search_backend", None),
             embed_client=app.state.embed_client,
             github_client=app.state.github_client,
             cache=app.state.cache,
             settings=settings,
             agent_store=getattr(app.state, "agent_store", None),
             session_evidence_store=getattr(app.state, "session_evidence_store", None),
+            content_cache_store=getattr(app.state, "content_cache_store", None),
         )
         mcp_server = create_mcp_server(mcp_deps)
         app.state.mcp_server = mcp_server
@@ -417,6 +461,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await slack_alerter.close()
     otel_logging.shutdown()
     analytics.shutdown()
+    opensearch_client = getattr(app.state, "opensearch_client", None)
+    if opensearch_client is not None:
+        await opensearch_client.close()
     if app.state.db_pool is not None:
         await close_pool(app.state.db_pool)
     if _client is not None:
@@ -648,8 +695,36 @@ async def readyz(request: Request) -> Response:
                 status_code=503,
                 media_type="application/json",
             )
+    # Check content cache freshness
+    content_cache_store = getattr(request.app.state, "content_cache_store", None)
+    stale_repos = []
+    if content_cache_store is not None:
+        try:
+            stale_repos = await content_cache_store.get_stale_repos(max_age_hours=2)
+        except Exception:
+            logger.debug("Failed to check content cache staleness", exc_info=True)
+
+    # Check OpenSearch reachability when enabled
+    opensearch_client = getattr(request.app.state, "opensearch_client", None)
+    opensearch_status = None
+    if opensearch_client is not None and opensearch_client.is_enabled:
+        opensearch_status = "ok" if await opensearch_client.ping() else "unreachable"
+
+    result = {"status": "ok"}
+    if stale_repos:
+        result["content_cache_stale_repos"] = len(stale_repos)
+    if opensearch_status is not None:
+        result["opensearch"] = opensearch_status
+
+    # OpenSearch reachability is informational only — never 503. Search
+    # is a partial dependency (Postgres remains source of truth and
+    # serves the read fallback), so failing readiness on an OpenSearch
+    # blip would take every pod out of the Service endpoint slice
+    # simultaneously and DoS unrelated paths (webhooks, auth, billing,
+    # agent runs). Operators should alert on the `opensearch` field via
+    # PostHog / Prometheus instead.
     return Response(
-        content=json.dumps({"status": "ok"}),
+        content=json.dumps(result),
         status_code=200,
         media_type="application/json",
     )

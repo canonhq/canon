@@ -55,6 +55,7 @@ async def on_installation_repositories(client, payload: dict, *, _app_state=None
     registry = getattr(state, "registry", None)
 
     # Remove indexed data for removed repos
+    opensearch_client = getattr(state, "opensearch_client", None)
     if search_index is not None:
         for repo_data in removed:
             full_name = repo_data.get("full_name", "")
@@ -64,6 +65,25 @@ async def on_installation_repositories(client, payload: dict, *, _app_state=None
                     logger.info("Deleted indexed data for removed repo: %s", full_name)
                 except Exception:
                     logger.warning("Failed to delete indexed data for %s", full_name, exc_info=True)
+                if opensearch_client is not None:
+                    try:
+                        await opensearch_client.delete_repo(full_name)
+                    except Exception:
+                        logger.warning(
+                            "Failed to delete OpenSearch data for %s",
+                            full_name,
+                            exc_info=True,
+                        )
+                # Clean up content cache
+                content_cache_store = getattr(state, "content_cache_store", None)
+                if content_cache_store is not None:
+                    try:
+                        await content_cache_store.delete_repo_specs(full_name)
+                        logger.info("Deleted cached content for removed repo %s", full_name)
+                    except Exception:
+                        logger.warning(
+                            "Failed to clean content cache for %s", full_name, exc_info=True
+                        )
 
     # Schedule indexing for added repos
     if indexer is not None and search_index is not None and added:
@@ -77,6 +97,7 @@ async def on_installation_repositories(client, payload: dict, *, _app_state=None
                 search_index=search_index,
                 embed_client=embed_client,
                 registry=registry,
+                opensearch_client=getattr(state, "opensearch_client", None),
             )
             logger.info("Scheduled indexing for %d added repos", len(repos_to_index))
 

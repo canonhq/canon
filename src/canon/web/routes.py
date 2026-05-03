@@ -77,6 +77,23 @@ def _get_cache(request: Request):
     return request.app.state.cache
 
 
+def _get_content_cache(request: Request):
+    return getattr(request.app.state, "content_cache_store", None)
+
+
+def _get_search_backend(request: Request):
+    """Return the active SearchBackend, or fall back to the raw SearchIndex.
+
+    The fallback keeps tests and pre-Phase-2c boots working: if no backend
+    has been wired, callers receive the existing :class:`SearchIndex`, which
+    exposes the same read methods (``hybrid_search``, ``get_facet_counts``,
+    ``get_indexed_paths``).
+    """
+    return getattr(request.app.state, "search_backend", None) or getattr(
+        request.app.state, "search_index", None
+    )
+
+
 def _get_org(request: Request) -> str:
     if request.app.state.settings.web_org:
         return request.app.state.settings.web_org
@@ -466,6 +483,7 @@ async def admin_reindex(
         search_index=search_index,
         embed_client=embed_client,
         registry=registry,
+        opensearch_client=getattr(request.app.state, "opensearch_client", None),
     )
 
     return RedirectResponse(url="/app/admin/indexing", status_code=303)
@@ -622,8 +640,14 @@ async def org_welcome(request: Request, org: str):
                 app_installed = True
                 client = await _get_client_for_org(request, org)
                 cache = _get_cache(request)
-                search_index = getattr(request.app.state, "search_index", None)
-                overview = await get_org_overview(client, org, cache, search_index=search_index)
+                search_index = _get_search_backend(request)
+                overview = await get_org_overview(
+                    client,
+                    org,
+                    cache,
+                    search_index=search_index,
+                    content_cache_store=_get_content_cache(request),
+                )
                 has_specs = overview.total_specs > 0
         except Exception:
             logger.debug("Failed to load welcome page state for org %s", org, exc_info=True)
@@ -653,9 +677,15 @@ async def org_dashboard(request: Request, org: str):
         return spa
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
-    search_index = getattr(request.app.state, "search_index", None)
+    search_index = _get_search_backend(request)
     try:
-        overview = await get_org_overview(client, org, cache, search_index=search_index)
+        overview = await get_org_overview(
+            client,
+            org,
+            cache,
+            search_index=search_index,
+            content_cache_store=_get_content_cache(request),
+        )
         facets = await get_facet_counts(client, org, cache, search_index=search_index)
     except (httpx.HTTPStatusError, httpx.RequestError) as exc:
         return _github_error_html(exc)
@@ -680,9 +710,16 @@ async def org_repo_detail(request: Request, org: str, owner: str, repo: str):
         return spa
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
-    search_index = getattr(request.app.state, "search_index", None)
+    search_index = _get_search_backend(request)
     try:
-        detail = await get_repo_detail(client, owner, repo, cache, search_index=search_index)
+        detail = await get_repo_detail(
+            client,
+            owner,
+            repo,
+            cache,
+            search_index=search_index,
+            content_cache_store=_get_content_cache(request),
+        )
     except (httpx.HTTPStatusError, httpx.RequestError) as exc:
         return _github_error_html(exc)
     if detail is None:
@@ -708,7 +745,9 @@ async def org_spec_detail(request: Request, org: str, owner: str, repo: str, fil
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
     try:
-        detail = await get_spec_detail(client, owner, repo, file_path, cache)
+        detail = await get_spec_detail(
+            client, owner, repo, file_path, cache, content_cache_store=_get_content_cache(request)
+        )
     except (httpx.HTTPStatusError, httpx.RequestError) as exc:
         return _github_error_html(exc)
     if detail is None:
@@ -768,7 +807,7 @@ async def api_search(
     """JSON search API for autocomplete and programmatic access."""
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
-    search_index = getattr(request.app.state, "search_index", None)
+    search_index = _get_search_backend(request)
     embed_client = getattr(request.app.state, "embed_client", None)
 
     try:
@@ -933,9 +972,15 @@ async def api_dashboard(
     """JSON org dashboard data for the Vue SPA."""
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
-    search_index = getattr(request.app.state, "search_index", None)
+    search_index = _get_search_backend(request)
     try:
-        overview = await get_org_overview(client, org, cache, search_index=search_index)
+        overview = await get_org_overview(
+            client,
+            org,
+            cache,
+            search_index=search_index,
+            content_cache_store=_get_content_cache(request),
+        )
     except httpx.HTTPStatusError as exc:
         return _github_error_response(exc)
     except httpx.RequestError as exc:
@@ -955,7 +1000,7 @@ async def api_tasks(
     """JSON tasks data — actionable work items from all specs."""
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
-    search_index = getattr(request.app.state, "search_index", None)
+    search_index = _get_search_backend(request)
     try:
         result = await get_tasks(
             client,
@@ -965,6 +1010,7 @@ async def api_tasks(
             repo_filter=repo,
             search_index=search_index,
             expand=expand,
+            content_cache_store=_get_content_cache(request),
         )
     except httpx.HTTPStatusError as exc:
         return _github_error_response(exc)
@@ -984,9 +1030,16 @@ async def api_repo_detail(
     """JSON repo detail for the Vue SPA."""
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
-    search_index = getattr(request.app.state, "search_index", None)
+    search_index = _get_search_backend(request)
     try:
-        detail = await get_repo_detail(client, owner, repo, cache, search_index=search_index)
+        detail = await get_repo_detail(
+            client,
+            owner,
+            repo,
+            cache,
+            search_index=search_index,
+            content_cache_store=_get_content_cache(request),
+        )
     except httpx.HTTPStatusError as exc:
         return _github_error_response(exc)
     except httpx.RequestError as exc:
@@ -1009,7 +1062,9 @@ async def api_spec_detail(
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
     try:
-        detail = await get_spec_detail(client, owner, repo, file_path, cache)
+        detail = await get_spec_detail(
+            client, owner, repo, file_path, cache, content_cache_store=_get_content_cache(request)
+        )
     except httpx.HTTPStatusError as exc:
         return _github_error_response(exc)
     except httpx.RequestError as exc:
@@ -1064,8 +1119,14 @@ async def api_welcome(
                 app_installed = True
                 client = await _get_client_for_org(request, org)
                 cache = _get_cache(request)
-                search_index = getattr(request.app.state, "search_index", None)
-                overview = await get_org_overview(client, org, cache, search_index=search_index)
+                search_index = _get_search_backend(request)
+                overview = await get_org_overview(
+                    client,
+                    org,
+                    cache,
+                    search_index=search_index,
+                    content_cache_store=_get_content_cache(request),
+                )
                 has_specs = overview.total_specs > 0
         except Exception:
             logger.debug("Failed to load welcome state for org %s", org, exc_info=True)
@@ -1123,6 +1184,7 @@ async def api_admin_reindex(
         search_index=search_index,
         embed_client=embed_client,
         registry=registry,
+        opensearch_client=getattr(request.app.state, "opensearch_client", None),
     )
 
     return JSONResponse(content={"ok": True})
@@ -1144,7 +1206,7 @@ async def org_search(
         return spa
     client = await _get_client_for_org(request, org)
     cache = _get_cache(request)
-    search_index = getattr(request.app.state, "search_index", None)
+    search_index = _get_search_backend(request)
     embed_client = getattr(request.app.state, "embed_client", None)
     results = await search_specs(
         client,

@@ -54,3 +54,39 @@ class TestOnInstallationReposOnboarding:
             await on_installation_repositories(client, payload, _app_state=state)
 
         mock_ff.assert_not_called()
+
+    async def test_opensearch_repo_cleanup_runs_after_postgres_succeeds(self):
+        """OpenSearch delete_repo must run regardless of whether the
+        Postgres search_index.delete_repo raised — both stores need to be
+        cleaned up on uninstall to avoid stale spec content remaining
+        searchable."""
+        search_index = MagicMock()
+        search_index.delete_repo = AsyncMock(return_value=None)  # PG succeeds
+        opensearch = MagicMock()
+        opensearch.delete_repo = AsyncMock()
+        state = _make_state(search_index=search_index)
+        state.opensearch_client = opensearch
+
+        client = AsyncMock()
+        payload = _make_payload(removed=[{"full_name": "test-org/old"}])
+
+        await on_installation_repositories(client, payload, _app_state=state)
+
+        opensearch.delete_repo.assert_awaited_once_with("test-org/old")
+
+    async def test_opensearch_repo_cleanup_still_runs_when_postgres_fails(self):
+        """If the Postgres delete raises, OpenSearch cleanup must still
+        fire — they're independent stores."""
+        search_index = MagicMock()
+        search_index.delete_repo = AsyncMock(side_effect=RuntimeError("PG down"))
+        opensearch = MagicMock()
+        opensearch.delete_repo = AsyncMock()
+        state = _make_state(search_index=search_index)
+        state.opensearch_client = opensearch
+
+        client = AsyncMock()
+        payload = _make_payload(removed=[{"full_name": "test-org/old"}])
+
+        await on_installation_repositories(client, payload, _app_state=state)
+
+        opensearch.delete_repo.assert_awaited_once_with("test-org/old")

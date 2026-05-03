@@ -311,6 +311,45 @@ coverageSnapshotCronJob:
   schedule: "0 5 * * *"
   concurrencyPolicy: Forbid
 
+## @section Content reconciliation CronJob parameters
+## @param contentReconcileCronJob.enabled Enable content reconciliation CronJob
+## @param contentReconcileCronJob.schedule Cron schedule expression (default: every 30 min)
+## @param contentReconcileCronJob.concurrencyPolicy CronJob concurrency policy
+contentReconcileCronJob:
+  enabled: false
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+
+## @param opensearchReconcileCronJob.enabled Enable OpenSearch reconciliation CronJob
+## @param opensearchReconcileCronJob.schedule Cron schedule expression (default: hourly)
+## @param opensearchReconcileCronJob.concurrencyPolicy CronJob concurrency policy
+## @param opensearchReconcileCronJob.backoffLimit Max retries before the job is marked failed
+## @param opensearchReconcileCronJob.activeDeadlineSeconds Hard timeout for a single run
+## @param opensearchReconcileCronJob.successfulJobsHistoryLimit Successful job pods retained
+## @param opensearchReconcileCronJob.failedJobsHistoryLimit Failed job pods retained
+## @param opensearchReconcileCronJob.startingDeadlineSeconds Window before a missed run is dropped
+## @param opensearchReconcileCronJob.resources Resource requests/limits sized for batch reconcile (independent of API server resources)
+opensearchReconcileCronJob:
+  enabled: false
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  # Each retry re-embeds mismatched specs (Vertex AI cost). 1 retry on
+  # transient failure is enough; the cron runs hourly so a stuck retry
+  # loop is the worse failure mode than a single-run miss.
+  backoffLimit: 1
+  # 30m is well above a healthy reconcile run; cuts off an OOM-loop or
+  # network hang before the next hour fires.
+  activeDeadlineSeconds: 1800
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
 ## @section Weekly SRE digest CronJob parameters
 ## @param weeklyDigestCronJob.enabled Enable weekly SRE digest CronJob
 ## @param weeklyDigestCronJob.schedule Cron schedule expression (default: Monday 9am UTC)
@@ -389,6 +428,81 @@ podDisruptionBudget:
   minAvailable: 1
 
 ## @section Zitadel (optional — bundled identity provider for self-hosting)
+## @section OpenSearch parameters
+## Canon can use OpenSearch for full-text + vector search. Choose one mode:
+##   - external: connect to a managed cluster (DO, AWS, self-managed)
+##   - internal: deploy OpenSearch in-cluster via subchart (self-hosted)
+## Both modes set OPENSEARCH_URL/USERNAME/PASSWORD on the Canon deployment.
+
+## @param opensearch.enabled Enable OpenSearch integration (read path)
+## @param opensearch.external.url URL of an external OpenSearch cluster
+## @param opensearch.external.username External cluster username
+## @param opensearch.external.password External cluster password
+## @param opensearch.internal.enabled Deploy OpenSearch in-cluster (subchart)
+## @param opensearch.internal.replicas Number of OpenSearch nodes
+## @param opensearch.internal.persistence.size PVC size per node
+## @param opensearch.internal.resources.requests.memory Memory request per node
+## @param opensearch.internal.resources.requests.cpu CPU request per node
+opensearch:
+  enabled: false
+
+  # Use an existing K8s Secret for OpenSearch credentials instead of
+  # generating one. The secret must contain OPENSEARCH_USERNAME and
+  # OPENSEARCH_PASSWORD keys. Recommended for production.
+  existingSecret: ""
+
+  # Option A: Connect to an external managed OpenSearch cluster
+  external:
+    url: ""
+    username: ""
+    password: ""
+
+  # Option B: Deploy OpenSearch in-cluster (self-hosted users)
+  # NOTE: username/password must be set explicitly when internal.enabled=true.
+  # No defaults are provided to avoid shipping known credentials.
+  internal:
+    enabled: false
+    replicas: 1
+    username: ""
+    password: ""
+    persistence:
+      size: 10Gi
+    resources:
+      requests:
+        memory: 1Gi
+        cpu: 500m
+
+  # Index settings (shared across both modes)
+  specsIndex: "canon-specs"
+  sectionsIndex: "canon-sections"
+
+  # ─── Subchart overrides (opensearch-project/helm-charts) ───────────
+  # These values pass through to the OpenSearch subchart when
+  # opensearch.internal.enabled=true. Override as needed.
+  # See: https://github.com/opensearch-project/helm-charts
+  singleNode: true
+  replicas: 1
+  opensearchJavaOpts: "-Xmx512m -Xms512m"
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      memory: 1536Mi
+  config:
+    opensearch.yml: |
+      # Security is enabled by default. Configure TLS certificates for production
+      # use. See https://opensearch.org/docs/latest/security/
+      # To disable security (NOT recommended for production), set:
+      #   plugins.security.disabled: true
+      plugins.security.disabled: false
+      cluster.name: canon-search
+      network.host: 0.0.0.0
+
+## @section Zitadel subchart parameters
 ## @param zitadel.enabled Deploy Zitadel alongside Canon
 ## @param zitadel.setup Enable Zitadel auto-provisioning job (creates Canon project, web app, device app)
 ## @param zitadel.setupImage Container image for the setup job (needs curl, kubectl, jq)

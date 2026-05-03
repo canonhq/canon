@@ -39,6 +39,26 @@ spec:
             - name: http
               containerPort: {{ .Values.config.port }}
               protocol: TCP
+          {{- if .Values.opensearch.enabled }}
+          env:
+            - name: OPENSEARCH_ENABLED
+              value: "true"
+            - name: OPENSEARCH_SPECS_INDEX
+              value: {{ .Values.opensearch.specsIndex | quote }}
+            - name: OPENSEARCH_SECTIONS_INDEX
+              value: {{ .Values.opensearch.sectionsIndex | quote }}
+            {{- if .Values.opensearch.internal.enabled }}
+            - name: OPENSEARCH_URL
+              value: "https://{{ include "canon.fullname" . }}-opensearch-cluster-master:9200"
+            {{- else if .Values.opensearch.external.url }}
+            - name: OPENSEARCH_URL
+              value: {{ .Values.opensearch.external.url | quote }}
+            {{- else }}
+            {{- fail "opensearch.enabled is true but no URL configured — set opensearch.internal.enabled or opensearch.external.url" }}
+            {{- end }}
+            - name: CONTENT_CACHE_ENABLED
+              value: "true"
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "canon.fullname" . }}
@@ -93,6 +113,10 @@ spec:
           {{- if or .Values.secrets.integrations.existingSecret .Values.secrets.integrations.jiraOauthClientId }}
             - secretRef:
                 name: {{ .Values.secrets.integrations.existingSecret | default (printf "%s-integrations" (include "canon.fullname" .)) }}
+          {{- end }}
+          {{- if .Values.opensearch.enabled }}
+            - secretRef:
+                name: {{ .Values.opensearch.existingSecret | default (printf "%s-opensearch" (include "canon.fullname" .)) }}
           {{- end }}
           livenessProbe:
             httpGet:

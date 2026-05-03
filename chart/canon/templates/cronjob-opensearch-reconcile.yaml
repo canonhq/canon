@@ -1,0 +1,76 @@
+{{- if and .Values.opensearch.enabled .Values.opensearchReconcileCronJob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "canon.fullname" . }}-opensearch-reconcile
+  labels:
+    {{- include "canon.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.opensearchReconcileCronJob.schedule | quote }}
+  concurrencyPolicy: {{ .Values.opensearchReconcileCronJob.concurrencyPolicy }}
+  # Reconcile re-embeds mismatched specs via Vertex AI. Each failed run
+  # that retries is real GCP spend, so we cap retries and history more
+  # aggressively than the rest of the cron fleet.
+  successfulJobsHistoryLimit: {{ .Values.opensearchReconcileCronJob.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.opensearchReconcileCronJob.failedJobsHistoryLimit }}
+  startingDeadlineSeconds: {{ .Values.opensearchReconcileCronJob.startingDeadlineSeconds }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.opensearchReconcileCronJob.backoffLimit }}
+      activeDeadlineSeconds: {{ .Values.opensearchReconcileCronJob.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "canon.selectorLabels" . | nindent 12 }}
+        spec:
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ include "canon.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          restartPolicy: OnFailure
+          containers:
+            - name: opensearch-reconcile
+              image: {{ include "canon.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["python", "-m", "canon.cron.opensearch_reconcile"]
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              env:
+                - name: OPENSEARCH_ENABLED
+                  value: "true"
+                - name: OPENSEARCH_SPECS_INDEX
+                  value: {{ .Values.opensearch.specsIndex | quote }}
+                - name: OPENSEARCH_SECTIONS_INDEX
+                  value: {{ .Values.opensearch.sectionsIndex | quote }}
+                {{- if .Values.opensearch.internal.enabled }}
+                - name: OPENSEARCH_URL
+                  value: "https://{{ include "canon.fullname" . }}-opensearch-cluster-master:9200"
+                {{- else if .Values.opensearch.external.url }}
+                - name: OPENSEARCH_URL
+                  value: {{ .Values.opensearch.external.url | quote }}
+                {{- end }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "canon.fullname" . }}
+                - secretRef:
+                    name: {{ .Values.opensearch.existingSecret | default (printf "%s-opensearch" (include "canon.fullname" .)) }}
+              {{- if or .Values.secrets.neon.databaseUrl .Values.secrets.neon.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.neonSecretName" . }}
+              {{- end }}
+              {{- if or .Values.secrets.gcp.serviceAccountKey .Values.secrets.gcp.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.gcpSecretName" . }}
+              {{- end }}
+              resources:
+                {{- toYaml .Values.opensearchReconcileCronJob.resources | nindent 16 }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: tmp
+              emptyDir: {}
+{{- end }}

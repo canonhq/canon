@@ -103,7 +103,7 @@ def _invalidate_web_cache(owner: str, repo: str) -> None:
             cache.invalidate_prefix("facets:")
             logger.info("Invalidated web cache for %s/%s", owner, repo)
     except Exception:
-        pass  # Cache not available (e.g. during tests)
+        logger.debug("Web cache not available", exc_info=True)
 
     try:
         from canon.slack import invalidate_spec_cache
@@ -127,13 +127,14 @@ async def _index_specs(
     """Best-effort indexing of changed/removed specs into the search index."""
     try:
         from canon.main import app
-        from canon.search.indexer import index_spec
+        from canon.search.indexer import index_spec, opensearch_doc_id
 
         search_index = getattr(app.state, "search_index", None)
         if search_index is None:
             return
 
         embed_client = getattr(app.state, "embed_client", None)
+        opensearch_client = getattr(app.state, "opensearch_client", None)
         full_repo = f"{owner}/{repo}"
 
         for file_path in removed_spec_files:
@@ -144,6 +145,16 @@ async def _index_specs(
                 logger.warning(
                     "Failed to delete spec from index: %s:%s", full_repo, file_path, exc_info=True
                 )
+            if opensearch_client is not None:
+                try:
+                    await opensearch_client.delete_spec(opensearch_doc_id(full_repo, file_path))
+                except Exception:
+                    logger.warning(
+                        "Failed to delete spec from OpenSearch: %s:%s",
+                        full_repo,
+                        file_path,
+                        exc_info=True,
+                    )
 
         for file_path, doc in parsed_specs.items():
             try:
@@ -153,11 +164,74 @@ async def _index_specs(
                     search_index=search_index,
                     embed_client=embed_client,
                     commit_sha=commit_sha,
+                    opensearch_client=opensearch_client,
                 )
             except Exception:
                 logger.warning("Failed to index spec: %s:%s", full_repo, file_path, exc_info=True)
     except Exception:
-        pass  # Search infrastructure not available (e.g. during tests)
+        # Outer catch is a last-resort guard for unexpected failures (e.g.
+        # canon.main not importable in some test contexts). Log so the
+        # operator can see why search updates aren't landing — the prior
+        # `pass` swallowed AttributeError, ImportError, etc., silently.
+        logger.warning("Search index update failed for %s/%s", owner, repo, exc_info=True)
+
+
+async def _cache_specs(
+    owner: str,
+    repo: str,
+    parsed_specs: dict,
+    spec_contents: dict[str, tuple[str, str]],
+    removed_spec_files: set[str],
+    installation_id: int = 0,
+) -> None:
+    """Best-effort caching of spec content into Postgres content cache."""
+    try:
+        from canon.main import app
+        from canon.sync.content_sync import ContentSyncEngine
+
+        content_cache_store = getattr(app.state, "content_cache_store", None)
+        if content_cache_store is None:
+            return
+
+        github_client = getattr(app.state, "github_client", None)
+        engine = ContentSyncEngine(content_cache_store, github_client)
+        full_repo = f"{owner}/{repo}"
+
+        for file_path in removed_spec_files:
+            try:
+                await content_cache_store.delete_spec(full_repo, file_path)
+                logger.info("Deleted spec from content cache: %s:%s", full_repo, file_path)
+            except Exception:
+                logger.warning(
+                    "Failed to delete spec from content cache: %s:%s",
+                    full_repo,
+                    file_path,
+                    exc_info=True,
+                )
+
+        for file_path, _doc in parsed_specs.items():
+            raw_content, file_sha = spec_contents.get(file_path, ("", ""))
+            if not raw_content:
+                continue
+            try:
+                await engine.sync_spec(owner, repo, file_path, raw_content, commit_sha=file_sha)
+                logger.debug("Cached spec content: %s:%s", full_repo, file_path)
+            except Exception:
+                logger.warning("Failed to cache spec: %s:%s", full_repo, file_path, exc_info=True)
+
+        # Update push sync timestamp
+        if installation_id:
+            try:
+                from datetime import UTC, datetime
+
+                await content_cache_store.upsert_sync_state(
+                    owner, repo, installation_id, last_push_sync_at=datetime.now(UTC)
+                )
+            except Exception:
+                logger.debug("Failed to update push sync timestamp for %s/%s", owner, repo)
+
+    except Exception:
+        logger.debug("Content cache not available for %s/%s", owner, repo, exc_info=True)
 
 
 def _get_doc_patterns(owner: str, repo: str) -> list[str] | None:
@@ -188,13 +262,14 @@ async def _index_doc_files(
     """Best-effort indexing of changed doc files (not just spec files)."""
     try:
         from canon.main import app
-        from canon.search.indexer import index_spec
+        from canon.search.indexer import index_spec, opensearch_doc_id
 
         search_index = getattr(app.state, "search_index", None)
         if search_index is None:
             return
 
         embed_client = getattr(app.state, "embed_client", None)
+        opensearch_client = getattr(app.state, "opensearch_client", None)
         full_repo = f"{owner}/{repo}"
 
         # Delete removed doc files from index
@@ -207,6 +282,16 @@ async def _index_doc_files(
                     logger.warning(
                         "Failed to delete doc: %s:%s", full_repo, file_path, exc_info=True
                     )
+                if opensearch_client is not None:
+                    try:
+                        await opensearch_client.delete_spec(opensearch_doc_id(full_repo, file_path))
+                    except Exception:
+                        logger.warning(
+                            "Failed to delete doc from OpenSearch: %s:%s",
+                            full_repo,
+                            file_path,
+                            exc_info=True,
+                        )
 
         # Index changed doc files that aren't already spec files
         for file_path in changed_files:
@@ -224,11 +309,15 @@ async def _index_doc_files(
                     search_index=search_index,
                     embed_client=embed_client,
                     commit_sha=commit_sha,
+                    opensearch_client=opensearch_client,
                 )
             except Exception:
                 logger.warning("Failed to index doc: %s:%s", full_repo, file_path, exc_info=True)
     except Exception:
-        pass
+        # Outer catch is a last-resort guard for unexpected failures (e.g.
+        # canon.main not importable in some test contexts). Logged so
+        # operators see why doc indexing isn't landing.
+        logger.warning("Doc index update failed for %s/%s", owner, repo, exc_info=True)
 
 
 async def _track_code_changes(owner: str, repo: str, changed_paths: list[str]) -> None:
@@ -249,7 +338,7 @@ async def _track_code_changes(owner: str, repo: str, changed_paths: list[str]) -
                 full_repo,
             )
     except Exception:
-        pass  # Best-effort — don't break push handling
+        logger.debug("Code change tracking failed for %s/%s", owner, repo, exc_info=True)
 
 
 async def _try_org_adapter(
@@ -489,6 +578,7 @@ async def on_push(client, payload: dict) -> None:
     # Track removed spec files and parsed docs for indexing
     removed_spec_files = filter_spec_files(list(removed_files))
     parsed_specs: dict = {}
+    spec_contents: dict[str, tuple[str, str]] = {}  # {path: (raw_markdown, file_sha)}
     commit_sha = payload.get("after", "")
 
     # Load repo config for require_review setting
@@ -537,6 +627,7 @@ async def on_push(client, payload: dict) -> None:
             content, file_sha = await client.get_file_content(owner, repo, file_path, ref=ref)
             result = parse_spec(content, ParseOptions(file_path=file_path))
             parsed_specs[file_path] = result.document
+            spec_contents[file_path] = (content, file_sha)
 
             if file_path in added_files:
                 from canon.parser.models import flatten_sections as _flat
@@ -717,6 +808,16 @@ async def on_push(client, payload: dict) -> None:
         parsed_specs,
         set(removed_spec_files),
         commit_sha,
+    )
+
+    # Best-effort: cache spec content in Postgres
+    await _cache_specs(
+        owner,
+        repo,
+        parsed_specs,
+        spec_contents,
+        set(removed_spec_files),
+        installation_id=int(getattr(client, "installation_id", 0) or 0),
     )
 
     # Best-effort: index doc files matching configurable doc_paths
