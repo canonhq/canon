@@ -53,6 +53,10 @@ auditRetentionCronJob:
   enabled: false
 refreshTokensCronJob:
   enabled: false
+contentReconcileCronJob:
+  enabled: false
+opensearchReconcileCronJob:
+  enabled: false
 
 config:
   environment: "preview"

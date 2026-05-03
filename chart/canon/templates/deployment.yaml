@@ -53,8 +53,6 @@ spec:
             {{- else if .Values.opensearch.external.url }}
             - name: OPENSEARCH_URL
               value: {{ .Values.opensearch.external.url | quote }}
-            {{- else }}
-            {{- fail "opensearch.enabled is true but no URL configured — set opensearch.internal.enabled or opensearch.external.url" }}
             {{- end }}
             - name: CONTENT_CACHE_ENABLED
               value: "true"
