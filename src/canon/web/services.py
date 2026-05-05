@@ -86,13 +86,49 @@ def _summarize_spec(doc: SpecDocument) -> SpecSummary:
 
 
 async def _load_config(
-    client: GitHubClient, owner: str, repo: str, cache: TTLCache
+    client: GitHubClient,
+    owner: str,
+    repo: str,
+    cache: TTLCache,
+    *,
+    content_cache_store: object | None = None,
 ) -> CanonConfig | None:
-    """Load CANON.yaml (or legacy SPECWRIGHT.yaml) for a repo, using cache."""
+    """Load CANON.yaml (or legacy SPECWRIGHT.yaml) for a repo, using cache.
+
+    When ``content_cache_store`` is provided, the persisted config is read
+    from Postgres before falling back to GitHub. A cache read or parse
+    failure logs at WARNING (a corrupt cached row is a real defect, not
+    debug noise) and falls through to the GitHub path so dashboards still
+    load.
+    """
     cache_key = f"config:{owner}/{repo}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
+
+    if content_cache_store is not None:
+        try:
+            row = await content_cache_store.get_config(owner, repo)
+        except Exception:
+            row = None
+            logger.warning(
+                "Content cache config read failed for %s/%s — falling back to GitHub",
+                owner,
+                repo,
+                exc_info=True,
+            )
+        if row and row.get("config_yaml"):
+            try:
+                config = parse_canon_yaml(row["config_yaml"]).config
+                cache.set(cache_key, config)
+                return config
+            except Exception:
+                logger.warning(
+                    "Cached CANON.yaml failed to parse for %s/%s — falling back to GitHub",
+                    owner,
+                    repo,
+                    exc_info=True,
+                )
 
     try:
         try:
@@ -124,7 +160,15 @@ async def _list_indexed_docs(
     indexed_paths: dict[str, dict] | None = None,
     spec_patterns: list[str] | None = None,
 ) -> list[DocFile]:
-    """List non-spec docs — from search index when available, else GitHub API."""
+    """List non-spec docs — from search index when available, else GitHub API.
+
+    Contract on ``indexed_paths``:
+      * dict (possibly empty) — search index answered authoritatively;
+        trust it and skip the GitHub fallback.
+      * ``None`` — search index errored or wasn't queried; fall back to the
+        per-repo directory listing so users still see docs even when the
+        index is degraded.
+    """
     from ..github.spec_utils import matches_doc_patterns
 
     full_name = f"{owner}/{repo}"
@@ -135,8 +179,7 @@ async def _list_indexed_docs(
             return matches_doc_patterns(path, spec_patterns)
         return classify_doc_type(path) == "spec"
 
-    # When we have indexed paths, use them to find docs
-    if indexed_paths:
+    if indexed_paths is not None:
         prefix = f"{full_name}/"
         for key in indexed_paths:
             if not key.startswith(prefix):
@@ -272,8 +315,10 @@ async def _fetch_org_overview(
     total_specs = 0
     total_docs = 0
 
-    # Query indexed paths once if search_index is available
-    indexed_paths: dict[str, dict] = {}
+    # Query indexed paths once if search_index is available. Stays None on
+    # error so _list_indexed_docs can distinguish "index returned empty"
+    # (authoritative) from "index unreachable" (fall back to GitHub).
+    indexed_paths: dict[str, dict] | None = None
     if search_index is not None:
         try:
             indexed_paths = await search_index.get_indexed_paths()
@@ -287,7 +332,9 @@ async def _fetch_org_overview(
         description = repo_data.get("description") or ""
         default_branch = repo_data.get("default_branch", "main")
 
-        config = await _load_config(client, owner, repo_name, cache)
+        config = await _load_config(
+            client, owner, repo_name, cache, content_cache_store=content_cache_store
+        )
         doc_paths = config.specs.doc_paths if config else None
 
         # Try content cache first, fall back to GitHub
@@ -309,7 +356,7 @@ async def _fetch_org_overview(
             owner,
             repo_name,
             search_index=search_index,
-            indexed_paths=indexed_paths if indexed_paths else None,
+            indexed_paths=indexed_paths,
             spec_patterns=doc_paths,
         )
 
@@ -439,7 +486,7 @@ async def get_repo_detail(
         except Exception:
             logger.warning("Failed to query indexed paths for repo detail", exc_info=True)
 
-    config = await _load_config(client, owner, repo, cache)
+    config = await _load_config(client, owner, repo, cache, content_cache_store=content_cache_store)
     doc_paths = config.specs.doc_paths if config else None
     # Try content cache first, fall back to GitHub
     specs_data = None
@@ -533,7 +580,7 @@ async def get_spec_detail(
 
     result = parse_spec(content, ParseOptions(file_path=file_path))
     rendered_html = render_spec_html(result.document, repo_owner=owner, repo_name=repo)
-    config = await _load_config(client, owner, repo, cache)
+    config = await _load_config(client, owner, repo, cache, content_cache_store=content_cache_store)
 
     detail = SpecDetail(
         document=result.document,

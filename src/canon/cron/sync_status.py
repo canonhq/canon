@@ -48,24 +48,37 @@ async def run_reverse_sync() -> list[dict]:
 
     results: list[dict] = []
 
-    # Best-effort: create IntegrationStore for DB-stored OAuth credentials
+    # Best-effort: pool used by both IntegrationStore (OAuth creds) and
+    # ContentCacheStore (read spec markdown from Postgres instead of GitHub).
     integration_store = None
+    content_cache_store = None
     pool = None
-    if settings.database_url and settings.byok_encryption_key:
+    if settings.database_url:
         try:
             import asyncpg
 
+            from ..db.content_cache_store import ContentCacheStore
             from ..db.integration_store import IntegrationStore
 
             pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=2)
-            integration_store = IntegrationStore(pool, settings.byok_encryption_key)
+            content_cache_store = ContentCacheStore(pool)
+            if settings.byok_encryption_key:
+                integration_store = IntegrationStore(pool, settings.byok_encryption_key)
         except ImportError:
-            logger.info("asyncpg not installed — skipping DB credential resolution for cron")
+            logger.info("asyncpg not installed — skipping DB-backed stores for cron")
         except Exception:
-            logger.warning(
-                "Failed to initialize IntegrationStore for cron job — "
-                "DB-stored OAuth credentials will not be used this run",
+            # Pool failure means the content-cache optimization silently
+            # disengages and we fan out to GitHub for every spec. That is
+            # exactly the rate-limit burnout this cron is supposed to avoid,
+            # so surface it as an error + analytics event for alerting.
+            logger.error(
+                "Failed to initialize DB-backed stores for cron job — "
+                "spec content will be fetched from GitHub and DB OAuth creds skipped",
                 exc_info=True,
+            )
+            analytics.track(
+                "reverse_sync_db_pool_failed",
+                properties={"installation_id": settings.gh_installation_id},
             )
 
     try:
@@ -125,7 +138,7 @@ async def run_reverse_sync() -> list[dict]:
                     raise ValueError("truncated tree")
                 tree_entries = tree_data.get("tree", [])
                 spec_files = [
-                    item["path"]
+                    (item["path"], item.get("sha", ""))
                     for item in tree_entries
                     if item["type"] == "blob"
                     and item["path"].endswith(".md")
@@ -153,8 +166,10 @@ async def run_reverse_sync() -> list[dict]:
                             repo_name,
                             exc_info=True,
                         )
+                # Contents API entries carry sha; preserve it so the per-file
+                # loop can hit the content cache without an extra GitHub call.
                 spec_files = [
-                    e.get("path", f"{e.get('name', '')}")
+                    (e.get("path", f"{e.get('name', '')}"), e.get("sha", ""))
                     for e in entries
                     if e.get("type") == "file"
                     and e.get("name", "").endswith(".md")
@@ -175,9 +190,36 @@ async def run_reverse_sync() -> list[dict]:
                 mapping = deep_merge_configs(org_mapping, mapping)
 
             full_repo = f"{owner}/{repo_name}"
-            for file_path in spec_files:
+            for file_path, tree_sha in spec_files:
                 try:
-                    content, file_sha = await client.get_file_content(owner, repo_name, file_path)
+                    content: str | None = None
+                    file_sha = tree_sha
+                    # Stale or partially-populated cache rows fall through to
+                    # GitHub so we never reverse-sync mismatched content. A
+                    # transient DB error here must not abort the spec — the
+                    # outer broad-except would silently skip it. Failing open
+                    # to GitHub costs at most one rate-limit slot per spec.
+                    if content_cache_store is not None and tree_sha:
+                        try:
+                            cached = await content_cache_store.get_spec(full_repo, file_path)
+                        except Exception:
+                            logger.warning(
+                                "Content cache read failed for %s/%s — falling back to GitHub",
+                                full_repo,
+                                file_path,
+                                exc_info=True,
+                            )
+                            cached = None
+                        if (
+                            cached
+                            and cached.get("github_sha") == tree_sha
+                            and cached.get("raw_markdown")
+                        ):
+                            content = cached["raw_markdown"]
+                    if content is None:
+                        content, file_sha = await client.get_file_content(
+                            owner, repo_name, file_path
+                        )
                     result = parse_spec(content, ParseOptions(file_path=file_path))
                     project_key = result.document.frontmatter.ticket_project
 

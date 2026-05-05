@@ -87,8 +87,23 @@ async def run_content_reconciliation() -> dict:
 def main() -> None:
     from .. import otel_logging
 
-    otel_logging.setup()
-    asyncio.run(run_content_reconciliation())
+    settings = Settings()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    if settings.posthog_logs_enabled:
+        otel_logging.init(
+            settings.posthog_key,
+            min_level=settings.posthog_logs_min_level,
+            posthog_host=settings.posthog_host,
+        )
+
+    try:
+        asyncio.run(run_content_reconciliation())
+    finally:
+        otel_logging.shutdown()
 
 
 if __name__ == "__main__":

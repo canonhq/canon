@@ -684,6 +684,57 @@ class TestListIndexedDocs:
         assert "docs/auth.md" in paths
         assert "docs/specs/overview.md" in paths  # not a spec under custom patterns
 
+    async def test_empty_index_result_skips_github(self):
+        """An empty (but non-None) indexed_paths means the index answered
+
+        authoritatively — return [] without ever hitting GitHub. This is the
+        rate-limit-critical branch: every dashboard load passes through here
+        once per repo.
+        """
+        client = AsyncMock()
+        client.list_directory = AsyncMock()
+        docs = await _list_indexed_docs(
+            client,
+            "org",
+            "repo1",
+            search_index=object(),
+            indexed_paths={},
+        )
+        assert docs == []
+        client.list_directory.assert_not_called()
+
+    async def test_none_indexed_paths_falls_back_when_index_errored(self):
+        """indexed_paths=None signals the index couldn't be queried.
+
+        The caller swallows search-index exceptions and leaves indexed_paths
+        as None; we should fall back to GitHub so users still see docs in
+        a search-index outage.
+        """
+        client = AsyncMock()
+
+        async def _list_dir(_owner, _repo, path):
+            if path == "":
+                return [
+                    {
+                        "name": "README.md",
+                        "path": "README.md",
+                        "type": "file",
+                    },
+                ]
+            return []
+
+        client.list_directory = AsyncMock(side_effect=_list_dir)
+        docs = await _list_indexed_docs(
+            client,
+            "org",
+            "repo1",
+            search_index=object(),
+            indexed_paths=None,
+        )
+        paths = {d.path for d in docs}
+        assert "README.md" in paths
+        assert client.list_directory.await_count >= 1
+
 
 class TestGetDocDetail:
     async def test_returns_doc_detail(self):

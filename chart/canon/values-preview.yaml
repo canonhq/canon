@@ -58,6 +58,13 @@ contentReconcileCronJob:
 opensearchReconcileCronJob:
   enabled: false
 
+# OpenSearch is production-only. The canon-opensearch K8s secret only
+# lives in the canon namespace (synced from Doppler), so preview pods
+# would CrashLoopBackOff on a missing-secret config error. Search falls
+# back to the pgvector + ParadeDB path automatically when this is off.
+opensearch:
+  enabled: false
+
 config:
   environment: "preview"
   webOrg: "canonhq"
