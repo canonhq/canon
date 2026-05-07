@@ -92,6 +92,7 @@ def _standard_patches(client, mock_adapter=None):
         gh_app_id="123",
         gh_private_key="key",
         gh_installation_id="456",
+        database_url=None,
     )
 
     repo_config = CanonConfig(
@@ -105,6 +106,10 @@ def _standard_patches(client, mock_adapter=None):
     return (
         patch("canon.cron.sync_status.Settings", return_value=settings_mock),
         patch("canon.cron.sync_status.GitHubClient", return_value=client),
+        patch(
+            "canon.cron.sync_status._get_installations",
+            new=AsyncMock(return_value=[("456", "acme")]),
+        ),
         patch(
             "canon.github.spec_utils.load_repo_config",
             new=AsyncMock(return_value=repo_config),
@@ -165,7 +170,8 @@ class TestReverseSyncCompletedEvent:
             patches[7],
             patches[8],
             patches[9],
-            patches[10] as mock_analytics,
+            patches[10],
+            patches[11] as mock_analytics,
         ):
             underlying = run_reverse_sync.__wrapped__
             await underlying()
@@ -207,7 +213,8 @@ class TestReverseSyncCompletedEvent:
             patches[7],
             patches[8],
             patches[9],
-            patches[10] as mock_analytics,
+            patches[10],
+            patches[11] as mock_analytics,
         ):
             underlying = run_reverse_sync.__wrapped__
             await underlying()
@@ -244,6 +251,7 @@ class TestReverseSyncCompletedEvent:
             patches[8],
             patches[9],
             patches[10],
+            patches[11],
         ):
             underlying = run_reverse_sync.__wrapped__
             await underlying()
@@ -251,8 +259,8 @@ class TestReverseSyncCompletedEvent:
         # Should have fallen back to list_directory
         client.list_directory.assert_called_once()
 
-    async def test_repo_list_failure_raises(self):
-        """When list_installation_repos fails, the job raises (not silent no-op)."""
+    async def test_repo_list_failure_skips_installation(self):
+        """When all installations fail auth/listing, the job raises RuntimeError."""
         from canon.cron.sync_status import run_reverse_sync
 
         client = _make_client()
@@ -270,13 +278,14 @@ class TestReverseSyncCompletedEvent:
             patches[7],
             patches[8],
             patches[9],
-            patches[10] as mock_analytics,
+            patches[10],
+            patches[11] as mock_analytics,
         ):
             underlying = run_reverse_sync.__wrapped__
-            with pytest.raises(Exception, match="403 rate limit"):
+            with pytest.raises(RuntimeError, match="All 1/1 installations failed"):
                 await underlying()
 
-        # Should have emitted the failure analytics event before re-raising
+        # Should have emitted the failure analytics event
         fail_calls = [
             c
             for c in mock_analytics.track.call_args_list
