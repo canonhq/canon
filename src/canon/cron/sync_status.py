@@ -52,6 +52,7 @@ async def run_reverse_sync() -> list[dict]:
     # ContentCacheStore (read spec markdown from Postgres instead of GitHub).
     integration_store = None
     content_cache_store = None
+    ref_store = None
     pool = None
     if settings.database_url:
         try:
@@ -59,9 +60,11 @@ async def run_reverse_sync() -> list[dict]:
 
             from ..db.content_cache_store import ContentCacheStore
             from ..db.integration_store import IntegrationStore
+            from ..db.ticket_ref_status_store import TicketRefStatusStore
 
             pool = await asyncpg.create_pool(settings.database_url, min_size=1, max_size=2)
             content_cache_store = ContentCacheStore(pool)
+            ref_store = TicketRefStatusStore(pool)
             if settings.byok_encryption_key:
                 integration_store = IntegrationStore(pool, settings.byok_encryption_key)
         except ImportError:
@@ -333,7 +336,14 @@ async def run_reverse_sync() -> list[dict]:
                         continue
 
                     updated_md, sync_result = await reverse_sync(
-                        result.document, adapter, system_config=resolved_sys_config
+                        result.document,
+                        adapter,
+                        system_config=resolved_sys_config,
+                        repo=full_repo,
+                        installation_id=int(settings.gh_installation_id)
+                        if settings.gh_installation_id
+                        else None,
+                        ref_store=ref_store,
                     )
 
                     if sync_result.status_changed and updated_md != content:

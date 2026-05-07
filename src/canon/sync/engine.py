@@ -39,8 +39,19 @@ from canon.sync.models import (
 )
 from canon.sync.status_map import resolve_reverse
 from canon.sync.templates import make_fingerprint, render_description, render_summary
+from canon.sync.ticket_error import classify_error
+from canon.sync.ticket_ref import due_for_recheck, qualify
 
 logger = logging.getLogger(__name__)
+
+
+class _RowAdapter:
+    """Wrap a dict row in attribute access for due_for_recheck."""
+
+    def __init__(self, row: dict) -> None:
+        self.status = row["status"]
+        self.last_recheck_at = row.get("last_recheck_at")
+
 
 # Only sections in these states are actionable work items.
 _SYNCABLE_STATES = frozenset({"todo", "in_progress"})
@@ -810,6 +821,8 @@ async def reverse_sync(
     org: str = "",
     sync_store: SyncHistoryStore | None = None,
     sync_trigger: str = "manual",
+    installation_id: int | None = None,
+    ref_store: object | None = None,
 ) -> tuple[str, SyncResult]:
     """Reverse sync: poll ticket statuses and update spec status comments.
 
@@ -845,6 +858,32 @@ async def reverse_sync(
         for section in all_sections:
             if not section.ticket_link or not section.section_number:
                 continue
+
+            # Broken-ref pre-check. Fail-open if the ref store is unavailable —
+            # cron must NEVER abort because ticket_ref_status is unreachable.
+            ticket_ref = None
+            ref_row = None
+            if ref_store is not None and installation_id is not None:
+                try:
+                    ticket_ref = qualify(
+                        section.ticket_link.system, repo, section.ticket_link.ticket_id
+                    )
+                    ref_row = await ref_store.get(
+                        installation_id, section.ticket_link.system, ticket_ref
+                    )
+                except Exception:
+                    logger.warning(
+                        "ticket_ref_status read failed — falling through to adapter",
+                        exc_info=True,
+                    )
+                    ref_row = None
+
+                if (
+                    ref_row
+                    and ref_row["status"] in ("broken", "dismissed")
+                    and not due_for_recheck(_RowAdapter(ref_row))
+                ):
+                    continue
 
             try:
                 ticket_status = await adapter.get_ticket_status(section.ticket_link.ticket_id)
@@ -884,7 +923,39 @@ async def reverse_sync(
                         },
                         groups={"organization": org} if org else None,
                     )
+
+                if (
+                    ref_store is not None
+                    and ticket_ref is not None
+                    and ref_row
+                    and ref_row["status"] == "broken"
+                ):
+                    try:
+                        await ref_store.mark_ok(
+                            installation_id=installation_id,
+                            system=section.ticket_link.system,
+                            ticket_ref=ticket_ref,
+                        )
+                    except Exception:
+                        logger.warning("ticket_ref_status mark_ok failed", exc_info=True)
+
             except Exception as err:
+                if ref_store is not None and ticket_ref is not None:
+                    kind = classify_error(err)
+                    if kind in ("not_found", "forbidden", "unauthorized"):
+                        try:
+                            await ref_store.record_failure(
+                                installation_id=installation_id,
+                                system=section.ticket_link.system,
+                                ticket_ref=ticket_ref,
+                                error_kind=kind,
+                                error_message=str(err),
+                            )
+                        except Exception:
+                            logger.warning(
+                                "ticket_ref_status record_failure failed",
+                                exc_info=True,
+                            )
                 result.errors.append(SyncError(section_id=section.id, error=str(err)))
 
         markdown = update_status_comments(doc, updates) if updates else doc.raw
