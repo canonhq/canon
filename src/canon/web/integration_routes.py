@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 
@@ -12,6 +13,8 @@ from fastapi.responses import JSONResponse
 from ..auth.deps import require_permission
 from ..auth.models import CurrentUser
 from ..auth.permissions import Permission
+from ..settings import Settings
+from ..sync.jira_auth import refresh_jira_token
 from .cache import TTLCache
 
 logger = logging.getLogger(__name__)
@@ -248,7 +251,7 @@ async def test_integration(
     start = time.monotonic()
     try:
         if provider == "jira":
-            ok, msg = await _test_jira(config)
+            ok, msg = await _test_jira(config, store=store, org=org)
         elif provider == "linear":
             ok, msg = await _test_linear(config)
         else:
@@ -270,19 +273,99 @@ async def test_integration(
     return JSONResponse({"ok": ok, "message": msg, "latency_ms": latency_ms})
 
 
-async def _test_jira(config: dict) -> tuple[bool, str]:
-    """Test Jira connection by calling /rest/api/3/myself."""
+async def _jira_myself(cloud_id: str, access_token: str) -> httpx.Response:
+    """Call Jira /rest/api/3/myself to verify credentials."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        return await client.get(
+            f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/myself",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+        )
+
+
+def _parse_metadata(raw) -> dict:
+    """Ensure provider_metadata is a dict (may be stored as JSON string)."""
+    if isinstance(raw, str):
+        return json.loads(raw)
+    return raw if isinstance(raw, dict) else {}
+
+
+async def _test_jira(config: dict, *, store=None, org: str = "") -> tuple[bool, str]:
+    """Test Jira connection by calling /rest/api/3/myself.
+
+    If the initial call returns 401, re-reads config from the store (in case
+    the cron just refreshed), then attempts a token refresh and retries.
+    Tokens are only persisted after the retry succeeds.
+    """
     cloud_id = config.get("cloud_id", "")
     access_token = config.get("access_token", "")
     if not cloud_id or not access_token:
         return False, "Missing cloud_id or access_token"
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(
-            f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/myself",
-            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
-        )
+
+    resp = await _jira_myself(cloud_id, access_token)
+
     if resp.status_code == 401:
-        return False, "Authentication failed — token may be expired"
+        # Re-read config from store — the cron may have refreshed tokens already
+        if store and org:
+            fresh_config = await store.get_integration_config(org, "jira")
+            if fresh_config and fresh_config.get("access_token") != access_token:
+                logger.info("Using cron-refreshed token for org %s", org)
+                access_token = fresh_config["access_token"]
+                config = fresh_config
+                resp = await _jira_myself(cloud_id, access_token)
+                if resp.status_code != 401:
+                    resp.raise_for_status()
+                    data = resp.json()
+                    return (
+                        True,
+                        f"Connected as {data.get('displayName', data.get('emailAddress', 'unknown'))}",
+                    )
+
+        # Still 401 — attempt our own token refresh
+        settings = Settings()
+        rt = config.get("refresh_token", "")
+        if not rt or not settings.jira_oauth_client_id:
+            return False, "Authentication failed — token expired and no refresh credentials"
+
+        refreshed = await refresh_jira_token(
+            refresh_token=rt,
+            client_id=settings.jira_oauth_client_id,
+            client_secret=settings.jira_oauth_client_secret,
+        )
+        if refreshed is None:
+            return False, "Authentication failed — token expired and refresh failed"
+
+        new_access = refreshed.get("access_token", "")
+        new_refresh = refreshed.get("refresh_token", rt)
+        if not new_access:
+            return False, "Authentication failed — refresh response missing access_token"
+
+        # Retry with the refreshed token
+        resp = await _jira_myself(cloud_id, new_access)
+        if resp.status_code == 401:
+            return False, "Authentication failed — token expired even after refresh"
+
+        # Persist tokens immediately — the Atlassian exchange succeeded and
+        # the old refresh token may have been rotated. A transient Jira error
+        # (500, 429) doesn't invalidate the tokens; losing them here would
+        # require manual re-auth. If this DB write fails, let the exception
+        # propagate — the integration is effectively broken (rotated refresh
+        # token lost) and should show "error" to prompt re-auth.
+        if store and org:
+            new_config = {**config, "access_token": new_access, "refresh_token": new_refresh}
+            existing = await store.get_integration(org, "jira")
+            metadata = _parse_metadata(existing.get("provider_metadata", {})) if existing else {}
+            metadata["token_refreshed_at"] = time.time()
+            await store.update_config(org, "jira", config=new_config, provider_metadata=metadata)
+            logger.info("Jira token refreshed during test for org %s", org)
+
+        # Now validate the /myself response for the test result
+        resp.raise_for_status()
+        data = resp.json()
+        return (
+            True,
+            f"Connected as {data.get('displayName', data.get('emailAddress', 'unknown'))}",
+        )
+
     resp.raise_for_status()
     data = resp.json()
     return True, f"Connected as {data.get('displayName', data.get('emailAddress', 'unknown'))}"

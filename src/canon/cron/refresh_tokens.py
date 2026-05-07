@@ -17,53 +17,21 @@ import logging
 import sys
 import time
 
-import httpx
-
 from .. import otel_logging
 from ..alerts.cron_utils import tracked_cron
 from ..billing.encryption import decrypt_api_key, encrypt_api_key
 from ..db import close_pool, create_pool
 from ..settings import Settings
+from ..sync.jira_auth import refresh_jira_token
 
 logger = logging.getLogger(__name__)
-
-ATLASSIAN_TOKEN_URL = "https://auth.atlassian.com/oauth/token"
 
 # Refresh tokens older than this (seconds). Atlassian access tokens expire at
 # 3600s; refreshing at 2700s (45 min) gives a comfortable buffer.
 REFRESH_THRESHOLD_SECONDS = 2700
 
-
-async def _refresh_jira_token(
-    *,
-    refresh_token: str,
-    client_id: str,
-    client_secret: str,
-) -> dict | None:
-    """Exchange a Jira refresh token for new access + refresh tokens.
-
-    Returns the token response dict on success, None on failure.
-    """
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(
-            ATLASSIAN_TOKEN_URL,
-            json={
-                "grant_type": "refresh_token",
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "refresh_token": refresh_token,
-            },
-        )
-
-    if resp.status_code != 200:
-        logger.warning(
-            "Jira token refresh failed: HTTP %d — %s",
-            resp.status_code,
-            resp.text[:200],
-        )
-        return None
-
-    return resp.json()
+# For integrations in error/needs_reauth, retry sooner (5 min) to speed recovery.
+ERROR_RECOVERY_THRESHOLD_SECONDS = 300
 
 
 @tracked_cron("refresh_integration_tokens")
@@ -90,9 +58,9 @@ async def run_refresh() -> int:
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT id, org_login, encrypted_config, provider_metadata
+                SELECT id, org_login, encrypted_config, provider_metadata, status
                 FROM org_integrations
-                WHERE provider = 'jira' AND status = 'active'
+                WHERE provider = 'jira' AND status IN ('active', 'error', 'needs_reauth')
                 """
             )
 
@@ -111,11 +79,17 @@ async def run_refresh() -> int:
                 logger.info("No refresh_token stored for org %s — skipping", org_login)
                 continue
 
-            # Check if refresh is needed based on last refresh timestamp
+            # Check if refresh is needed based on last refresh timestamp.
+            # Use a shorter threshold for broken integrations to speed recovery.
             metadata = json.loads(row["provider_metadata"]) if row["provider_metadata"] else {}
             last_refreshed = metadata.get("token_refreshed_at", 0)
             age = now - last_refreshed
-            if age < REFRESH_THRESHOLD_SECONDS:
+            threshold = (
+                ERROR_RECOVERY_THRESHOLD_SECONDS
+                if row["status"] in ("error", "needs_reauth")
+                else REFRESH_THRESHOLD_SECONDS
+            )
+            if age < threshold:
                 logger.debug(
                     "Jira token for org %s refreshed %ds ago — skipping",
                     org_login,
@@ -124,7 +98,7 @@ async def run_refresh() -> int:
                 continue
 
             # Refresh the token
-            result = await _refresh_jira_token(
+            result = await refresh_jira_token(
                 refresh_token=refresh_token,
                 client_id=settings.jira_oauth_client_id,
                 client_secret=settings.jira_oauth_client_secret,
@@ -143,7 +117,7 @@ async def run_refresh() -> int:
                 )
                 continue
 
-            # Persist new tokens
+            # Persist new tokens and recover status if needed
             new_config = {
                 **config,
                 "access_token": result["access_token"],
@@ -152,20 +126,32 @@ async def run_refresh() -> int:
             encrypted = encrypt_api_key(json.dumps(new_config), encryption_key)
             metadata["token_refreshed_at"] = now
 
+            prev_status = row["status"]
+            new_status = "active" if prev_status in ("error", "needs_reauth") else prev_status
+
             async with pool.acquire() as conn:
                 await conn.execute(
                     """
                     UPDATE org_integrations
-                    SET encrypted_config = $1, provider_metadata = $2, updated_at = now()
-                    WHERE id = $3
+                    SET encrypted_config = $1, provider_metadata = $2,
+                        status = $3, updated_at = now()
+                    WHERE id = $4
                     """,
                     encrypted,
                     json.dumps(metadata),
+                    new_status,
                     row["id"],
                 )
 
             refreshed += 1
-            logger.info("Jira token refreshed for org %s", org_login)
+            if prev_status != new_status:
+                logger.info(
+                    "Jira token refreshed for org %s — status recovered from %s to active",
+                    org_login,
+                    prev_status,
+                )
+            else:
+                logger.info("Jira token refreshed for org %s", org_login)
 
     finally:
         await close_pool(pool)
