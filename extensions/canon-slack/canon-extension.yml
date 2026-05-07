@@ -1,0 +1,31 @@
+schema_version: "1"
+
+extension:
+  id: "canon-slack"
+  name: "Slack Integration"
+  version: "0.1.0"
+  description: "Interactive Slack bot with slash commands, @canon mentions, proactive notifications, dashboards, and team digests. The Python runtime module lives in core (src/canon/slack/) and is activated by environment variables."
+  author: "Canon"
+  repository: "https://github.com/canonhq/canon"
+  license: "MIT"
+
+requires:
+  canon_version: ">=1.50.0"
+
+provides:
+  skills:
+    - name: "canon-slack"
+      file: "skills/canon-slack/SKILL.md"
+      description: "Help with Slack integration setup, configuration, and troubleshooting"
+
+  commands:
+    - name: "canon-slack"
+      file: "commands/canon-slack.md"
+      description: "Check Slack integration status and configuration"
+
+tags:
+  - "slack"
+  - "notifications"
+  - "chat"
+  - "bot"
+  - "integration"

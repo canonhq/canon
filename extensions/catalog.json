@@ -1,0 +1,31 @@
+{
+  "schema_version": "1",
+  "updated_at": "2026-04-15T00:00:00Z",
+  "catalog_url": "https://raw.githubusercontent.com/canonhq/canon/main/extensions/catalog.json",
+  "extensions": {
+    "canon-sprint-plan": {
+      "id": "canon-sprint-plan",
+      "name": "Sprint Planning",
+      "version": "0.1.0",
+      "description": "AI-assisted sprint planning from spec coverage data",
+      "author": "Canon",
+      "repository": "https://github.com/canonhq/canon",
+      "category": "workflow",
+      "tags": ["planning", "agile", "sprint"],
+      "bundled": true,
+      "verified": true
+    },
+    "canon-slack": {
+      "id": "canon-slack",
+      "name": "Slack Integration",
+      "version": "0.1.0",
+      "description": "Interactive Slack bot with slash commands, mentions, notifications, and dashboards",
+      "author": "Canon",
+      "repository": "https://github.com/canonhq/canon",
+      "category": "integration",
+      "tags": ["slack", "notifications", "chat", "bot"],
+      "bundled": true,
+      "verified": true
+    }
+  }
+}

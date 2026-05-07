@@ -1,0 +1,123 @@
+name: "Canon Issue Triage"
+description: >
+  AI-powered GitHub issue classification and spec matching. Classifies
+  issues as feature-request, bug-report, question, duplicate, or support,
+  relates them to existing specs, and optionally creates draft spec PRs
+  for unmatched feature requests.
+branding:
+  icon: "inbox"
+  color: "purple"
+
+inputs:
+  canon-token:
+    description: "Canon platform token (routes classification via backend)"
+    required: false
+    default: ""
+  anthropic-api-key:
+    description: "Direct Anthropic API key (BYOK fallback when canon-token not set)"
+    required: false
+    default: ""
+  auto-create:
+    description: "Create draft spec PRs for unmatched feature requests"
+    required: false
+    default: "false"
+  confidence-threshold:
+    description: "Minimum confidence (0.0-1.0) to act on classification"
+    required: false
+    default: "0.7"
+  specs:
+    description: "Glob pattern for spec files"
+    required: false
+    default: "docs/specs"
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.12"
+  canon-version:
+    description: "Canon CLI version constraint (pip spec)"
+    required: false
+    default: ">=1.0.0,<2.0.0"
+
+outputs:
+  classification:
+    description: "Issue classification category"
+    value: ${{ steps.triage.outputs.classification }}
+  confidence:
+    description: "Classification confidence (0.0-1.0)"
+    value: ${{ steps.triage.outputs.confidence }}
+  matched-specs:
+    description: "JSON array of matched spec paths with relevance scores"
+    value: ${{ steps.triage.outputs.matched-specs }}
+  spec-pr-url:
+    description: "URL of created spec PR (if auto-create triggered)"
+    value: ${{ steps.triage.outputs.spec-pr-url }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Canon CLI
+      shell: bash
+      env:
+        CANON_VERSION: ${{ inputs.canon-version }}
+      run: |
+        # Validate version spec to prevent command injection
+        if [[ ! "$CANON_VERSION" =~ ^[a-zA-Z0-9.,\>\<!=~\*\ ]+$ ]]; then
+          echo "::error::Invalid canon-version input: $CANON_VERSION"
+          exit 1
+        fi
+        python -m pip install --upgrade pip
+        python -m pip install "canonhq${CANON_VERSION}"
+        canon --help > /dev/null
+
+    - name: Run issue triage
+      id: triage
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        CANON_TOKEN: ${{ inputs.canon-token }}
+        ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
+        ISSUE_NUMBER: ${{ github.event.issue.number }}
+        AUTO_CREATE: ${{ inputs.auto-create }}
+        CONFIDENCE_THRESHOLD: ${{ inputs.confidence-threshold }}
+        SPECS_DIR: ${{ inputs.specs }}
+      run: |
+        set -e
+
+        # Build args array
+        ARGS=(canon triage --issue "$ISSUE_NUMBER" --specs "$SPECS_DIR" --json --apply --confidence-threshold "$CONFIDENCE_THRESHOLD")
+
+        if [ "$AUTO_CREATE" = "true" ]; then
+          ARGS+=(--create-spec)
+        fi
+
+        # Run triage and capture output
+        RESULT=$("${ARGS[@]}") || {
+          echo "::warning::Canon triage failed (exit $?). Issue left untriaged."
+          exit 0
+        }
+
+        # Parse JSON output for action outputs
+        CLASSIFICATION=$(echo "$RESULT" | python -c "import json,sys; print(json.load(sys.stdin)['classification'])")
+        CONFIDENCE=$(echo "$RESULT" | python -c "import json,sys; print(json.load(sys.stdin)['confidence'])")
+        MATCHED=$(echo "$RESULT" | python -c "import json,sys; print(json.dumps(json.load(sys.stdin)['related_specs']))")
+        SPEC_PR=$(echo "$RESULT" | python -c "import json,sys; print(json.load(sys.stdin).get('spec_pr_url') or '')")
+
+        {
+          echo "classification=$CLASSIFICATION"
+          echo "confidence=$CONFIDENCE"
+          echo "matched-specs=$MATCHED"
+          echo "spec-pr-url=$SPEC_PR"
+        } >> "$GITHUB_OUTPUT"
+
+        # Write to step summary
+        echo "## Canon Issue Triage" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "**Classification:** $CLASSIFICATION (confidence: $CONFIDENCE)" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo '```json' >> "$GITHUB_STEP_SUMMARY"
+        echo "$RESULT" >> "$GITHUB_STEP_SUMMARY"
+        echo '```' >> "$GITHUB_STEP_SUMMARY"

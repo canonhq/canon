@@ -38,6 +38,7 @@ KNOWN_TOP_KEYS = {
     "routing",
     "auth_profiles",
     "extensions",
+    "triage",
 }
 KNOWN_SPECS_KEYS = {"auto_tickets", "require_review", "doc_paths", "lifecycle_sync"}
 KNOWN_AGENTS_KEYS = {"doc_updates", "pr_analysis", "stale_detection", "realization_check"}
@@ -192,6 +193,16 @@ class AgentsConfig(BaseModel):
     stale_detection: str | Literal[False] = "30d"
 
 
+class TriageConfig(BaseModel):
+    enabled: bool = True
+    auto_create_specs: bool = False
+    classify_labels: bool = True
+    ignore_labels: list[str] = []
+    ignore_authors: list[str] = []
+    spec_template: str = "docs/specs/_template.md"
+    confidence_threshold: float = 0.7
+
+
 class CanonConfig(BaseModel):
     team: str | None = None
     ticket_system: TicketSystem | None = None
@@ -202,6 +213,7 @@ class CanonConfig(BaseModel):
     ide: IdeConfig = IdeConfig()
     sre: SreConfig = SreConfig()
     slack: SlackConfig = SlackConfig()
+    triage: TriageConfig = TriageConfig()
     ticket_mapping: TicketMappingConfig | None = None
 
 

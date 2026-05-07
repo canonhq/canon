@@ -1,0 +1,23 @@
+name: Canon Stale Spec Check
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays at 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  stale-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Canon stale-spec-check
+        uses: canonhq/canon/actions/stale-spec-check@v1
+        with:
+          stale-days: "90"
+          code-churn-threshold: "50"

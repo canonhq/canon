@@ -1,0 +1,41 @@
+schema_version: "1"
+
+extension:
+  id: "canon-issue-triage"
+  name: "Issue Triage"
+  version: "0.1.0"
+  description: "AI-powered GitHub issue classification, spec matching, and automatic spec creation. Classifies incoming issues as feature-request/bug/question/duplicate/support, relates them to existing specs, and optionally creates draft spec PRs for unmatched feature requests."
+  author: "Canon"
+  repository: "https://github.com/canonhq/canon"
+  license: "MIT"
+
+requires:
+  canon_version: ">=1.60.0"
+
+provides:
+  skills:
+    - name: "issue-triage"
+      file: "skills/issue-triage/SKILL.md"
+      description: "Help with issue triage configuration and troubleshooting"
+
+  mcp_tools:
+    - name: "triage_issue"
+      handler: "issue_triage.tools:triage_issue_handler"
+      description: "Classify a GitHub issue and match it to existing specs"
+      input_schema:
+        type: object
+        properties:
+          issue_number:
+            type: integer
+            description: "GitHub issue number to triage"
+          repo:
+            type: string
+            description: "Repository in owner/name format"
+        required: ["issue_number", "repo"]
+
+tags:
+  - "triage"
+  - "issues"
+  - "classification"
+  - "automation"
+  - "ai"

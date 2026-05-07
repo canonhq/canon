@@ -1,0 +1,35 @@
+schema_version: "1"
+
+extension:
+  id: "canon-sprint-plan"
+  name: "Sprint Planning"
+  version: "0.1.0"
+  description: "AI-assisted sprint planning from spec coverage data — identifies todo sections, estimates effort by AC count, and proposes a sprint plan respecting team velocity"
+  author: "Canon"
+  repository: "https://github.com/canonhq/canon"
+  license: "MIT"
+
+requires:
+  canon_version: ">=1.50.0"
+
+provides:
+  skills:
+    - name: "sprint-plan"
+      file: "skills/sprint-plan/SKILL.md"
+      description: "Plan sprints based on spec coverage gaps and team velocity"
+
+  commands:
+    - name: "canon-sprint"
+      file: "commands/canon-sprint.md"
+      description: "Generate a sprint plan from current spec coverage"
+
+tags:
+  - "planning"
+  - "agile"
+  - "workflow"
+  - "sprint"
+
+defaults:
+  sprint-plan:
+    sprint_length_days: 14
+    velocity_points: 40

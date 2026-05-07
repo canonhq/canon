@@ -1,0 +1,8 @@
+{
+  "number": 102,
+  "title": "canon verify crashes on specs with empty acceptance criteria section",
+  "body": "## Bug Report\n\n**Steps to reproduce:**\n1. Create a spec with `### Acceptance Criteria` heading but no items\n2. Run `canon verify`\n3. Get a traceback:\n\n```\nTraceback (most recent call last):\n  File \"src/canon/cli/verify.py\", line 45, in run_verify\n    results = evaluate_spec(spec)\n  File \"src/canon/parser/evaluator.py\", line 89, in evaluate_spec\n    for ac in section.acceptance_criteria:\nTypeError: 'NoneType' object is not iterable\n```\n\n**Expected:** Graceful handling of empty AC sections\n**Actual:** Crash with TypeError\n\n**Version:** canon 1.62.0",
+  "user": {"login": "bug-reporter"},
+  "labels": [],
+  "state": "open"
+}

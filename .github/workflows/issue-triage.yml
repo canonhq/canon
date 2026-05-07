@@ -1,0 +1,21 @@
+name: Canon Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Canon issue triage
+        uses: canonhq/canon/actions/issue-triage@v1
+        with:
+          canon-token: ${{ secrets.CANON_TOKEN }}
+          auto-create: "false"
+          confidence-threshold: "0.7"

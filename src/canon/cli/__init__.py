@@ -38,6 +38,7 @@ def main(argv: list[str] | None = None) -> None:
     from .status_cmd import register as status_register
     from .sync_cmd import register as sync_register
     from .tasks import register as tasks_register
+    from .triage import register as triage_register
     from .verify import register as verify_register
 
     db_register(subparsers)
@@ -63,6 +64,7 @@ def main(argv: list[str] | None = None) -> None:
     evidence_register(subparsers)
     extension_register(subparsers)
     integrations_register(subparsers)
+    triage_register(subparsers)
     doctor_register(subparsers)
 
     # Alias: canon init -> canon setup (shares the same arguments)
@@ -236,6 +238,21 @@ def main(argv: list[str] | None = None) -> None:
         from .integrations_cmd import run_integrations
 
         run_integrations(args)
+    elif args.command == "triage":
+        from .triage import run_triage
+
+        exit_code = run_triage(
+            issue=args.issue,
+            repo=args.repo,
+            specs=args.specs,
+            apply=args.apply,
+            create_spec=args.create_spec,
+            dry_run=args.dry_run,
+            json_output=args.json_output,
+            confidence_threshold=args.confidence_threshold,
+        )
+        if exit_code:
+            sys.exit(exit_code)
     elif args.command == "doctor":
         from .doctor_cmd import run_doctor
 

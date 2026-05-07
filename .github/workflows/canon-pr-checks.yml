@@ -1,0 +1,13 @@
+name: Canon PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  canon:
+    uses: canonhq/canon/.github/workflows/reusable/pr-checks.yml@v1
+    with:
+      fail-on-lint: error
+      fail-on-verify: never
+      coverage-delta: true

@@ -1,0 +1,8 @@
+{
+  "number": 103,
+  "title": "How to configure Canon for a monorepo with multiple spec directories?",
+  "body": "We have a monorepo with this structure:\n\n```\napps/\n  frontend/docs/specs/\n  backend/docs/specs/\npackages/\n  shared/docs/specs/\n```\n\nIs there a way to configure Canon to look at all three directories? I tried setting `specs.doc_paths` in CANON.yaml but it only seems to accept one pattern.\n\nThanks!",
+  "user": {"login": "question-asker"},
+  "labels": [],
+  "state": "open"
+}

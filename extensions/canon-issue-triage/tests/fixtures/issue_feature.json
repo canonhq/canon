@@ -1,0 +1,8 @@
+{
+  "number": 101,
+  "title": "Add support for GitLab CI integration",
+  "body": "It would be great if Canon could work with GitLab CI pipelines in addition to GitHub Actions. We use GitLab at our company and would love to use Canon's spec-driven workflows.\n\nSpecifically:\n- A `.gitlab-ci.yml` template that runs spec-lint and verify\n- Support for GitLab merge request comments (coverage delta)\n- Integration with GitLab issues for ticket sync\n\nWe have about 50 specs and 10 active developers.",
+  "user": {"login": "gitlab-user"},
+  "labels": [],
+  "state": "open"
+}
