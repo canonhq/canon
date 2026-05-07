@@ -1,6 +1,6 @@
 [project]
 name = "canonhq"
-version = "1.63.0"
+version = "1.64.0"
 description = "Canon — spec-driven development platform"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -138,6 +138,14 @@ strict = true
 version_toml = ["pyproject.toml:project.version"]
 commit_parser = "conventional"
 upload_to_vcs_release = false
+# Regenerate uv.lock alongside the version bump so the release commit
+# is self-consistent. Without this, uv.lock keeps the stale canonhq
+# version after each release and every open PR's CI fails on the
+# `git diff --exit-code uv.lock` lockfile check after merging main.
+# `uv lock` defaults to honoring existing pins (no -U / --upgrade), so
+# only the canonhq editable entry's version line moves; transitives
+# stay pinned where they were.
+build_command = "uv lock"
 
 [tool.semantic_release.branches.main]
 match = "main"

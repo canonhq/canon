@@ -7,6 +7,12 @@ ticket_project: null
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 tags: []
+# Audience: which corpus this spec belongs to.
+#   internal (default) — SaaS team's working artifact; not mirrored to canonhq/canon
+#   oss               — public OSS-facing spec (extension API, self-hosting, plugin contract, etc.)
+#   both              — relevant to both audiences; mirrored to public repo
+# The export-oss.sh sync respects this field; missing or empty = internal.
+audience: internal
 ---
 
 # Feature Title
