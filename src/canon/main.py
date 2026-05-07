@@ -94,6 +94,21 @@ logger = logging.getLogger(__name__)
 
 settings = Settings()
 
+# Configure root logger so canon's own logger.info() messages reach stdout.
+# Without this, Python's default WARNING root level silently drops every
+# startup diagnostic ("DB pool initialised", "Slack bot mounted at...",
+# "Slack bot not configured — /slack/events will return 503") — which is
+# exactly how a config-drift bug stayed invisible in production for weeks
+# (see PR #701). The LOG_LEVEL env var is wired into Settings already; this
+# is the missing line that actually applies it.
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+# Tame noisy 3rd-party libraries that default to DEBUG/INFO themselves.
+for _noisy in ("httpx", "httpcore", "asyncpg", "urllib3", "slack_bolt"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
 _client: GitHubClient | None = None
 
 
@@ -157,6 +172,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         )
         if app.state.slack_alerter.enabled:
             logger.info("Slack alerts enabled (channel configured)")
+        elif settings.environment == "production":
+            # Symmetric counterpart to the success log above. SRE alerts going
+            # silently offline in production is the worst-case observability
+            # failure (no way to alert that alerts are broken), so warn loudly
+            # and let it show up in any log search.
+            logger.warning(
+                "SlackAlerter disabled — SLACK_ALERTS_WEBHOOK_URL is empty in "
+                "production. SRE alerting is offline."
+            )
 
     # OTel logs to PostHog (opt-in)
     if settings.posthog_logs_enabled:
@@ -527,7 +551,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     else:
         app.state.slack_identity_store = None
         app.state.slack_spec_loader = None
-        logger.info("Slack bot not configured — /slack/events will return 503")
+        msg = (
+            "Slack bot not configured — SLACK_BOT_TOKEN or SLACK_SIGNING_SECRET "
+            "is empty; /slack/events would return 503 and notification dispatcher "
+            "would silently no-op"
+        )
+        if settings.environment == "production":
+            # In production a missing slack token is a config-drift bug
+            # (Doppler sync failure, Helm chart misconfig, expired token,
+            # missing envFrom mount — see PR #701). Fail fast so the pod
+            # CrashLoopBackoff surfaces the problem to operators rather than
+            # silently 503-ing every Slack request indefinitely. Self-hosted
+            # / FOSS / dev environments keep the soft fall-through.
+            raise RuntimeError(msg + " (refusing to start in production)")
+        logger.warning(msg)
+        try:
+            analytics.track(
+                "slack_bot_disabled_at_startup",
+                properties={
+                    "has_bot_token": bool(settings.slack_bot_token),
+                    "has_signing_secret": bool(settings.slack_signing_secret),
+                    "environment": settings.environment,
+                },
+            )
+        except Exception:
+            logger.debug("Failed to track slack_bot_disabled_at_startup", exc_info=True)
 
     if mcp_server is not None:
         async with mcp_server.session_manager.run():
