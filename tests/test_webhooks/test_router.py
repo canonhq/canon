@@ -365,6 +365,87 @@ class TestFailClosed:
         assert resp.status_code == 503
         assert "not configured" in resp.text
 
+    def test_jira_503_logs_warning_and_emits_telemetry(self, caplog):
+        """Regression for the slack/PR#701 silent-failure pattern: a missing
+        webhook secret must produce a visible signal — both a logger.warning
+        for human eyes and a PostHog event for dashboards. Without these the
+        webhook provider retries-then-disables silently."""
+        import logging
+
+        test_app = self._make_app_without_secrets()
+        with (
+            caplog.at_level(logging.WARNING, logger="canon.webhooks.router"),
+            patch("canon.webhooks.router.analytics.track") as mock_track,
+            TestClient(test_app) as tc,
+        ):
+            payload = json.dumps({"webhookEvent": "jira:issue_updated"}).encode()
+            resp = tc.post("/webhooks/jira", content=payload)
+
+        assert resp.status_code == 503
+        assert any("jira webhook returned 503" in r.message.lower() for r in caplog.records), (
+            "Missing logger.warning — operators have no signal that the webhook is misconfigured"
+        )
+        track_calls = [
+            c for c in mock_track.call_args_list if c.args[0] == "webhook_misconfigured_503"
+        ]
+        assert len(track_calls) == 1, "Missing PostHog webhook_misconfigured_503 event"
+        assert track_calls[0].kwargs["properties"]["source"] == "jira"
+
+    def test_linear_503_logs_warning_and_emits_telemetry(self, caplog):
+        import logging
+
+        test_app = self._make_app_without_secrets()
+        with (
+            caplog.at_level(logging.WARNING, logger="canon.webhooks.router"),
+            patch("canon.webhooks.router.analytics.track") as mock_track,
+            TestClient(test_app) as tc,
+        ):
+            payload = json.dumps({"action": "update", "type": "Issue"}).encode()
+            resp = tc.post("/webhooks/linear", content=payload)
+
+        assert resp.status_code == 503
+        assert any("linear webhook returned 503" in r.message.lower() for r in caplog.records)
+        track_calls = [
+            c for c in mock_track.call_args_list if c.args[0] == "webhook_misconfigured_503"
+        ]
+        assert len(track_calls) == 1
+        assert track_calls[0].kwargs["properties"]["source"] == "linear"
+
+    def test_asana_503_logs_warning_and_emits_telemetry(self, caplog):
+        import logging
+
+        test_app = self._make_app_without_secrets()
+        with (
+            caplog.at_level(logging.WARNING, logger="canon.webhooks.router"),
+            patch("canon.webhooks.router.analytics.track") as mock_track,
+            TestClient(test_app) as tc,
+        ):
+            resp = tc.post("/webhooks/asana", content=b"{}")
+
+        assert resp.status_code == 503
+        assert any("asana webhook returned 503" in r.message.lower() for r in caplog.records)
+        track_calls = [
+            c for c in mock_track.call_args_list if c.args[0] == "webhook_misconfigured_503"
+        ]
+        assert len(track_calls) == 1
+        assert track_calls[0].kwargs["properties"]["source"] == "asana"
+
+    def test_telemetry_failure_does_not_crash_503_response(self):
+        """analytics.track failures must not propagate — webhook must still 503."""
+        test_app = self._make_app_without_secrets()
+        with (
+            patch(
+                "canon.webhooks.router.analytics.track",
+                side_effect=RuntimeError("posthog down"),
+            ),
+            TestClient(test_app) as tc,
+        ):
+            resp = tc.post(
+                "/webhooks/jira",
+                content=json.dumps({"webhookEvent": "jira:issue_updated"}).encode(),
+            )
+        assert resp.status_code == 503
+
     def test_asana_no_secret_blocks_handshake(self):
         """Unauthenticated callers cannot complete the Asana handshake."""
         test_app = self._make_app_without_secrets()

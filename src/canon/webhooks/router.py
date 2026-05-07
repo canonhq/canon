@@ -28,6 +28,35 @@ from canon.webhooks.verify import (
 
 logger = logging.getLogger(__name__)
 
+
+def _record_misconfigured_503(source: str, request: Request) -> None:
+    """Log + emit telemetry for a webhook 503 caused by missing secret config.
+
+    Without this, every misconfigured-webhook request returns a bare 503 with
+    no signal — the same anti-pattern that hid PR #701 for 41 days. The
+    webhook providers (Jira/Linear/Asana) retry-then-disable silently, and
+    operators have no way to detect the misconfig until ticket sync stops
+    working entirely. Always logs (rate-limit via PostHog aggregation, not
+    here — webhook providers backoff exponentially so volume stays low) and
+    always tracks so the dashboard signal is per-request.
+    """
+    logger.warning(
+        "%s webhook returned 503 — secret is not configured. "
+        "Verify the matching K8s Secret is mounted and Doppler is syncing.",
+        source,
+    )
+    try:
+        analytics.track(
+            "webhook_misconfigured_503",
+            properties={
+                "source": source,
+                "request_ip": request.client.host if request.client else None,
+            },
+        )
+    except Exception:
+        logger.debug("Failed to track webhook_misconfigured_503", exc_info=True)
+
+
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 # Defense-in-depth body size limit. The primary limit should be enforced by
@@ -93,6 +122,7 @@ async def jira_webhook(request: Request) -> Response:
 
     # Auth is fail-closed: reject requests when secret is not configured.
     if not settings.jira_webhook_secret:
+        _record_misconfigured_503("jira", request)
         return Response(content="Jira webhook secret not configured", status_code=503)
 
     body = await request.body()
@@ -216,6 +246,7 @@ async def linear_webhook(request: Request) -> Response:
 
     # Auth is fail-closed: reject requests when secret is not configured.
     if not settings.linear_webhook_secret:
+        _record_misconfigured_503("linear", request)
         return Response(content="Linear webhook secret not configured", status_code=503)
 
     body = await request.body()
@@ -274,6 +305,7 @@ async def asana_webhook(request: Request) -> Response:
     # Uses 503 (not 501) to distinguish from the "not yet implemented" 501
     # returned at the bottom of this handler.
     if not settings.asana_webhook_secret:
+        _record_misconfigured_503("asana", request)
         return Response(content="Asana webhook secret not configured", status_code=503)
 
     # Asana webhook registration handshake: Asana sends X-Hook-Secret and
