@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import time
 from typing import Any
 
 from .blocks import (
@@ -17,6 +19,7 @@ from .blocks import (
 )
 from .dashboard import build_dashboard_blocks
 from .spec_loader import SpecLoader
+from .telemetry import EVENT_COMMAND_INVOKED, EVENT_IDENTITY_LINKED, SuperProperties, track_slack
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +169,14 @@ async def handle_canon_command(ack: Any, command: dict, respond: Any, client: An
     text = command.get("text", "")
     subcommand, args = parse_command(text)
 
+    super_props = SuperProperties(
+        slack_workspace_id=command.get("team_id", ""),
+        org_id="unknown",
+        extension_version="0.1.0",
+    )
+    start = time.monotonic()
+    success = False
+
     try:
         if subcommand == "help":
             await help_handler(ack, respond)
@@ -195,6 +206,7 @@ async def handle_canon_command(ack: Any, command: dict, respond: Any, client: An
             await unlink_handler(ack, respond, command)
         else:
             await unknown_handler(ack, respond, subcommand)
+        success = True
     except Exception:
         logger.exception("Unhandled error in /canon %s", subcommand)
         try:
@@ -209,6 +221,18 @@ async def handle_canon_command(ack: Any, command: dict, respond: Any, client: An
             )
         except Exception:
             logger.error("Failed to send error response to Slack", exc_info=True)
+    finally:
+        track_slack(
+            EVENT_COMMAND_INVOKED,
+            super_props,
+            {
+                "subcommand": subcommand,
+                "channel_type": command.get("channel_name", ""),
+                "success": success,
+                "duration_ms": int((time.monotonic() - start) * 1000),
+            },
+            distinct_id=command.get("user_id", "unknown"),
+        )
 
 
 async def status_handler(ack: Any, respond: Any, client: Any, args: str, command: dict) -> None:
@@ -714,13 +738,25 @@ async def unmute_handler(ack: Any, respond: Any, args: str, command: dict) -> No
 
 
 def _get_identity_store():
-    """Get the IdentityStore from app state."""
+    """Get the IdentityStore from app state.
+
+    Returns the DB-backed `slack_identity_store` (set up in main.py *after*
+    db_pool is initialized) when available, falling back to the legacy
+    `identity_store` for compatibility. The legacy alias is constructed
+    before db_pool exists, so its writes go to an in-memory dict and are
+    lost on restart — never use it for persistent linking.
+    """
     try:
         from canon.main import app
 
-        return getattr(app.state, "identity_store", None)
+        return getattr(app.state, "slack_identity_store", None) or getattr(
+            app.state, "identity_store", None
+        )
     except Exception:
         return None
+
+
+_GITHUB_USERNAME_RE = re.compile(r"^[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}$")
 
 
 async def link_handler(ack: Any, respond: Any, args: str, command: dict) -> None:
@@ -731,6 +767,22 @@ async def link_handler(ack: Any, respond: Any, args: str, command: dict) -> None
     if not github_login:
         await respond(
             blocks=[section_block("Usage: `/canon link <github-username>`")],
+            response_type="ephemeral",
+        )
+        return
+
+    # Validate GitHub username format BEFORE the API call. Without this, a
+    # value like "../zen" is interpolated into the URL and httpx normalises
+    # it to https://api.github.com/zen (the GitHub Zen endpoint, which
+    # returns 200), so the bogus value would be accepted and stored.
+    if not _GITHUB_USERNAME_RE.fullmatch(github_login):
+        await respond(
+            blocks=[
+                section_block(
+                    f":x: `{github_login}` isn't a valid GitHub username "
+                    "(letters, digits, single hyphens, max 39 chars)."
+                )
+            ],
             response_type="ephemeral",
         )
         return
@@ -773,6 +825,17 @@ async def link_handler(ack: Any, respond: Any, args: str, command: dict) -> None
 
     user_id = command.get("user_id", "")
     await identity_store.link(user_id, github_login)
+
+    track_slack(
+        EVENT_IDENTITY_LINKED,
+        SuperProperties(
+            slack_workspace_id=command.get("team_id", ""),
+            org_id="unknown",
+            extension_version="0.1.0",
+        ),
+        {"method": "link_command"},
+        distinct_id=user_id,
+    )
 
     await respond(
         blocks=[

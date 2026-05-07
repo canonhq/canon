@@ -14,6 +14,7 @@ from .blocks import (
     section_block,
     status_emoji,
 )
+from .telemetry import EVENT_NOTIFICATION_DISPATCHED, SuperProperties, track_slack
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,7 @@ class NotificationDispatcher:
         quiet_end: dt_time | None = None,
         channel_overrides: dict[str, str] | None = None,
         activity_store: Any | None = None,
+        workspace_id: str = "",
     ) -> None:
         self._client = client
         self._default_channel = default_channel
@@ -72,6 +74,7 @@ class NotificationDispatcher:
         self._quiet_end = quiet_end
         self._channel_overrides = channel_overrides or {}
         self._activity_store = activity_store
+        self._workspace_id = workspace_id
 
     def _is_quiet(self) -> bool:
         now = datetime.now(UTC).time()
@@ -101,9 +104,11 @@ class NotificationDispatcher:
         if notification_type not in _CRITICAL_TYPES and self._is_quiet():
             return
 
+        _outcome = "sent"
         try:
             await self._client.chat_postMessage(channel=target, blocks=blocks, text=text)
         except Exception:
+            _outcome = "failed"
             logger.error(
                 "Failed to post %s notification to %s",
                 notification_type,
@@ -112,6 +117,17 @@ class NotificationDispatcher:
             )
             if notification_type in _CRITICAL_TYPES:
                 raise
+        finally:
+            track_slack(
+                EVENT_NOTIFICATION_DISPATCHED,
+                SuperProperties(
+                    slack_workspace_id=self._workspace_id,
+                    org_id="unknown",
+                    extension_version="0.1.0",
+                ),
+                {"event_type": notification_type, "outcome": _outcome},
+                distinct_id="system",
+            )
 
     async def send_spec_status_change(
         self,

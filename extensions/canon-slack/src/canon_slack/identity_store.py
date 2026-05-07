@@ -91,3 +91,17 @@ class IdentityStore:
     async def get_github_login_for_slack(self, slack_user_id: str) -> str | None:
         """Alias for get_github_login (matches registry interface)."""
         return await self.get_github_login(slack_user_id)
+
+    async def get_team(self, user_id: str) -> str | None:
+        """Return the team name for a Slack user, or None if unknown.
+
+        Looks up the linked GitHub login in the org's team membership data.
+        Returns None if the user is unlinked or team data isn't available.
+
+        NOTE: If no ``org_members`` table exists in the schema, this method
+        returns None for every user.  That's intentional — personal context
+        works without a team field; the team is just an enrichment.
+        """
+        # No org_members table with a team column exists in the current schema.
+        # Return None safely; populate if/when team data is available.
+        return None

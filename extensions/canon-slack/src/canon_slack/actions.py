@@ -8,6 +8,7 @@ import re
 from typing import Any
 
 from .permissions import Permission, resolve_permission
+from .telemetry import EVENT_ACTION_CLICKED, SuperProperties, track_slack
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,12 @@ async def handle_approve(ack: Any, body: dict, client: Any) -> None:
     await ack()
     user_id = body["user"]["id"]
     spec_title = body["actions"][0]["value"]
+    action_id = body["actions"][0].get("action_id", "approve_spec")
+    _super = SuperProperties(
+        slack_workspace_id=body.get("team", {}).get("id", ""),
+        org_id="unknown",
+        extension_version="0.1.0",
+    )
 
     # Sanitize spec_title to prevent path traversal
     if ".." in spec_title or "/" in spec_title:
@@ -48,6 +55,12 @@ async def handle_approve(ack: Any, body: dict, client: Any) -> None:
             channel=body.get("channel", {}).get("id", ""),
             user=user_id,
             text=":x: Invalid spec name.",
+        )
+        track_slack(
+            EVENT_ACTION_CLICKED,
+            _super,
+            {"action_id": action_id, "permission_denied": False, "success": False},
+            distinct_id=user_id,
         )
         return
 
@@ -60,12 +73,19 @@ async def handle_approve(ack: Any, body: dict, client: Any) -> None:
             user=user_id,
             text=":lock: You don't have permission to approve specs (requires specs:write).",
         )
+        track_slack(
+            EVENT_ACTION_CLICKED,
+            _super,
+            {"action_id": action_id, "permission_denied": True, "success": False},
+            distinct_id=user_id,
+        )
         return
 
     channel = body.get("channel", {}).get("id", "")
     ts = body.get("message", {}).get("ts", "")
 
     # Update review_status frontmatter in GitHub
+    _action_success = False
     try:
         owner, repo = _get_repo_settings()
         gh = _get_github_client()
@@ -88,12 +108,20 @@ async def handle_approve(ack: Any, body: dict, client: Any) -> None:
             thread_ts=ts,
             text=f":white_check_mark: *{spec_title}* approved by <@{user_id}> — `review_status` updated in GitHub.",
         )
+        _action_success = True
     except Exception:
         logger.error("Failed to update review_status for %s", spec_title, exc_info=True)
         await client.chat_postMessage(
             channel=channel,
             thread_ts=ts,
             text=f":warning: <@{user_id}> approved *{spec_title}* but the GitHub update failed — review_status was not changed. Check logs.",
+        )
+    finally:
+        track_slack(
+            EVENT_ACTION_CLICKED,
+            _super,
+            {"action_id": action_id, "permission_denied": False, "success": _action_success},
+            distinct_id=user_id,
         )
 
 
@@ -102,6 +130,12 @@ async def handle_request_changes_open(ack: Any, body: dict, client: Any) -> None
     await ack()
     user_id = body["user"]["id"]
     spec_title = body["actions"][0]["value"]
+    action_id = body["actions"][0].get("action_id", "request_changes")
+    _super = SuperProperties(
+        slack_workspace_id=body.get("team", {}).get("id", ""),
+        org_id="unknown",
+        extension_version="0.1.0",
+    )
 
     registry = _get_registry()
     perm = await resolve_permission(user_id, registry)
@@ -111,6 +145,12 @@ async def handle_request_changes_open(ack: Any, body: dict, client: Any) -> None
             channel=body.get("channel", {}).get("id", ""),
             user=user_id,
             text=":lock: You don't have permission to request changes (requires specs:write).",
+        )
+        track_slack(
+            EVENT_ACTION_CLICKED,
+            _super,
+            {"action_id": action_id, "permission_denied": True, "success": False},
+            distinct_id=user_id,
         )
         return
 
@@ -150,6 +190,12 @@ async def handle_request_changes_open(ack: Any, body: dict, client: Any) -> None
                 }
             ),
         },
+    )
+    track_slack(
+        EVENT_ACTION_CLICKED,
+        _super,
+        {"action_id": action_id, "permission_denied": False, "success": True},
+        distinct_id=user_id,
     )
 
 
@@ -307,6 +353,12 @@ async def handle_sync_tickets(ack: Any, body: dict, client: Any) -> None:
     await ack()
     user_id = body["user"]["id"]
     spec_title = body["actions"][0]["value"]
+    action_id = body["actions"][0].get("action_id", "sync_tickets")
+    _super = SuperProperties(
+        slack_workspace_id=body.get("team", {}).get("id", ""),
+        org_id="unknown",
+        extension_version="0.1.0",
+    )
 
     registry = _get_registry()
     perm = await resolve_permission(user_id, registry)
@@ -317,6 +369,12 @@ async def handle_sync_tickets(ack: Any, body: dict, client: Any) -> None:
             user=user_id,
             text=":lock: You don't have permission to trigger sync (requires specs:admin).",
         )
+        track_slack(
+            EVENT_ACTION_CLICKED,
+            _super,
+            {"action_id": action_id, "permission_denied": True, "success": False},
+            distinct_id=user_id,
+        )
         return
 
     # Sanitize spec_title to prevent path traversal
@@ -325,6 +383,12 @@ async def handle_sync_tickets(ack: Any, body: dict, client: Any) -> None:
             channel=body.get("channel", {}).get("id", ""),
             user=user_id,
             text=":x: Invalid spec name.",
+        )
+        track_slack(
+            EVENT_ACTION_CLICKED,
+            _super,
+            {"action_id": action_id, "permission_denied": False, "success": False},
+            distinct_id=user_id,
         )
         return
 
@@ -338,6 +402,7 @@ async def handle_sync_tickets(ack: Any, body: dict, client: Any) -> None:
         text=f":arrows_counterclockwise: Syncing tickets for *{spec_title}*\u2026",
     )
 
+    _sync_success = False
     try:
         owner, repo = _get_repo_settings()
         gh = _get_github_client()
@@ -358,6 +423,12 @@ async def handle_sync_tickets(ack: Any, body: dict, client: Any) -> None:
                 thread_ts=ts,
                 text=f":warning: No ticket adapter configured \u2014 cannot sync *{spec_title}*.",
             )
+            track_slack(
+                EVENT_ACTION_CLICKED,
+                _super,
+                {"action_id": action_id, "permission_denied": False, "success": False},
+                distinct_id=user_id,
+            )
             return
 
         spec_url = f"https://github.com/{owner}/{repo}/blob/main/{spec_path}"
@@ -377,12 +448,20 @@ async def handle_sync_tickets(ack: Any, body: dict, client: Any) -> None:
                 f"{created} created, {updated} updated."
             ),
         )
+        _sync_success = True
     except Exception:
         logger.error("Ticket sync failed for %s", spec_title, exc_info=True)
         await client.chat_postMessage(
             channel=channel,
             thread_ts=ts,
             text=f":x: Ticket sync failed for *{spec_title}* \u2014 check logs for details.",
+        )
+    finally:
+        track_slack(
+            EVENT_ACTION_CLICKED,
+            _super,
+            {"action_id": action_id, "permission_denied": False, "success": _sync_success},
+            distinct_id=user_id,
         )
 
 

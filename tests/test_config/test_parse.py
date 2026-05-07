@@ -746,3 +746,34 @@ slack:
         assert len(errors) == 1
         assert "team_digests.platform" in errors[0].message
         assert "mapping" in errors[0].message
+
+
+def test_slack_work_context_default_disabled():
+    """work_context defaults to disabled when slack section omits it."""
+    raw = """
+slack:
+  default_channel: "#specs"
+"""
+    result = parse_canon_yaml(raw)
+    assert result.config.slack.work_context.enabled is False
+
+
+def test_slack_work_context_explicit_enabled():
+    raw = """
+slack:
+  work_context:
+    enabled: true
+"""
+    result = parse_canon_yaml(raw)
+    assert result.config.slack.work_context.enabled is True
+
+
+def test_slack_work_context_invalid_type_warns():
+    raw = """
+slack:
+  work_context:
+    enabled: "yes"
+"""
+    result = parse_canon_yaml(raw)
+    # Coerced/warned; non-bool should default to False
+    assert result.config.slack.work_context.enabled is False

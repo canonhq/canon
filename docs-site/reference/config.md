@@ -421,6 +421,31 @@ Configure a periodic digest of spec activity.
 | `schedule` | `string` | `"monday 09:00"` | Cron-style schedule: `"<day> HH:MM"` |
 | `team_digests` | `map<string, {channel, schedule}>` | `{}` | Per-team digest overrides. Each entry requires a `channel` and optionally a `schedule`. |
 
+#### `slack.work_context`
+
+> **Status (v1):** Infrastructure is built but this section is disabled by default. Enable it only after wiring `canon_config`, `slack_identity_store`, and `slack_spec_loader` into `app.state` (see deployment notes).
+
+Controls the smarter-bot personal DM context feature. When enabled, DMs to the Canon bot include user-specific context (owned specs, team coverage, follow/mute state) so the bot can answer "my specs", "what should I work on", and similar personal queries without the user naming themselves.
+
+```yaml
+slack:
+  work_context:
+    enabled: false   # set to true to activate personal DM context
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | `boolean` | `false` | Enable personal DM context injection for @canon mentions and DMs. Requires `slack_identity_store` wired into `app.state`. |
+
+When `enabled: false` (default), the bot answers DMs with the same channel-style spec context — no personal data is injected and behavior is identical to earlier releases.
+
+When `enabled: true`, the bot additionally:
+- Resolves the Slack user ID to a GitHub login (via `/canon link`)
+- Injects owned specs, team coverage, and follow/mute state into the Claude system prompt for DM queries
+- Activates intent shortcuts: "my specs", "what should I work on", "what's blocked on me", "my team"
+
+Source loaders active in v1: `canon_specs`, `slack_threads`. Loaders `github_prs`, `github_commits`, `tickets`, and `canon_pr_analysis` ship as graceful stubs and will become active in a follow-up release once the underlying APIs are extended.
+
 ### `extensions`
 
 The `extensions` key is reserved for configuring Canon plugin extensions. Extension-specific options are defined by each extension and documented separately.

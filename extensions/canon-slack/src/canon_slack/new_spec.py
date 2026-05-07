@@ -7,6 +7,8 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
+from .telemetry import EVENT_SPEC_CREATED, SuperProperties, track_slack
+
 logger = logging.getLogger(__name__)
 
 _SPEC_TEMPLATE = """\
@@ -136,6 +138,16 @@ async def handle_new_spec_submit(ack: Any, view: dict, client: Any, body: dict) 
                 f":sparkles: Created spec *{title or slug}* ({spec_type})\n"
                 f"<{github_url}|View on GitHub>"
             ),
+        )
+        track_slack(
+            EVENT_SPEC_CREATED,
+            SuperProperties(
+                slack_workspace_id=body.get("team", {}).get("id", ""),
+                org_id="unknown",
+                extension_version="0.1.0",
+            ),
+            {"team": team, "type": spec_type},
+            distinct_id=user_id,
         )
     except Exception:
         logger.error("Failed to create spec %s via Slack", slug, exc_info=True)

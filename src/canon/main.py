@@ -214,6 +214,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     app.state.github_client = _get_client()
 
+    # CANON.yaml config — loaded once at startup for workspace-level features
+    # (e.g. slack.work_context.enabled flag read by the smarter-bot mentions handler).
+    # Slack handlers run at workspace level, not per-repo, so we load the local
+    # repo's CANON.yaml as the baseline.  If none exists, CanonConfig() gives
+    # safe defaults (all feature flags off).
+    from .config.parse import CanonConfig as _CanonConfig
+    from .config.parse import parse_canon_yaml as _parse_canon_yaml
+
+    _canon_yaml_path = Path(__file__).resolve().parents[2] / "CANON.yaml"
+    if _canon_yaml_path.is_file():
+        try:
+            app.state.canon_config = _parse_canon_yaml(_canon_yaml_path.read_text()).config
+            logger.info("CANON.yaml loaded from %s", _canon_yaml_path)
+        except Exception:
+            logger.warning("Failed to parse CANON.yaml — using defaults", exc_info=True)
+            app.state.canon_config = _CanonConfig()
+    else:
+        app.state.canon_config = _CanonConfig()
+        logger.debug("No CANON.yaml found at %s — using default CanonConfig", _canon_yaml_path)
+
     # Log unconfigured webhook integrations (endpoints fail-closed with 503)
     for name in ("jira_webhook_secret", "linear_webhook_secret", "asana_webhook_secret"):
         if not getattr(settings, name):
@@ -442,7 +462,71 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
             )
             app.state.notification_dispatcher = dispatcher
             logger.info("Notification dispatcher initialised")
+
+        # slack_identity_store — per-workspace Slack→GitHub identity mapping.
+        # Re-instantiated here (after db_pool is available) so it persists across
+        # restarts.  The earlier app.state.identity_store is a legacy alias kept
+        # for backward-compat; slack_identity_store is what mentions.py reads.
+        from .slack import SLACK_AVAILABLE as _SLACK_AVAILABLE
+        from .slack import IdentityStore as _IdentityStore
+
+        if _SLACK_AVAILABLE and _IdentityStore is not None:
+            app.state.slack_identity_store = _IdentityStore(db_pool=app.state.db_pool)
+            logger.info("Slack identity store initialised (db=%s)", app.state.db_pool is not None)
+        else:
+            app.state.slack_identity_store = None
+
+        # slack_spec_loader — loads and caches spec data from the configured repo.
+        # Requires GITHUB_OWNER + GITHUB_REPO to be set.  If either is absent the
+        # loader is left as None and _get_spec_loader() in mentions.py no-ops safely.
+        #
+        # IMPORTANT: we obtain the loader via commands._get_spec_loader() (the factory
+        # that manages the module-level _loaders cache) rather than constructing a new
+        # SpecLoader directly.  This ensures app.state.slack_spec_loader is the *same*
+        # object stored in commands._loaders[(owner, repo)], so that a single call to
+        # invalidate_spec_cache() in the push handler invalidates both paths at once.
+        from .slack import SLACK_AVAILABLE as _SLACK_AVAIL2
+        from .slack import SpecLoader as _SpecLoader
+
+        if (
+            _SLACK_AVAIL2
+            and _SpecLoader is not None
+            and settings.github_owner
+            and settings.github_repo
+        ):
+            try:
+                from canon_slack.commands import _get_spec_loader as _commands_get_loader
+
+                app.state.slack_spec_loader = _commands_get_loader(
+                    app.state.github_client,
+                    settings.github_owner,
+                    settings.github_repo,
+                )
+            except Exception:
+                # Fallback: construct directly if the commands import fails (e.g. in
+                # FOSS builds that ship canon_slack but not the full extension path).
+                logger.warning(
+                    "Failed to obtain shared SpecLoader from commands._get_spec_loader "
+                    "— creating a standalone instance (cache invalidation may diverge)",
+                    exc_info=True,
+                )
+                app.state.slack_spec_loader = _SpecLoader(
+                    github_client=app.state.github_client,
+                    owner=settings.github_owner,
+                    repo=settings.github_repo,
+                )
+            logger.info(
+                "Slack spec loader initialised (repo=%s/%s)",
+                settings.github_owner,
+                settings.github_repo,
+            )
+        else:
+            app.state.slack_spec_loader = None
+            if _SLACK_AVAIL2 and _SpecLoader is not None:
+                logger.info("Slack spec loader not initialised — GITHUB_OWNER/GITHUB_REPO not set")
     else:
+        app.state.slack_identity_store = None
+        app.state.slack_spec_loader = None
         logger.info("Slack bot not configured — /slack/events will return 503")
 
     if mcp_server is not None:

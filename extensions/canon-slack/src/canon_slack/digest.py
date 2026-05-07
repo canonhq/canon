@@ -13,6 +13,7 @@ from .blocks import (
     section_block,
 )
 from .spec_loader import SpecInfo
+from .telemetry import EVENT_DIGEST_SENT, SuperProperties, track_slack
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,7 @@ async def dispatch_team_digests(
     specs: list[SpecInfo],
     coverage_by_team: dict[str, int] | None = None,
     previous_coverage: dict[str, int] | None = None,
+    workspace_id: str = "",
 ) -> list[str]:
     """Send digest messages to each configured team's Slack channel.
 
@@ -114,6 +116,7 @@ async def dispatch_team_digests(
         prev_pct = previous_coverage.get(team_name, coverage_pct)
         delta = coverage_pct - prev_pct
 
+        team_specs = [s for s in specs if s.team == team_name]
         blocks = build_digest_blocks(team_name, specs, coverage_pct, delta)
 
         try:
@@ -124,6 +127,16 @@ async def dispatch_team_digests(
             )
             posted.append(team_name)
             logger.info("Posted digest for team %s to %s", team_name, config.channel)
+            track_slack(
+                EVENT_DIGEST_SENT,
+                SuperProperties(
+                    slack_workspace_id=workspace_id,
+                    org_id="unknown",
+                    extension_version="0.1.0",
+                ),
+                {"team": team_name, "specs_in_digest": len(team_specs)},
+                distinct_id="system",
+            )
         except Exception:
             logger.error(
                 "Failed to post digest for team %s to %s",

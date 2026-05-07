@@ -56,6 +56,7 @@ KNOWN_SLACK_KEYS = {
     "dashboard_refresh",
     "team_digests",
     "allow_shared_channels",
+    "work_context",
 }
 KNOWN_SLACK_NOTIFICATION_KEYS = {
     "spec_status_change",
@@ -161,6 +162,10 @@ class SlackTeamDigestConfig(BaseModel):
 DashboardRefresh = Literal["daily", "weekly", False]
 
 
+class WorkContextConfig(BaseModel):
+    enabled: bool = False
+
+
 class SlackConfig(BaseModel):
     default_channel: str = "#canon-specs"
     sre_channel: str = ""
@@ -170,6 +175,7 @@ class SlackConfig(BaseModel):
     dashboard_refresh: DashboardRefresh = False
     team_digests: dict[str, SlackTeamDigestConfig] = {}
     allow_shared_channels: bool = False
+    work_context: WorkContextConfig = WorkContextConfig()
 
 
 class IdeConfig(BaseModel):
@@ -1045,6 +1051,13 @@ def _merge_with_defaults(
                         else "monday 09:00",
                     )
 
+        wc_data = slack_data.get("work_context")
+        work_context = WorkContextConfig()
+        if isinstance(wc_data, dict):
+            wc_enabled = wc_data.get("enabled", False)
+            if isinstance(wc_enabled, bool):
+                work_context = WorkContextConfig(enabled=wc_enabled)
+
         slack = SlackConfig(
             default_channel=slack_data["default_channel"]
             if isinstance(slack_data.get("default_channel"), str)
@@ -1058,6 +1071,7 @@ def _merge_with_defaults(
             dashboard_refresh=dashboard_refresh,
             team_digests=team_digests,
             allow_shared_channels=bool(slack_data.get("allow_shared_channels", False)),
+            work_context=work_context,
         )
 
     return CanonConfig(

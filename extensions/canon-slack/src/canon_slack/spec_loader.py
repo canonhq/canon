@@ -148,6 +148,10 @@ class SpecLoader:
         slugs = [s.slug for s in self._cache]
         return get_close_matches(query, slugs, n=n, cutoff=0.4)
 
+    def specs_owned_by(self, github_login: str) -> list[SpecInfo]:
+        """Return specs whose frontmatter owner matches the given GitHub login."""
+        return [s for s in self._cache if s.owner == github_login]
+
     def coverage_stats(self, team: str = "") -> dict:
         """Compute coverage statistics, optionally filtered by team."""
         specs = self._cache

@@ -201,6 +201,15 @@ secrets:
     canonBaseUrl: ""
     existingSecret: ""
 
+## @section Slack feature flags (optional — non-secret Slack config)
+slack:
+  # Override slack.work_context.enabled from CANON.yaml. Empty string ("")
+  # means "unset" — fall through to whatever CANON.yaml says (default: false).
+  # Accepts: "true" | "false" | "" (or YAML booleans true/false; the chart
+  # coerces to string before injection so YAML `false` correctly disables
+  # the feature rather than being silently treated as "unset").
+  workContextEnabledOverride: ""
+
 ## @section Application configuration
 ## @param config.port Server port
 ## @param config.logLevel Log level (debug, info, warning, error)

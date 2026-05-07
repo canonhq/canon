@@ -28,3 +28,13 @@ data:
   SRE_WEEKLY_DIGEST_ENABLED: {{ .Values.config.sreWeeklyDigestEnabled | quote }}
   DEPLOYMENT_MODE: {{ .Values.config.deploymentMode | quote }}
   ADMIN_AUDIT_RETENTION_DAYS: {{ .Values.config.adminAuditRetentionDays | quote }}
+  {{- /*
+    Use ne (toString …) "" instead of a bare truthiness check: Go templates
+    treat the YAML boolean `false` (unquoted) as falsy, which would silently
+    skip injection when an operator wants to explicitly disable the override.
+    With toString-coerce, only the empty-string sentinel "" means "unset";
+    "false" / "true" / any other value gets through to the env var.
+  */}}
+  {{- if ne (toString .Values.slack.workContextEnabledOverride) "" }}
+  SLACK_WORK_CONTEXT_ENABLED_OVERRIDE: {{ .Values.slack.workContextEnabledOverride | toString | quote }}
+  {{- end }}

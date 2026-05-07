@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from .telemetry import EVENT_HOME_TAB_OPENED, SuperProperties, track_slack
+
 logger = logging.getLogger(__name__)
 
 
@@ -179,6 +181,7 @@ def _build_dashboard_blocks(
 async def handle_app_home_opened(event: dict, client: Any) -> None:
     """Handle app_home_opened event — publish personalized Home Tab."""
     user_id = event["user"]
+    workspace_id = event.get("team", "")
 
     identity_store = _get_identity_store()
     github_username = None
@@ -191,9 +194,20 @@ async def handle_app_home_opened(event: dict, client: Any) -> None:
             user_id=user_id,
             view={"type": "home", "blocks": blocks},
         )
+        track_slack(
+            EVENT_HOME_TAB_OPENED,
+            SuperProperties(
+                slack_workspace_id=workspace_id,
+                org_id="unknown",
+                extension_version="0.1.0",
+            ),
+            {"is_linked": False, "owned_specs_count": 0},
+            distinct_id=user_id,
+        )
         return
 
     # Load specs and build personalized dashboard
+    owned_specs_count = 0
     try:
         owner, repo = _get_repo_settings()
         gh = _get_github_client()
@@ -205,6 +219,7 @@ async def handle_app_home_opened(event: dict, client: Any) -> None:
 
         # Filter specs owned by this user
         user_specs = [s for s in specs if s.owner == github_username]
+        owned_specs_count = len(user_specs)
 
         # Determine team from user's specs
         teams = {s.team for s in user_specs if s.team}
@@ -240,4 +255,14 @@ async def handle_app_home_opened(event: dict, client: Any) -> None:
     await client.views_publish(
         user_id=user_id,
         view={"type": "home", "blocks": blocks},
+    )
+    track_slack(
+        EVENT_HOME_TAB_OPENED,
+        SuperProperties(
+            slack_workspace_id=workspace_id,
+            org_id="unknown",
+            extension_version="0.1.0",
+        ),
+        {"is_linked": True, "owned_specs_count": owned_specs_count},
+        distinct_id=user_id,
     )

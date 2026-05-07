@@ -265,4 +265,14 @@ class Settings(BaseSettings):
     # Admin audit log retention
     admin_audit_retention_days: int = Field(default=90, ge=1)
 
+    # Slack smarter-bot feature flag override
+    slack_work_context_enabled_override: bool | None = Field(
+        default=None,
+        description=(
+            "If set, overrides slack.work_context.enabled from CANON.yaml. "
+            "Lets operators flip the smarter-bot coordinator path on/off without "
+            "redeploying with a new CANON.yaml. Reads env SLACK_WORK_CONTEXT_ENABLED_OVERRIDE."
+        ),
+    )
+
     model_config = {"env_prefix": "", "case_sensitive": False}
