@@ -145,7 +145,7 @@ upload_to_vcs_release = false
 # `uv lock` defaults to honoring existing pins (no -U / --upgrade), so
 # only the canonhq editable entry's version line moves; transitives
 # stay pinned where they were.
-build_command = "uv lock"
+build_command = "pip install 'uv==0.9.28' && uv lock"
 
 [tool.semantic_release.branches.main]
 match = "main"
