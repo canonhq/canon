@@ -11,9 +11,10 @@ from ..config.parse import CanonConfig, parse_canon_yaml
 from ..github.client import GitHubClient
 from ..github.spec_utils import load_repo_specs
 from ..parser.classify import classify_doc_type
-from ..parser.models import SpecDocument, SpecSection
+from ..parser.models import SpecDocument, SpecSection, flatten_sections
 from .cache import TTLCache
 from .models import (
+    BrokenRef,
     CoverageApiResponse,
     CoverageSummary,
     CoverageTrendPoint,
@@ -39,6 +40,28 @@ _inflight: dict[str, asyncio.Task] = {}
 # Longer TTL for data that changes infrequently.
 _REPO_LIST_TTL = 900  # 15 min — repos rarely added/removed
 _ORG_OVERVIEW_TTL = 600  # 10 min — spec content changes occasionally
+
+_VALID_ERROR_KINDS: frozenset[str] = frozenset({"not_found", "forbidden", "unauthorized"})
+
+
+def _coerce_error_kind(raw: object) -> str:
+    """Coerce a raw DB error_kind into the BrokenRef.Literal set.
+
+    Defensively handles legacy or unexpected values (e.g. if the
+    classifier expands and we deploy the read path before the model
+    update lands) by falling back to 'not_found'. Prevents a single
+    bad row from 500-ing the whole list endpoint.
+    """
+    if isinstance(raw, str) and raw in _VALID_ERROR_KINDS:
+        return raw
+    return "not_found"
+
+
+def _section_heading(section: SpecSection) -> str:
+    """Build a display heading for a section, matching the search UI format."""
+    if section.section_number:
+        return f"{section.section_number}. {section.title}"
+    return section.title
 
 
 def _summarize_spec(doc: SpecDocument) -> SpecSummary:
@@ -250,6 +273,8 @@ async def get_org_overview(
     *,
     search_index: object | None = None,
     content_cache_store: object | None = None,
+    ref_store: object | None = None,
+    installation_id: int | None = None,
 ) -> OrgOverview:
     """Get the full org dashboard overview.
 
@@ -278,6 +303,8 @@ async def get_org_overview(
             cache_key=cache_key,
             search_index=search_index,
             content_cache_store=content_cache_store,
+            ref_store=ref_store,
+            installation_id=installation_id,
         )
     )
     _inflight[cache_key] = task
@@ -297,6 +324,8 @@ async def _fetch_org_overview(
     cache_key: str,
     search_index: object | None = None,
     content_cache_store: object | None = None,
+    ref_store: object | None = None,
+    installation_id: int | None = None,
 ) -> OrgOverview:
     """Internal: actually fetch the org overview.
 
@@ -324,6 +353,31 @@ async def _fetch_org_overview(
             indexed_paths = await search_index.get_indexed_paths()
         except Exception:
             logger.warning("Failed to query indexed paths", exc_info=True)
+
+    # Pre-fetch broken refs for this installation in one query, then
+    # bucket by repo using the ticket_ref's leading prefix. Refs with
+    # status='dismissed' are excluded — the dashboard "needs attention"
+    # count should reflect actionable breakage only.
+    broken_by_repo: dict[str, int] = {}
+    total_broken: int = 0
+    if ref_store is not None and installation_id is not None:
+        try:
+            broken_rows = await ref_store.list_broken(installation_id=installation_id)
+        except Exception:
+            logger.warning(
+                "list_broken failed during org overview — broken-ref counts default to 0",
+                exc_info=True,
+            )
+            broken_rows = []
+        for row in broken_rows:
+            ref = row.get("ticket_ref", "")
+            # github refs are 'org/repo#N'; jira/linear refs aren't
+            # repo-scoped so they bucket under '' and are counted only
+            # in total_broken
+            repo_prefix = ref.rsplit("#", 1)[0] if "#" in ref else ""
+            if repo_prefix:
+                broken_by_repo[repo_prefix] = broken_by_repo.get(repo_prefix, 0) + 1
+            total_broken += 1
 
     for repo_data in repos:
         owner = repo_data["owner"]["login"]
@@ -380,6 +434,7 @@ async def _fetch_org_overview(
             specs=spec_summaries,
             config=config,
             docs=docs,
+            broken_refs_count=broken_by_repo.get(full_name, 0),
         )
 
         if spec_summaries:
@@ -396,6 +451,7 @@ async def _fetch_org_overview(
         total_specs=total_specs,
         total_repos=len(repos),
         total_docs=total_docs,
+        total_broken_refs=total_broken,
     )
     cache.set_with_ttl(cache_key, overview, _ORG_OVERVIEW_TTL)
     return overview
@@ -530,11 +586,17 @@ async def get_spec_detail(
     cache: TTLCache,
     *,
     content_cache_store: object | None = None,
+    ref_store: object | None = None,
+    installation_id: int | None = None,
 ) -> SpecDetail | None:
     """Get full spec detail with rendered HTML.
 
     When content_cache_store is provided, reads from Postgres first
     and falls back to GitHub on cache miss.
+
+    When ref_store and installation_id are provided, attaches a list of
+    BrokenRef entries (one per section whose ticket_ref maps to a 'broken'
+    row). Falls open to [] on store error or when the kwargs are omitted.
     """
     cache_key = f"spec:{owner}/{repo}/{file_path}"
     cached = cache.get(cache_key)
@@ -582,6 +644,51 @@ async def get_spec_detail(
     rendered_html = render_spec_html(result.document, repo_owner=owner, repo_name=repo)
     config = await _load_config(client, owner, repo, cache, content_cache_store=content_cache_store)
 
+    broken_sections: list[BrokenRef] = []
+    if ref_store is not None and installation_id is not None:
+        try:
+            broken_rows = await ref_store.list_broken(installation_id=installation_id)
+        except Exception:
+            logger.warning(
+                "list_broken failed during spec detail — broken_sections defaults to []",
+                exc_info=True,
+            )
+            broken_rows = []
+
+        # Index broken rows by ticket_ref for O(1) section lookup
+        broken_by_ref: dict[str, dict] = {
+            row["ticket_ref"]: row for row in broken_rows if row.get("status") == "broken"
+        }
+
+        if broken_by_ref:
+            from ..sync.ticket_ref import qualify
+
+            for section in flatten_sections(result.document.sections):
+                link = section.ticket_link
+                if not link:
+                    continue
+                try:
+                    section_ref = qualify(link.system, f"{owner}/{repo}", link.ticket_id)
+                except Exception:
+                    continue
+                row = broken_by_ref.get(section_ref)
+                if row is None:
+                    continue
+                broken_sections.append(
+                    BrokenRef(
+                        system=link.system,
+                        ticket_ref=section_ref,
+                        spec_path=f"{owner}/{repo}/{file_path}",
+                        section_id=section.id,
+                        section_heading=_section_heading(section),
+                        error_kind=_coerce_error_kind(row.get("last_error_kind")),
+                        first_failure_at=row["first_failure_at"],
+                        last_check_at=row["last_check_at"],
+                        dismissed=row.get("status") == "dismissed",
+                        dismissed_by=row.get("dismissed_by"),
+                    )
+                )
+
     detail = SpecDetail(
         document=result.document,
         rendered_html=rendered_html,
@@ -589,10 +696,82 @@ async def get_spec_detail(
         repo_name=repo,
         github_url=f"https://github.com/{owner}/{repo}/blob/main/{file_path}",
         config=config,
+        broken_sections=broken_sections,
     )
 
     cache.set(cache_key, detail)
     return detail
+
+
+async def list_broken_refs(
+    ref_store: object,
+    installation_id: int,
+    cache: TTLCache,
+    *,
+    org: str,
+    status: str = "broken",
+    system: str | None = None,
+    repo: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[BrokenRef], int]:
+    """Return (items, total) for the paginated dashboard list.
+
+    Filtering by repo / system happens here in Python after a single
+    list_broken query — the row volume is small enough (broken-ref
+    population is bounded by total spec count x ~1) that paging in SQL
+    isn't worth the complexity in v1.
+    """
+    rows = await ref_store.list_broken(installation_id=installation_id, status=status)
+
+    def matches(row: dict) -> bool:
+        if system and row.get("system") != system:
+            return False
+        if repo:
+            ref = row.get("ticket_ref", "")
+            if "#" in ref and ref.rsplit("#", 1)[0] != repo:
+                return False
+            if "#" not in ref:
+                # jira/linear rows aren't repo-scoped → only surface
+                # them when repo filter is empty
+                return False
+        return True
+
+    filtered = [r for r in rows if matches(r)]
+    total = len(filtered)
+    items = [_row_to_broken_ref(r) for r in filtered[offset : offset + limit]]
+    return items, total
+
+
+def _row_to_broken_ref(row: dict) -> BrokenRef:
+    """Convert a ticket_ref_status row dict into the API-facing model.
+
+    spec_path / section_id / section_heading are left empty here —
+    the dashboard list endpoint elides per-row spec lookup. The user
+    clicks through to the spec view where get_spec_detail provides
+    section-level context.
+    """
+    return BrokenRef(
+        system=row["system"],
+        ticket_ref=row["ticket_ref"],
+        spec_path="",
+        section_id="",
+        section_heading="",
+        error_kind=_coerce_error_kind(row.get("last_error_kind")),
+        first_failure_at=row["first_failure_at"],
+        last_check_at=row["last_check_at"],
+        dismissed=row.get("status") == "dismissed",
+        dismissed_by=row.get("dismissed_by"),
+    )
+
+
+async def count_broken_refs(
+    ref_store: object,
+    installation_id: int,
+) -> int:
+    """Return the count of broken (not dismissed) refs for an installation."""
+    rows = await ref_store.list_broken(installation_id=installation_id, status="broken")
+    return len(rows)
 
 
 async def get_doc_detail(

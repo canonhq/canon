@@ -32,6 +32,21 @@ class SpecSummary(BaseModel):
     is_stale: bool = False
 
 
+class BrokenRef(BaseModel):
+    """A spec section that references a ticket the cron has flagged broken."""
+
+    system: Literal["jira", "linear", "github"]
+    ticket_ref: str  # Fully-qualified per canon.sync.ticket_ref.qualify
+    spec_path: str  # `{repo_full_name}/{file_path}` — used for navigation
+    section_id: str
+    section_heading: str
+    error_kind: Literal["not_found", "forbidden", "unauthorized"]
+    first_failure_at: datetime
+    last_check_at: datetime
+    dismissed: bool
+    dismissed_by: str | None
+
+
 class DocFile(BaseModel):
     """An unstructured markdown file (not a spec)."""
 
@@ -56,6 +71,7 @@ class RepoSummary(BaseModel):
     specs: list[SpecSummary]
     config: CanonConfig | None
     docs: list[DocFile]
+    broken_refs_count: int = 0
 
 
 class OrgOverview(BaseModel):
@@ -67,6 +83,7 @@ class OrgOverview(BaseModel):
     total_specs: int
     total_repos: int
     total_docs: int = 0
+    total_broken_refs: int = 0
 
 
 class SpecDetail(BaseModel):
@@ -78,6 +95,7 @@ class SpecDetail(BaseModel):
     repo_name: str
     github_url: str
     config: CanonConfig | None
+    broken_sections: list[BrokenRef] = []
 
 
 class DocDetail(BaseModel):
@@ -126,6 +144,15 @@ class SearchApiResponse(BaseModel):
     results: list[SpecSearchResult]
     total: int
     facets: FacetCounts
+
+
+class BrokenRefsApiResponse(BaseModel):
+    """JSON response for GET /{org}/api/broken-refs."""
+
+    items: list[BrokenRef]
+    total: int
+    limit: int
+    offset: int
 
 
 class EditorSaveRequest(BaseModel):

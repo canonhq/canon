@@ -161,6 +161,72 @@ class TestGetOrgOverview:
         assert len(result.repos_without_specs) == 1
         assert result.repos_without_specs[0].full_name == "org/repo1"
 
+    async def test_populates_broken_refs_count_when_ref_store_provided(self):
+        client = _mock_client(
+            repos=[
+                {
+                    "owner": {"login": "o"},
+                    "name": "r1",
+                    "full_name": "o/r1",
+                    "description": "",
+                    "default_branch": "main",
+                },
+                {
+                    "owner": {"login": "o"},
+                    "name": "r2",
+                    "full_name": "o/r2",
+                    "description": "",
+                    "default_branch": "main",
+                },
+            ]
+        )
+        cache = TTLCache(ttl_seconds=300)
+        ref_store = AsyncMock()
+        ref_store.list_broken = AsyncMock(
+            return_value=[
+                {
+                    "installation_id": 1,
+                    "system": "github",
+                    "ticket_ref": "o/r1#1",
+                    "status": "broken",
+                    "consecutive_failures": 3,
+                    "last_error_kind": "not_found",
+                    "first_failure_at": None,
+                    "last_check_at": None,
+                },
+                {
+                    "installation_id": 1,
+                    "system": "github",
+                    "ticket_ref": "o/r1#2",
+                    "status": "broken",
+                    "consecutive_failures": 3,
+                    "last_error_kind": "not_found",
+                    "first_failure_at": None,
+                    "last_check_at": None,
+                },
+            ]
+        )
+        overview = await get_org_overview(
+            client,
+            "o",
+            cache,
+            ref_store=ref_store,
+            installation_id=1,
+        )
+        assert overview.total_broken_refs == 2
+        repo_counts = {
+            r.full_name: r.broken_refs_count
+            for r in overview.repos_with_specs + overview.repos_without_specs
+        }
+        assert repo_counts.get("o/r1") == 2
+        assert repo_counts.get("o/r2", 0) == 0
+
+    async def test_zero_broken_refs_when_ref_store_omitted(self):
+        client = _mock_client()
+        cache = TTLCache(ttl_seconds=300)
+        overview = await get_org_overview(client, "o", cache)
+        assert overview.total_broken_refs == 0
+
 
 class TestGetRepoDetail:
     async def test_repo_not_found(self):
@@ -193,6 +259,68 @@ class TestGetSpecDetail:
         cache = TTLCache(ttl_seconds=60)
         result = await get_spec_detail(client, "org", "repo", "docs/specs/nope.md", cache)
         assert result is None
+
+    async def test_populates_broken_sections_when_ref_store_provided(self):
+        from datetime import UTC, datetime
+
+        spec_md = """---
+title: Test
+status: in_progress
+---
+
+# Test
+
+## 1. Has broken ticket
+
+<!-- canon:system:1 status:in_progress -->
+<!-- canon:ticket:github:456 url:https://github.com/o/r/issues/456 -->
+
+Body
+
+## 2. Has working ticket
+
+<!-- canon:system:2 status:in_progress -->
+<!-- canon:ticket:github:789 url:https://github.com/o/r/issues/789 -->
+
+Body
+"""
+        client = AsyncMock()
+        client.get_file_content = AsyncMock(return_value=(spec_md, "sha"))
+        cache = TTLCache(ttl_seconds=300)
+
+        ref_store = AsyncMock()
+        ref_store.list_broken = AsyncMock(
+            return_value=[
+                {
+                    "installation_id": 1,
+                    "system": "github",
+                    "ticket_ref": "o/r#456",
+                    "status": "broken",
+                    "consecutive_failures": 3,
+                    "last_error_kind": "not_found",
+                    "last_error_message": "not found",
+                    "first_failure_at": datetime.now(UTC),
+                    "last_check_at": datetime.now(UTC),
+                    "last_recheck_at": None,
+                    "dismissed_at": None,
+                    "dismissed_by": None,
+                },
+            ]
+        )
+
+        detail = await get_spec_detail(
+            client,
+            "o",
+            "r",
+            "docs/specs/test.md",
+            cache,
+            ref_store=ref_store,
+            installation_id=1,
+        )
+        assert detail is not None
+        assert len(detail.broken_sections) == 1
+        assert detail.broken_sections[0].ticket_ref == "o/r#456"
+        assert detail.broken_sections[0].error_kind == "not_found"
 
 
 class TestIndexedStatus:

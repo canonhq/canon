@@ -25,8 +25,9 @@ from ..auth.deps import require_permission
 from ..auth.models import CurrentUser
 from ..auth.permissions import Permission
 from ..settings import Settings as _Settings
-from .models import SearchApiResponse
+from .models import BrokenRefsApiResponse, SearchApiResponse
 from .services import (
+    count_broken_refs,
     get_coverage,
     get_doc_detail,
     get_facet_counts,
@@ -35,6 +36,7 @@ from .services import (
     get_repo_detail,
     get_spec_detail,
     get_tasks,
+    list_broken_refs,
     search_specs,
 )
 
@@ -980,12 +982,74 @@ async def api_dashboard(
             cache,
             search_index=search_index,
             content_cache_store=_get_content_cache(request),
+            ref_store=getattr(request.app.state, "ref_store", None),
+            installation_id=int(client.installation_id) if client.installation_id else None,
         )
     except httpx.HTTPStatusError as exc:
         return _github_error_response(exc)
     except httpx.RequestError as exc:
         return _request_error_response(exc)
     return JSONResponse(content=overview.model_dump())
+
+
+@app_router.get("/{org}/api/broken-refs", response_class=JSONResponse)
+async def api_broken_refs(
+    request: Request,
+    org: str,
+    status: str = "broken",
+    system: str | None = None,
+    repo: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    _user: CurrentUser = Depends(require_permission(Permission.SPECS_READ)),
+):
+    """Paginated list of broken refs for the dashboard."""
+    ref_store = getattr(request.app.state, "ref_store", None)
+    if ref_store is None:
+        return JSONResponse(content={"items": [], "total": 0, "limit": limit, "offset": offset})
+
+    client = await _get_client_for_org(request, org)
+    installation_id = int(client.installation_id) if client.installation_id else None
+    if installation_id is None:
+        return JSONResponse(content={"items": [], "total": 0, "limit": limit, "offset": offset})
+
+    cache = _get_cache(request)
+    items, total = await list_broken_refs(
+        ref_store,
+        installation_id,
+        cache,
+        org=org,
+        status=status,
+        system=system,
+        repo=repo,
+        limit=limit,
+        offset=offset,
+    )
+    return JSONResponse(
+        content=BrokenRefsApiResponse(
+            items=items, total=total, limit=limit, offset=offset
+        ).model_dump(mode="json")
+    )
+
+
+@app_router.get("/{org}/api/broken-refs/count", response_class=JSONResponse)
+async def api_broken_refs_count(
+    request: Request,
+    org: str,
+    _user: CurrentUser = Depends(require_permission(Permission.SPECS_READ)),
+):
+    """Cheap count for navbar / dashboard chip polling."""
+    ref_store = getattr(request.app.state, "ref_store", None)
+    if ref_store is None:
+        return JSONResponse(content={"count": 0})
+
+    client = await _get_client_for_org(request, org)
+    installation_id = int(client.installation_id) if client.installation_id else None
+    if installation_id is None:
+        return JSONResponse(content={"count": 0})
+
+    count = await count_broken_refs(ref_store, installation_id)
+    return JSONResponse(content={"count": count})
 
 
 @app_router.get("/{org}/api/tasks", response_class=JSONResponse)
@@ -1063,7 +1127,14 @@ async def api_spec_detail(
     cache = _get_cache(request)
     try:
         detail = await get_spec_detail(
-            client, owner, repo, file_path, cache, content_cache_store=_get_content_cache(request)
+            client,
+            owner,
+            repo,
+            file_path,
+            cache,
+            content_cache_store=_get_content_cache(request),
+            ref_store=getattr(request.app.state, "ref_store", None),
+            installation_id=int(client.installation_id) if client.installation_id else None,
         )
     except httpx.HTTPStatusError as exc:
         return _github_error_response(exc)

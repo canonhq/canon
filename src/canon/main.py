@@ -301,6 +301,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Search index (requires DB pool)
     app.state.search_index = None
     app.state.content_cache_store = None
+    app.state.ref_store = None
     if app.state.db_pool is not None:
         app.state.search_index = SearchIndex(app.state.db_pool)
         logger.info("Search index initialised")
@@ -311,6 +312,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
             app.state.content_cache_store = ContentCacheStore(app.state.db_pool)
             logger.info("Content cache store initialised")
+
+        # Broken-ref tracking — independent of content_cache_enabled. The
+        # store is cheap (no per-request work) and the broken-ref display
+        # depends only on cron-written rows.
+        from .db.ticket_ref_status_store import TicketRefStatusStore
+
+        app.state.ref_store = TicketRefStatusStore(app.state.db_pool)
+        logger.info("Ticket ref status store initialised")
 
     # OpenSearch client (optional — feature-flagged)
     from .search.backend import build_backend
