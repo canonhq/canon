@@ -155,6 +155,27 @@ class BrokenRefsApiResponse(BaseModel):
     offset: int
 
 
+class DismissBrokenRefRequest(BaseModel):
+    """Request to dismiss a broken ticket reference."""
+
+    system: Literal["jira", "linear", "github"]
+    ticket_ref: str
+
+
+class RecheckBrokenRefRequest(BaseModel):
+    """Request to recheck a broken ticket reference."""
+
+    system: Literal["jira", "linear", "github"]
+    ticket_ref: str
+
+
+class RemoveTicketRefResponse(BaseModel):
+    """Response after removing a ticket reference."""
+
+    pr_number: int
+    pr_url: str
+
+
 class EditorSaveRequest(BaseModel):
     """Request body for saving a spec via direct commit."""
 

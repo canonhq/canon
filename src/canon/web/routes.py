@@ -25,8 +25,16 @@ from ..auth.deps import require_permission
 from ..auth.models import CurrentUser
 from ..auth.permissions import Permission
 from ..settings import Settings as _Settings
-from .models import BrokenRefsApiResponse, SearchApiResponse
+from .models import (
+    BrokenRefsApiResponse,
+    DismissBrokenRefRequest,
+    RecheckBrokenRefRequest,
+    RemoveTicketRefResponse,
+    SearchApiResponse,
+)
 from .services import (
+    SectionAlreadyUpdatedError,
+    SectionNotFoundError,
     count_broken_refs,
     get_coverage,
     get_doc_detail,
@@ -37,6 +45,7 @@ from .services import (
     get_spec_detail,
     get_tasks,
     list_broken_refs,
+    remove_ticket_ref,
     search_specs,
 )
 
@@ -1050,6 +1059,110 @@ async def api_broken_refs_count(
 
     count = await count_broken_refs(ref_store, installation_id)
     return JSONResponse(content={"count": count})
+
+
+@app_router.post("/{org}/api/broken-refs/dismiss", response_class=JSONResponse)
+async def api_broken_refs_dismiss(
+    request: Request,
+    org: str,
+    body: DismissBrokenRefRequest,
+    user: CurrentUser = Depends(require_permission(Permission.SPECS_WRITE)),
+):
+    """Dismiss a broken ref: cron will skip it, UI shows it as muted."""
+    ref_store = getattr(request.app.state, "ref_store", None)
+    if ref_store is None:
+        return JSONResponse(content={"error": "ticket_ref_status unavailable"}, status_code=503)
+    client = await _get_client_for_org(request, org)
+    installation_id = int(client.installation_id) if client.installation_id else None
+    if installation_id is None:
+        return JSONResponse(content={"error": "no installation for org"}, status_code=404)
+
+    row = await ref_store.get(installation_id, body.system, body.ticket_ref)
+    if row is None:
+        return JSONResponse(content={"error": "ticket_ref not found"}, status_code=404)
+
+    # `user` is the CurrentUser dict from require_permission; sub is the
+    # JWT subject claim (or empty for anonymous test mode).
+    dismissed_by = user.get("sub", "") if isinstance(user, dict) else getattr(user, "sub", "")
+
+    await ref_store.dismiss(
+        installation_id=installation_id,
+        system=body.system,
+        ticket_ref=body.ticket_ref,
+        dismissed_by=dismissed_by,
+    )
+    return JSONResponse(content={"ok": True})
+
+
+@app_router.post("/{org}/api/broken-refs/recheck", response_class=JSONResponse)
+async def api_broken_refs_recheck(
+    request: Request,
+    org: str,
+    body: RecheckBrokenRefRequest,
+    _user: CurrentUser = Depends(require_permission(Permission.SPECS_WRITE)),
+):
+    """Force the next cron run to re-check this broken ref immediately."""
+    ref_store = getattr(request.app.state, "ref_store", None)
+    if ref_store is None:
+        return JSONResponse(content={"error": "ticket_ref_status unavailable"}, status_code=503)
+    client = await _get_client_for_org(request, org)
+    installation_id = int(client.installation_id) if client.installation_id else None
+    if installation_id is None:
+        return JSONResponse(content={"error": "no installation for org"}, status_code=404)
+
+    row = await ref_store.get(installation_id, body.system, body.ticket_ref)
+    if row is None:
+        return JSONResponse(content={"error": "ticket_ref not found"}, status_code=404)
+
+    await ref_store.force_recheck(
+        installation_id=installation_id,
+        system=body.system,
+        ticket_ref=body.ticket_ref,
+    )
+    return JSONResponse(content={"ok": True})
+
+
+@app_router.post(
+    "/{org}/api/specs/{owner}/{repo}/{file_path:path}/sections/{section_id}/remove-ticket-ref",
+    response_class=JSONResponse,
+)
+async def api_remove_ticket_ref(
+    request: Request,
+    org: str,
+    owner: str,
+    repo: str,
+    file_path: str,
+    section_id: str,
+    _user: CurrentUser = Depends(require_permission(Permission.SPECS_WRITE)),
+):
+    """Open a doc PR removing the ticket-link comment from a spec section."""
+    client = await _get_client_for_org(request, org)
+    content_cache_store = _get_content_cache(request)
+    try:
+        result = await remove_ticket_ref(
+            client,
+            content_cache_store,
+            owner=owner,
+            repo=repo,
+            file_path=file_path,
+            section_id=section_id,
+        )
+    except SectionNotFoundError as exc:
+        return JSONResponse(content={"error": str(exc)}, status_code=404)
+    except SectionAlreadyUpdatedError as exc:
+        return JSONResponse(content={"error": str(exc)}, status_code=410)
+    except httpx.HTTPStatusError as exc:
+        return _github_error_response(exc)
+    except httpx.RequestError as exc:
+        return _request_error_response(exc)
+
+    status_code = 409 if result.already_existed else 200
+    return JSONResponse(
+        content=RemoveTicketRefResponse(
+            pr_number=result.pr_number, pr_url=result.pr_url
+        ).model_dump(),
+        status_code=status_code,
+    )
 
 
 @app_router.get("/{org}/api/tasks", response_class=JSONResponse)

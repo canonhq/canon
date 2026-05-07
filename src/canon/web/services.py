@@ -6,9 +6,10 @@ import asyncio
 import html
 import logging
 import re
+from dataclasses import dataclass
 
 from ..config.parse import CanonConfig, parse_canon_yaml
-from ..github.client import GitHubClient
+from ..github.client import FileChange, GitHubClient
 from ..github.spec_utils import load_repo_specs
 from ..parser.classify import classify_doc_type
 from ..parser.models import SpecDocument, SpecSection, flatten_sections
@@ -1457,3 +1458,132 @@ async def get_tasks(
                 logger.warning("Failed to load spec %s for tasks", spec_summary.file_path)
 
     return TasksApiResponse(tasks=tasks, total=len(tasks))
+
+
+class SectionNotFoundError(Exception):
+    """Raised when the requested section_id doesn't exist in the spec."""
+
+
+class SectionAlreadyUpdatedError(Exception):
+    """Raised when the section exists but its ticket_link was already
+    removed/changed since the dashboard surfaced this row."""
+
+
+@dataclass
+class RemoveTicketRefResult:
+    pr_number: int
+    pr_url: str
+    already_existed: bool = False
+
+
+async def remove_ticket_ref(
+    client,
+    content_cache_store,
+    *,
+    owner: str,
+    repo: str,
+    file_path: str,
+    section_id: str,
+) -> RemoveTicketRefResult:
+    """Open a doc PR that strips the ticket-link comment from a section.
+
+    Reads the spec from the content cache (or GitHub if the cache is
+    None/unavailable), parses it, locates the target section, drops
+    the line containing `<!-- canon:ticket:... -->` within the
+    section's [start_line, end_line] range, and opens (or returns the
+    existing) doc PR via client.create_doc_pr.
+
+    Branch name is deterministic per section_id so re-runs find the
+    existing PR (already_existed=True) rather than duplicating.
+
+    Raises:
+      SectionNotFoundError: section_id not in the spec.
+      SectionAlreadyUpdatedError: section exists but has no ticket_link
+        (someone already removed it; dashboard view is stale).
+    """
+    from ..parser.models import ParseOptions
+    from ..parser.parse import parse_spec
+
+    raw = None
+    if content_cache_store is not None:
+        try:
+            raw = await content_cache_store.get_spec_raw(f"{owner}/{repo}", file_path)
+        except Exception:
+            logger.warning(
+                "Cache read failed for %s/%s/%s — falling back to GitHub",
+                owner,
+                repo,
+                file_path,
+                exc_info=True,
+            )
+    if raw is None:
+        content, _ = await client.get_file_content(owner, repo, file_path)
+        raw = content
+
+    parsed = parse_spec(raw, ParseOptions(file_path=file_path))
+    # Accept either the slug id (e.g. "1-has-broken-ticket") or the bare
+    # section_number (e.g. "1") — different call sites use different forms.
+    target = next(
+        (
+            s
+            for s in flatten_sections(parsed.document.sections)
+            if s.id == section_id or s.section_number == section_id
+        ),
+        None,
+    )
+    if target is None:
+        raise SectionNotFoundError(
+            f"section_id={section_id} not found in {owner}/{repo}/{file_path}"
+        )
+    if target.ticket_link is None:
+        raise SectionAlreadyUpdatedError(
+            f"section_id={section_id} no longer has a ticket_link; dashboard view is stale"
+        )
+
+    # Strip the ticket comment line within the section's range.
+    # Parser uses 1-indexed inclusive [start_line, end_line].
+    lines = raw.splitlines(keepends=True)
+    # Match the SPECIFIC ticket_link's comment, not any canon:ticket comment
+    # in the range. Sections with multiple ticket comments are rare but
+    # nothing in the parser prevents them — being precise here avoids
+    # silently stripping the wrong line.
+    ticket_marker = f"<!-- canon:ticket:{target.ticket_link.system}:{target.ticket_link.ticket_id}"
+    new_lines: list[str] = []
+    removed = False
+    for idx, line in enumerate(lines, start=1):
+        if not removed and target.start_line <= idx <= target.end_line and ticket_marker in line:
+            removed = True
+            continue
+        new_lines.append(line)
+    if not removed:
+        raise SectionAlreadyUpdatedError(
+            f"section_id={section_id} ticket comment not found in section range"
+        )
+    new_content = "".join(new_lines)
+
+    # Deterministic branch name = idempotent re-runs.
+    branch = f"canon-bot/remove-ref-{section_id}"
+    existing = await client.find_open_doc_pr(owner, repo, branch)
+    if existing is not None:
+        return RemoveTicketRefResult(
+            pr_number=existing.pr_number,
+            pr_url=existing.pr_url,
+            already_existed=True,
+        )
+
+    pr = await client.create_doc_pr(
+        owner,
+        repo,
+        branch=branch,
+        title=f"Remove broken ticket reference from {file_path}",
+        body=(
+            "The Canon dashboard flagged this ticket reference as persistently broken "
+            "(404/401/403 from the ticket system on multiple consecutive sync runs). "
+            "This PR removes the dead reference so the cron stops re-checking it. "
+            "If the ticket should be replaced rather than removed, close this PR and "
+            "edit the spec directly."
+        ),
+        files=[FileChange(path=file_path, content=new_content)],
+        commit_message=f"chore(canon): remove broken ticket reference from {file_path}",
+    )
+    return RemoveTicketRefResult(pr_number=pr.pr_number, pr_url=pr.pr_url)

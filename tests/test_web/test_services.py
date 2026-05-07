@@ -1041,3 +1041,185 @@ class TestGetCoverage:
 
         assert isinstance(result, CoverageApiResponse)
         assert result.summary.realized_ac == 0
+
+
+class TestRemoveTicketRef:
+    SPEC_WITH_TICKET = """---
+title: Test
+status: in_progress
+---
+
+# Test
+
+## 1. Has broken ticket
+
+<!-- canon:system:1 status:in_progress -->
+<!-- canon:ticket:github:456 url:https://github.com/o/r/issues/456 -->
+
+Body
+"""
+
+    SPEC_WITHOUT_TICKET = """---
+title: Test
+status: in_progress
+---
+
+# Test
+
+## 1. No ticket here
+
+<!-- canon:system:1 status:in_progress -->
+
+Body
+"""
+
+    async def test_strips_ticket_line_and_opens_pr_with_slug(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        from canon.web.services import RemoveTicketRefResult, remove_ticket_ref
+
+        client = AsyncMock()
+        store = AsyncMock()
+        store.get_spec_raw = AsyncMock(return_value=self.SPEC_WITH_TICKET)
+        client.find_open_doc_pr = AsyncMock(return_value=None)
+        client.create_doc_pr = AsyncMock(
+            return_value=MagicMock(pr_number=42, pr_url="https://github.com/o/r/pull/42")
+        )
+
+        result = await remove_ticket_ref(
+            client,
+            store,
+            owner="o",
+            repo="r",
+            file_path="docs/specs/test.md",
+            section_id="1-has-broken-ticket",
+        )
+        assert isinstance(result, RemoveTicketRefResult)
+        assert result.pr_number == 42
+        assert result.already_existed is False
+
+        # Verify the markdown passed to create_doc_pr does NOT contain the ticket comment
+        call_kwargs = client.create_doc_pr.await_args.kwargs
+        files = call_kwargs["files"]
+        assert len(files) == 1
+        assert "canon:ticket:github:456" not in files[0].content
+        # Section header + body remain
+        assert "## 1. Has broken ticket" in files[0].content
+        assert "Body" in files[0].content
+        # canon:system: comment is preserved (only ticket comment is removed)
+        assert "canon:system:1" in files[0].content
+
+    async def test_section_number_fallback_works(self):
+        """Test that section_id='1' (bare number) matches via the fallback."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from canon.web.services import RemoveTicketRefResult, remove_ticket_ref
+
+        client = AsyncMock()
+        store = AsyncMock()
+        store.get_spec_raw = AsyncMock(return_value=self.SPEC_WITH_TICKET)
+        client.find_open_doc_pr = AsyncMock(return_value=None)
+        client.create_doc_pr = AsyncMock(
+            return_value=MagicMock(pr_number=42, pr_url="https://github.com/o/r/pull/42")
+        )
+
+        result = await remove_ticket_ref(
+            client,
+            store,
+            owner="o",
+            repo="r",
+            file_path="docs/specs/test.md",
+            section_id="1",  # bare number, hits fallback
+        )
+        assert isinstance(result, RemoveTicketRefResult)
+        assert result.pr_number == 42
+
+    async def test_409_when_existing_pr_for_same_section(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        from canon.web.services import remove_ticket_ref
+
+        client = AsyncMock()
+        store = AsyncMock()
+        store.get_spec_raw = AsyncMock(return_value=self.SPEC_WITH_TICKET)
+        client.find_open_doc_pr = AsyncMock(
+            return_value=MagicMock(pr_number=7, pr_url="https://github.com/o/r/pull/7")
+        )
+
+        result = await remove_ticket_ref(
+            client,
+            store,
+            owner="o",
+            repo="r",
+            file_path="docs/specs/test.md",
+            section_id="1",
+        )
+        assert result.pr_number == 7
+        assert result.already_existed is True
+        client.create_doc_pr.assert_not_called()
+
+    async def test_section_not_found_raises(self):
+        from unittest.mock import AsyncMock
+
+        import pytest
+
+        from canon.web.services import SectionNotFoundError, remove_ticket_ref
+
+        client = AsyncMock()
+        store = AsyncMock()
+        store.get_spec_raw = AsyncMock(return_value=self.SPEC_WITH_TICKET)
+
+        with pytest.raises(SectionNotFoundError):
+            await remove_ticket_ref(
+                client,
+                store,
+                owner="o",
+                repo="r",
+                file_path="docs/specs/test.md",
+                section_id="9999-does-not-exist",
+            )
+
+    async def test_section_without_ticket_link_raises_already_updated(self):
+        from unittest.mock import AsyncMock
+
+        import pytest
+
+        from canon.web.services import SectionAlreadyUpdatedError, remove_ticket_ref
+
+        client = AsyncMock()
+        store = AsyncMock()
+        store.get_spec_raw = AsyncMock(return_value=self.SPEC_WITHOUT_TICKET)
+
+        with pytest.raises(SectionAlreadyUpdatedError):
+            await remove_ticket_ref(
+                client,
+                store,
+                owner="o",
+                repo="r",
+                file_path="docs/specs/test.md",
+                section_id="1-no-ticket-here",
+            )
+
+    async def test_falls_back_to_github_when_cache_empty(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        from canon.web.services import remove_ticket_ref
+
+        client = AsyncMock()
+        client.get_file_content = AsyncMock(return_value=(self.SPEC_WITH_TICKET, "abc"))
+        client.find_open_doc_pr = AsyncMock(return_value=None)
+        client.create_doc_pr = AsyncMock(
+            return_value=MagicMock(pr_number=42, pr_url="https://github.com/o/r/pull/42")
+        )
+
+        # Pass content_cache_store=None to simulate the cache-disabled path
+        result = await remove_ticket_ref(
+            client,
+            None,
+            owner="o",
+            repo="r",
+            file_path="docs/specs/test.md",
+            section_id="1",
+        )
+        assert result.pr_number == 42
+        client.get_file_content.assert_awaited_once_with("o", "r", "docs/specs/test.md")
