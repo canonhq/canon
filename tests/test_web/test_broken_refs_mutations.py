@@ -228,3 +228,98 @@ class TestRemoveTicketRef:
         )
         assert r.status_code == 200
         assert r.json() == {"pr_number": 42, "pr_url": "https://github.com/o/r/pull/42"}
+
+    async def test_auto_dismisses_on_success(self, client_factory, monkeypatch):
+        """When remove_ticket_ref succeeds and returns a populated
+        ticket_ref, the route auto-dismisses the matching row so the
+        dashboard count drops immediately."""
+        from canon.web import routes
+        from canon.web.services import RemoveTicketRefResult
+
+        monkeypatch.setattr(
+            routes,
+            "remove_ticket_ref",
+            AsyncMock(
+                return_value=RemoveTicketRefResult(
+                    pr_number=42,
+                    pr_url="https://github.com/o/r/pull/42",
+                    already_existed=False,
+                    system="github",
+                    ticket_ref="o/r#1",
+                )
+            ),
+        )
+        ref_store = AsyncMock()
+        ref_store.dismiss = AsyncMock()
+        client = client_factory(ref_store=ref_store)
+
+        r = await client.post(
+            f"/app/{ORG}/api/specs/o/r/docs%2Fspecs%2Ftest.md/sections/1/remove-ticket-ref",
+        )
+        assert r.status_code == 200
+        ref_store.dismiss.assert_awaited_once()
+        # Verify dismiss was called with the matching system + ticket_ref
+        dismiss_kwargs = ref_store.dismiss.await_args.kwargs
+        assert dismiss_kwargs["system"] == "github"
+        assert dismiss_kwargs["ticket_ref"] == "o/r#1"
+        assert dismiss_kwargs["installation_id"] == 1
+
+    async def test_auto_dismisses_when_already_existed(self, client_factory, monkeypatch):
+        """409 path also auto-dismisses — user has acknowledged the ref by
+        finding (or opening) a remove-PR; surfacing it on the next
+        dashboard load is just noise."""
+        from canon.web import routes
+        from canon.web.services import RemoveTicketRefResult
+
+        monkeypatch.setattr(
+            routes,
+            "remove_ticket_ref",
+            AsyncMock(
+                return_value=RemoveTicketRefResult(
+                    pr_number=7,
+                    pr_url="https://github.com/o/r/pull/7",
+                    already_existed=True,
+                    system="github",
+                    ticket_ref="o/r#1",
+                )
+            ),
+        )
+        ref_store = AsyncMock()
+        ref_store.dismiss = AsyncMock()
+        client = client_factory(ref_store=ref_store)
+
+        r = await client.post(
+            f"/app/{ORG}/api/specs/o/r/docs%2Fspecs%2Ftest.md/sections/1/remove-ticket-ref",
+        )
+        assert r.status_code == 409
+        ref_store.dismiss.assert_awaited_once()
+
+    async def test_auto_dismiss_failure_does_not_break_response(self, client_factory, monkeypatch):
+        """If the auto-dismiss call raises, the route still returns the PR
+        metadata — the PR was already created, the user shouldn't see an
+        error just because the bookkeeping write failed."""
+        from canon.web import routes
+        from canon.web.services import RemoveTicketRefResult
+
+        monkeypatch.setattr(
+            routes,
+            "remove_ticket_ref",
+            AsyncMock(
+                return_value=RemoveTicketRefResult(
+                    pr_number=42,
+                    pr_url="https://github.com/o/r/pull/42",
+                    already_existed=False,
+                    system="github",
+                    ticket_ref="o/r#1",
+                )
+            ),
+        )
+        ref_store = AsyncMock()
+        ref_store.dismiss = AsyncMock(side_effect=RuntimeError("db down"))
+        client = client_factory(ref_store=ref_store)
+
+        r = await client.post(
+            f"/app/{ORG}/api/specs/o/r/docs%2Fspecs%2Ftest.md/sections/1/remove-ticket-ref",
+        )
+        assert r.status_code == 200
+        assert r.json() == {"pr_number": 42, "pr_url": "https://github.com/o/r/pull/42"}

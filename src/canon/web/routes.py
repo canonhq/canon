@@ -1133,9 +1133,17 @@ async def api_remove_ticket_ref(
     repo: str,
     file_path: str,
     section_id: str,
-    _user: CurrentUser = Depends(require_permission(Permission.SPECS_WRITE)),
+    user: CurrentUser = Depends(require_permission(Permission.SPECS_WRITE)),
 ):
-    """Open a doc PR removing the ticket-link comment from a spec section."""
+    """Open a doc PR removing the ticket-link comment from a spec section.
+
+    On success — including the idempotent already-existed branch — also
+    auto-dismiss the matching ticket_ref_status row so the dashboard
+    count drops immediately. The user has acknowledged this ref by
+    opening (or finding) a remove-PR; surfacing it again on the next
+    dashboard load is just noise. If the PR is closed without merging
+    they can manually un-dismiss via the badge re-check action.
+    """
     client = await _get_client_for_org(request, org)
     content_cache_store = _get_content_cache(request)
     try:
@@ -1155,6 +1163,28 @@ async def api_remove_ticket_ref(
         return _github_error_response(exc)
     except httpx.RequestError as exc:
         return _request_error_response(exc)
+
+    # Auto-dismiss the matching ticket_ref_status row. Best-effort —
+    # if the dismiss fails, the PR was still created/found; the user
+    # just sees the row again until they dismiss it manually.
+    ref_store = getattr(request.app.state, "ref_store", None)
+    installation_id = int(client.installation_id) if client.installation_id else None
+    if ref_store is not None and installation_id is not None and result.ticket_ref:
+        dismissed_by = user.get("sub", "") if isinstance(user, dict) else getattr(user, "sub", "")
+        try:
+            await ref_store.dismiss(
+                installation_id=installation_id,
+                system=result.system,
+                ticket_ref=result.ticket_ref,
+                dismissed_by=dismissed_by,
+            )
+        except Exception:
+            logger.warning(
+                "auto-dismiss after remove-ticket-ref failed for %s/%s",
+                result.system,
+                result.ticket_ref,
+                exc_info=True,
+            )
 
     status_code = 409 if result.already_existed else 200
     return JSONResponse(

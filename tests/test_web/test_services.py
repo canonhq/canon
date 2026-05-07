@@ -1097,6 +1097,11 @@ Body
         assert isinstance(result, RemoveTicketRefResult)
         assert result.pr_number == 42
         assert result.already_existed is False
+        # The result also reports the qualified ticket_ref so the route layer
+        # can auto-dismiss the matching ticket_ref_status row without
+        # re-deriving it from the spec.
+        assert result.system == "github"
+        assert result.ticket_ref == "o/r#456"
 
         # Verify the markdown passed to create_doc_pr does NOT contain the ticket comment
         call_kwargs = client.create_doc_pr.await_args.kwargs
@@ -1108,6 +1113,32 @@ Body
         assert "Body" in files[0].content
         # canon:system: comment is preserved (only ticket comment is removed)
         assert "canon:system:1" in files[0].content
+
+    async def test_already_existed_result_carries_ticket_ref(self):
+        """Existing-PR path also returns system + ticket_ref so the route
+        can auto-dismiss the row regardless of whether a new PR was opened."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from canon.web.services import remove_ticket_ref
+
+        client = AsyncMock()
+        store = AsyncMock()
+        store.get_spec_raw = AsyncMock(return_value=self.SPEC_WITH_TICKET)
+        client.find_open_doc_pr = AsyncMock(
+            return_value=MagicMock(pr_number=7, pr_url="https://github.com/o/r/pull/7")
+        )
+
+        result = await remove_ticket_ref(
+            client,
+            store,
+            owner="o",
+            repo="r",
+            file_path="docs/specs/test.md",
+            section_id="1-has-broken-ticket",
+        )
+        assert result.already_existed is True
+        assert result.system == "github"
+        assert result.ticket_ref == "o/r#456"
 
     async def test_section_number_fallback_works(self):
         """Test that section_id='1' (bare number) matches via the fallback."""

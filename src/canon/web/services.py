@@ -1474,6 +1474,11 @@ class RemoveTicketRefResult:
     pr_number: int
     pr_url: str
     already_existed: bool = False
+    # Qualified ticket_ref of the comment that was (or would be) stripped.
+    # Returned so the route layer can auto-dismiss the matching
+    # ticket_ref_status row without re-deriving it.
+    system: str = ""
+    ticket_ref: str = ""
 
 
 async def remove_ticket_ref(
@@ -1503,6 +1508,7 @@ async def remove_ticket_ref(
     """
     from ..parser.models import ParseOptions
     from ..parser.parse import parse_spec
+    from ..sync.ticket_ref import qualify
 
     raw = None
     if content_cache_store is not None:
@@ -1561,6 +1567,15 @@ async def remove_ticket_ref(
         )
     new_content = "".join(new_lines)
 
+    # Qualified ticket_ref of the line we just stripped — passed back so
+    # callers (i.e. the route layer) can auto-dismiss the matching row in
+    # ticket_ref_status without re-deriving it from spec metadata.
+    qualified_ref = qualify(
+        target.ticket_link.system,
+        f"{owner}/{repo}",
+        target.ticket_link.ticket_id,
+    )
+
     # Deterministic branch name = idempotent re-runs.
     branch = f"canon-bot/remove-ref-{section_id}"
     existing = await client.find_open_doc_pr(owner, repo, branch)
@@ -1569,6 +1584,8 @@ async def remove_ticket_ref(
             pr_number=existing.pr_number,
             pr_url=existing.pr_url,
             already_existed=True,
+            system=target.ticket_link.system,
+            ticket_ref=qualified_ref,
         )
 
     pr = await client.create_doc_pr(
@@ -1586,4 +1603,9 @@ async def remove_ticket_ref(
         files=[FileChange(path=file_path, content=new_content)],
         commit_message=f"chore(canon): remove broken ticket reference from {file_path}",
     )
-    return RemoveTicketRefResult(pr_number=pr.pr_number, pr_url=pr.pr_url)
+    return RemoveTicketRefResult(
+        pr_number=pr.pr_number,
+        pr_url=pr.pr_url,
+        system=target.ticket_link.system,
+        ticket_ref=qualified_ref,
+    )
