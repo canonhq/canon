@@ -108,7 +108,12 @@ async def run_refresh() -> int:
                 # Mark as needs_reauth so the UI shows a warning
                 async with pool.acquire() as conn:
                     await conn.execute(
-                        "UPDATE org_integrations SET status = 'needs_reauth', updated_at = now() "
+                        "UPDATE org_integrations "
+                        "SET status = 'needs_reauth', updated_at = now(), "
+                        "    provider_metadata = jsonb_set("
+                        "        COALESCE(provider_metadata, '{}'), '{error}',"
+                        "        to_jsonb('Token refresh returned no data'::text)"
+                        "    ) "
                         "WHERE id = $1",
                         row["id"],
                     )
@@ -125,6 +130,7 @@ async def run_refresh() -> int:
             }
             encrypted = encrypt_api_key(json.dumps(new_config), encryption_key)
             metadata["token_refreshed_at"] = now
+            metadata.pop("error", None)  # clear stale error on successful refresh
 
             prev_status = row["status"]
             new_status = "active" if prev_status in ("error", "needs_reauth") else prev_status

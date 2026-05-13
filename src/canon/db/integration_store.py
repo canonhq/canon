@@ -132,19 +132,65 @@ class IntegrationStore:
             )
         return result == "DELETE 1"
 
-    async def update_status(self, org_login: str, provider: str, status: str) -> bool:
-        """Update the status of an integration. Returns True if updated."""
-        async with self._pool.acquire() as conn:
-            result = await conn.execute(
-                """
-                UPDATE org_integrations
-                SET status = $3, updated_at = now()
-                WHERE org_login = $1 AND provider = $2
-                """,
-                org_login,
-                provider,
-                status,
-            )
+    async def update_status(
+        self,
+        org_login: str,
+        provider: str,
+        status: str,
+        *,
+        error: str | None = None,
+    ) -> bool:
+        """Update the status of an integration. Returns True if updated.
+
+        When *error* is provided and status is ``error`` or ``needs_reauth``,
+        the message is recorded in ``provider_metadata->>'error'`` so the
+        admin dashboard can display it.  On recovery (status ``active``), any
+        previous error is cleared.
+        """
+        if error and status in ("error", "needs_reauth"):
+            async with self._pool.acquire() as conn:
+                result = await conn.execute(
+                    """
+                    UPDATE org_integrations
+                    SET status = $3,
+                        provider_metadata = jsonb_set(
+                            COALESCE(provider_metadata, '{}'), '{error}', to_jsonb($4::text)
+                        ),
+                        updated_at = now()
+                    WHERE org_login = $1 AND provider = $2
+                    """,
+                    org_login,
+                    provider,
+                    status,
+                    error,
+                )
+        elif status == "active":
+            # Clear any stale error on recovery
+            async with self._pool.acquire() as conn:
+                result = await conn.execute(
+                    """
+                    UPDATE org_integrations
+                    SET status = $3,
+                        provider_metadata = provider_metadata - 'error',
+                        updated_at = now()
+                    WHERE org_login = $1 AND provider = $2
+                    """,
+                    org_login,
+                    provider,
+                    status,
+                )
+        else:
+            async with self._pool.acquire() as conn:
+                result = await conn.execute(
+                    """
+                    UPDATE org_integrations
+                    SET status = $3, updated_at = now()
+                    WHERE org_login = $1 AND provider = $2
+                    """,
+                    org_login,
+                    provider,
+                    status,
+                )
         return result == "UPDATE 1"
 
     async def update_config(

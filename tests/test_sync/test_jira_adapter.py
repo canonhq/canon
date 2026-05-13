@@ -869,7 +869,9 @@ class TestTokenRefresh:
             result = await adapter._refresh_tokens()
 
         assert result is False
-        store.update_status.assert_called_once_with("testorg", "jira", "needs_reauth")
+        store.update_status.assert_called_once_with(
+            "testorg", "jira", "needs_reauth", error="Token refresh failed: HTTP 400"
+        )
 
     @pytest.mark.asyncio
     async def test_refresh_persists_new_tokens(self) -> None:

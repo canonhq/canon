@@ -266,7 +266,7 @@ async def test_integration(
 
     # Update status based on result
     if not ok:
-        await store.update_status(org, provider, "error")
+        await store.update_status(org, provider, "error", error=msg)
     elif (await store.get_integration(org, provider) or {}).get("status") != "active":
         await store.update_status(org, provider, "active")
 

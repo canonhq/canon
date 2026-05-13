@@ -291,13 +291,16 @@ class JiraAdapter:
             )
 
         if resp.status_code != 200:
+            err_msg = f"Token refresh failed: HTTP {resp.status_code}"
             logger.warning(
                 "Jira token refresh failed: HTTP %d — %s",
                 resp.status_code,
                 resp.text[:200],
             )
             if self._store and self._org_login:
-                await self._store.update_status(self._org_login, "jira", "needs_reauth")
+                await self._store.update_status(
+                    self._org_login, "jira", "needs_reauth", error=err_msg
+                )
             return False
 
         data = resp.json()
