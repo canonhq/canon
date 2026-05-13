@@ -49,7 +49,7 @@ def _ticket_link_html(ticket: object, *, repo_owner: str = "", repo_name: str = 
         return f'<a href="{esc(ticket.url)}" class="{link_class}" target="_blank" rel="noopener">{tid}</a>'
 
     if ticket.system == "github":
-        # Parse "owner/repo#N" or "#N" format
+        # Parse "owner/repo#N", "#N", or bare "N" format
         raw_id = ticket.ticket_id
         if "/" in raw_id and "#" in raw_id:
             # "owner/repo#123" format
@@ -57,10 +57,11 @@ def _ticket_link_html(ticket: object, *, repo_owner: str = "", repo_name: str = 
             owner_part, repo_part = repo_part.split("/", 1)
             url = f"https://github.com/{esc(owner_part)}/{esc(repo_part)}/issues/{esc(num)}"
             return f'<a href="{url}" class="{link_class}" target="_blank">{tid}</a>'
-        if raw_id.startswith("#") and repo_owner and repo_name:
-            num = raw_id[1:]
-            url = f"https://github.com/{esc(repo_owner)}/{esc(repo_name)}/issues/{esc(num)}"
-            return f'<a href="{url}" class="{link_class}" target="_blank">{tid}</a>'
+        if repo_owner and repo_name:
+            num = raw_id.lstrip("#")
+            if num.isdigit():
+                url = f"https://github.com/{esc(repo_owner)}/{esc(repo_name)}/issues/{esc(num)}"
+                return f'<a href="{url}" class="{link_class}" target="_blank">{tid}</a>'
 
     # Fallback: render as plain text when we can't construct a valid URL
     return f'<span class="text-blue-600 dark:text-blue-400 text-sm">{tid}</span>'
