@@ -65,6 +65,14 @@ opensearchReconcileCronJob:
 opensearch:
   enabled: false
 
+# Slack is production-only. Without this override the chart inherits
+# secrets.slack.existingSecret from values-production.yaml, causing a
+# CreateContainerConfigError because canon-slack doesn't exist in
+# preview namespaces.
+secrets:
+  slack:
+    existingSecret: ""
+
 config:
   environment: "preview"
   webOrg: "canonhq"

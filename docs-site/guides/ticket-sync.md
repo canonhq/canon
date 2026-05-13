@@ -46,11 +46,11 @@ Hidden HTML comments track the bidirectional link. Engineers never think about t
 For a single ticket system with default status mappings:
 
 ```yaml
-sync:
-  system: jira          # or: linear, github
-  project_key: PAY      # Jira project key, Linear team, or GitHub repo
-  create_tickets: true
-  reverse_sync: true
+ticket_system: jira       # or: linear, github
+project_key: PAY          # Jira project key, Linear team, or GitHub repo
+specs:
+  auto_tickets: true      # auto-create tickets from spec sections
+  lifecycle_sync: true    # sync ticket status back to specs
 ```
 
 ### Supported Systems
@@ -84,17 +84,19 @@ ticket_systems:
     system: jira
     project: ENG
     status_map:
-      draft: "Backlog"
-      todo: "Open"
-      in_progress: "In Development"
-      done: "Closed"
-      blocked: "On Hold"
-      deprecated: "Won't Fix"
+      forward:
+        draft: "Backlog"
+        todo: "Open"
+        in_progress: "In Development"
+        done: "Closed"
+        blocked: "On Hold"
+        deprecated: "Won't Fix"
     hierarchy:
-      2: "Epic"        # h2 sections → Epics
-      3: "Story"       # h3 sections → Stories
-      4: "Sub-task"    # h4 sections → Sub-tasks
-    auto_parent: true
+      depth_to_type:
+        2: "Epic"        # h2 sections → Epics
+        3: "Story"       # h3 sections → Stories
+        4: "Sub-task"    # h4 sections → Sub-tasks
+      auto_parent: true
   oss:
     system: github
     repo: org/public-repo
@@ -114,12 +116,13 @@ Map spec statuses to your ticket system's workflow statuses:
 
 ```yaml
 status_map:
-  draft: "Backlog"        # spec draft → ticket Backlog
-  todo: "Open"            # spec todo → ticket Open
-  in_progress: "In Development"
-  done: "Closed"
-  blocked: "On Hold"
-  deprecated: "Won't Fix"
+  forward:
+    draft: "Backlog"        # spec draft → ticket Backlog
+    todo: "Open"            # spec todo → ticket Open
+    in_progress: "In Development"
+    done: "Closed"
+    blocked: "On Hold"
+    deprecated: "Won't Fix"
 ```
 
 ### Hierarchy Templates
@@ -128,9 +131,12 @@ Map spec section depth to issue types:
 
 ```yaml
 hierarchy:
-  2: "Epic"       # h2 sections create Epics
-  3: "Story"      # h3 sections create Stories
-  4: "Sub-task"   # h4 sections create Sub-tasks
+  depth_to_type:
+    2: "Epic"       # h2 sections create Epics
+    3: "Story"      # h3 sections create Stories
+    4: "Sub-task"   # h4 sections create Sub-tasks
+  auto_parent: true
+  default_type: Task
 ```
 
 With `auto_parent: true`, child tickets are automatically linked to their parent.
@@ -147,10 +153,58 @@ routing:
   - match:
       team: "security"
     target: security-board
+    shadow_targets:
+      - engineering    # read-only mirror to engineering board
   - match:
       default: true
     target: engineering
 ```
+
+**Shadow targets** let you mirror tickets to additional systems as read-only copies. This is useful for cross-team visibility without creating duplicate work items.
+
+### Field Mapping
+
+Map spec metadata to ticket fields. Standard fields map common attributes; custom fields target system-specific fields using dotpath syntax.
+
+```yaml
+ticket_systems:
+  engineering:
+    system: jira
+    project: ENG
+    field_map:
+      standard:
+        frontmatter.team: component
+        frontmatter.owner: assignee
+        frontmatter.tags: labels
+      custom:
+        customfield_10001: frontmatter.owner
+        customfield_10042: frontmatter.team
+```
+
+See the [full field mapping reference](/reference/config#field-mapping) for all available options.
+
+### Presets
+
+The Canon web app (Settings → Sync) offers **presets** — pre-configured mappings for common setups like "Jira Scrum", "Linear Standard", or "GitHub Issues". Applying a preset replaces the current status mappings, field mappings, and routing rules with preconfigured defaults.
+
+Presets are a starting point — after applying one, you can customize individual mappings in the editor or directly in CANON.yaml.
+
+## Configuring from the Web App
+
+Sync configuration can be managed from the Canon web app at **Settings → Sync**. The editor provides:
+
+- **Repository selector** — each repo has its own configuration
+- **Status mapping editor** — visual forward/reverse status mapping
+- **Field mapping editor** — standard and custom field mappings
+- **Hierarchy editor** — depth-to-type mapping and auto-parent toggle
+- **Routing rules editor** — match conditions and target/shadow target selection
+- **Presets** — one-click starting configurations
+- **Validation** — check your configuration for errors before applying
+- **Config preview** — see the raw YAML that will be committed to CANON.yaml
+
+Changes made in the web app are committed directly to your repository's CANON.yaml file via the Canon GitHub App.
+
+For the full configuration reference, see the [CANON.yaml reference](/reference/config#ticket-systems).
 
 ## Adapter Architecture
 
@@ -180,4 +234,4 @@ Canon uses an adapter pattern to support multiple ticket systems:
 
 The **API Proxy Adapter** is used by the CLI when you're logged in. Instead of calling GitHub directly, it routes requests through the Canon server, which uses its GitHub App installation token. This means developers don't need local `GITHUB_TOKEN` — just `canon login`.
 
-The legacy `sync` block continues to work alongside the newer `ticket_systems` configuration.
+The top-level `ticket_system` and `project_key` fields provide simple single-system configuration. For multi-system routing, use the `ticket_systems` and `routing` blocks instead. See the [configuration reference](/reference/config#sync) for the mapping between simple and advanced fields.

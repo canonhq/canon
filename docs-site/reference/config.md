@@ -32,12 +32,8 @@ agents:
   stale_detection: string | false  # Duration or false
   realization_check: boolean       # Enable AC realization tracking
 
-# Simple ticket sync
-sync:
-  system: string          # jira, linear, or github
-  project_key: string     # Project key for ticket creation
-  create_tickets: boolean # Auto-create tickets
-  reverse_sync: boolean   # Sync ticket status back to specs
+# Simple ticket sync (deprecated — use top-level ticket_system, project_key,
+# specs.auto_tickets, and specs.lifecycle_sync instead)
 
 # Advanced: multi-system ticket routing
 ticket_systems:
@@ -45,22 +41,29 @@ ticket_systems:
     system: string        # jira, linear, or github
     project: string       # Project key
     status_map:           # Spec status → ticket status mapping
-      draft: string
-      todo: string
-      in_progress: string
-      done: string
-      blocked: string
-      deprecated: string
+      forward:
+        draft: string
+        todo: string
+        in_progress: string
+        done: string
+        blocked: string
+        deprecated: string
+      reverse: map        # ticket status → spec state
+      fallback: string    # unmapped fallback (default: "draft")
     hierarchy:            # Section depth → issue type mapping
-      2: string           # e.g., "Epic"
-      3: string           # e.g., "Story"
-      4: string           # e.g., "Sub-task"
-    auto_parent: boolean  # Auto-link child tickets to parent
+      depth_to_type:
+        2: string           # e.g., "Epic"
+        3: string           # e.g., "Story"
+        4: string           # e.g., "Sub-task"
+      auto_parent: boolean  # Auto-link child tickets to parent
+      default_type: string  # Default issue type (default: "Task")
 
 routing:
   - match:
       tags: string[]      # Match on spec tags
       team: string        # Match on team
+      owner: string       # Match on owner
+      path: string        # Match on file path (glob)
       default: boolean    # Default route
     target: string        # ticket_systems key
 
@@ -90,6 +93,16 @@ sre:
   auto_triage: boolean
   weekly_digest: boolean
   error_spike_threshold: integer
+
+# Issue triage
+triage:
+  enabled: boolean              # Enable auto-triage
+  auto_create_specs: boolean    # Create specs from issues
+  classify_labels: boolean      # Auto-classify labels
+  ignore_labels: string[]       # Labels to skip
+  ignore_authors: string[]      # Authors to skip
+  spec_template: string         # Template path
+  confidence_threshold: number  # Min confidence (0.0-1.0)
 
 # Advanced Slack configuration
 slack:
@@ -214,39 +227,192 @@ Duration string (e.g., `"30d"`, `"7d"`) before flagging stale sections, or `fals
 
 Enable acceptance criteria realization tracking in PR analysis.
 
-### `sync`
+### `sync` (deprecated alias) {#sync}
 
-Simple ticket sync configuration. For multi-system routing, use `ticket_systems` instead.
+::: warning
+The `sync` block is a documentation alias for top-level fields. Use the canonical field names instead:
 
-#### `sync.system`
+| `sync` field | Canonical equivalent |
+|---|---|
+| `sync.system` | [`ticket_system`](#ticket-system) |
+| `sync.project_key` | [`project_key`](#project-key) |
+| `sync.create_tickets` | [`specs.auto_tickets`](#specs-auto-tickets) |
+| `sync.reverse_sync` | [`specs.lifecycle_sync`](#specs-lifecycle-sync) |
+:::
 
-**Type:** `string`
+### `ticket_systems` / `routing` {#ticket-systems}
 
-Ticket system: `jira`, `linear`, or `github`.
+Advanced multi-system ticket routing. Configure multiple ticket systems with independent status mappings, field mappings, and hierarchy rules, then use routing rules to direct tickets based on spec metadata.
 
-#### `sync.project_key`
+For a guided walkthrough, see the [Ticket Sync guide](/guides/ticket-sync#advanced-multi-system-routing).
 
-**Type:** `string`
+#### `ticket_systems.<name>`
 
-Project key for ticket creation.
+Each key defines a named ticket system connection.
 
-#### `sync.create_tickets`
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `system` | `string` | — | Ticket system: `jira`, `linear`, or `github` |
+| `project` | `string` | — | Project key for ticket creation |
+| `dedup_enabled` | `boolean` | `true` | Deduplicate before creating tickets |
+| `host_override` | `string` | — | Override host URL for this system connection |
+| `auth_profile` | `string` | — | Reference to a named auth profile |
 
-**Type:** `boolean`
-**Default:** `true`
+#### Status Mapping {#status-mapping}
 
-Auto-create tickets from spec sections.
+Maps spec section states to ticket statuses. Configured under `ticket_systems.<name>.status_map`.
 
-#### `sync.reverse_sync`
+**Forward mapping** maps spec states to ticket statuses:
 
-**Type:** `boolean`
-**Default:** `true`
+```yaml
+status_map:
+  forward:
+    draft: To Do
+    todo: To Do
+    in_progress: In Progress
+    done: Done
+    blocked: Blocked
+    deprecated: Won't Do
+```
 
-Sync ticket status changes back to specs.
+**Reverse mapping** syncs ticket status changes back to spec states:
 
-### `ticket_systems` / `routing`
+```yaml
+status_map:
+  reverse:
+    To Do: todo
+    In Progress: in_progress
+    Done: done
+    Blocked: blocked
+  fallback: draft
+```
 
-Advanced multi-system ticket routing. See the [Ticket Sync guide](/guides/ticket-sync#advanced-multi-system-routing) for detailed usage.
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `reverse` | `object` | — | Ticket status → spec state mapping |
+| `fallback` | `string` | `"draft"` | Spec state for unmapped ticket statuses |
+
+#### Field Mapping {#field-mapping}
+
+Maps spec metadata to ticket fields. Configured under `ticket_systems.<name>.field_map`.
+
+**Standard fields** map spec sources to ticket fields:
+
+```yaml
+field_map:
+  standard:
+    frontmatter.team: component
+    frontmatter.owner: assignee
+    frontmatter.tags: labels
+```
+
+**Custom fields** map system-specific field IDs to spec sources or literal values:
+
+```yaml
+field_map:
+  custom:
+    customfield_10001: frontmatter.owner
+    customfield_10042: frontmatter.team
+    customfield_10100: "literal:canon-managed"
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `standard` | `object` | Maps spec source → ticket field (e.g. `"frontmatter.team": "component"`) |
+| `custom` | `object` | Maps custom field ID → spec source or `"literal:<value>"` |
+
+#### Hierarchy {#hierarchy}
+
+Controls how spec section nesting depth maps to ticket types and parent-child relationships. Configured under `ticket_systems.<name>.hierarchy`.
+
+```yaml
+hierarchy:
+  depth_to_type:
+    2: Epic
+    3: Story
+    4: Sub-task
+  auto_parent: true
+  default_type: Task
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `depth_to_type` | `object` | — | Maps section depth (number) to issue type |
+| `auto_parent` | `boolean` | `false` | Auto-link child tickets to parent issues |
+| `default_type` | `string` | `"Task"` | Issue type when depth is not in `depth_to_type` |
+
+#### Routing Rules {#routing}
+
+Route tickets to different systems or projects based on spec metadata. Each rule has a `match` condition and a `target` system.
+
+```yaml
+routing:
+  - match:
+      tags: [backend, api]
+    target: jira_backend
+  - match:
+      team: mobile
+    target: linear_mobile
+    shadow_targets:
+      - jira_readonly
+  - match:
+      default: true
+    target: jira_default
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `match.tags` | `string[]` | Match specs with any of these tags |
+| `match.team` | `string` | Match specs assigned to this team |
+| `match.owner` | `string` | Match specs assigned to this owner |
+| `match.path` | `string` | Match specs by file path (glob pattern) |
+| `match.default` | `boolean` | Catch-all rule (must be last) |
+| `target` | `string` | `ticket_systems` key to route to |
+| `shadow_targets` | `string[]` | Read-only sync targets (mirror tickets without creating duplicates) |
+
+#### Auth Profiles {#auth-profiles}
+
+Named credential sets for multi-system authentication. Referenced by `ticket_systems.<name>.auth_profile`.
+
+```yaml
+auth_profiles:
+  jira_prod:
+    system: jira
+    auth_method: api_token
+    env_prefix: JIRA_PROD_
+  linear_team:
+    system: linear
+    auth_method: api_key
+    env_prefix: LINEAR_TEAM_
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `system` | `string` | Ticket system type |
+| `auth_method` | `string` | Authentication method (`api_token`, `personal_access_token`, `api_key`, `app_installation`) |
+| `env_prefix` | `string` | Environment variable prefix for credentials (must match `^[A-Z][A-Z0-9_]*_$`, e.g. `JIRA_PROD_`) |
+
+#### Templates {#templates}
+
+Mustache-style templates for ticket content generation. Configured under `ticket_systems.<name>.templates`.
+
+```yaml
+templates:
+  summary: "[{{spec.title}} §{{section.section_number}}] {{section.title}}"
+  description: |
+    {{section.clean_content}}
+
+    ---
+    Spec: {{spec_url}}
+    Section: {{section.id}}
+    Owner: {{spec.owner}}
+    Team: {{spec.team}}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `summary` | `string` | Template for ticket title/summary |
+| `description` | `string` | Template for ticket body/description |
 
 ### `ide`
 
@@ -335,6 +501,59 @@ sre:
 | `auto_triage` | `boolean` | `true` | Automatically triage incoming alerts against open spec sections |
 | `weekly_digest` | `boolean` | `true` | Send a weekly SRE digest to `alerts_channel` |
 | `error_spike_threshold` | `integer` | `10` | Number of errors per minute that triggers a spike alert |
+
+### `triage`
+
+Controls automatic issue triage behavior when Canon processes incoming GitHub issues.
+
+#### `triage.enabled`
+
+**Type:** `boolean`  
+**Default:** `true`
+
+Enable or disable automatic issue triage.
+
+#### `triage.auto_create_specs`
+
+**Type:** `boolean`  
+**Default:** `false`
+
+Automatically create spec documents from triaged issues.
+
+#### `triage.classify_labels`
+
+**Type:** `boolean`  
+**Default:** `true`
+
+Automatically classify and apply labels to triaged issues.
+
+#### `triage.ignore_labels`
+
+**Type:** `string[]`  
+**Default:** `[]`
+
+Issues with any of these labels will be skipped during triage.
+
+#### `triage.ignore_authors`
+
+**Type:** `string[]`  
+**Default:** `[]`
+
+Issues from these authors will be skipped during triage.
+
+#### `triage.spec_template`
+
+**Type:** `string`  
+**Default:** `"docs/specs/_template.md"`
+
+Path to the spec template used when `auto_create_specs` is enabled.
+
+#### `triage.confidence_threshold`
+
+**Type:** `number`  
+**Default:** `0.7`
+
+Minimum confidence score (0.0–1.0) for auto-classification actions.
 
 ### `slack`
 
