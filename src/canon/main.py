@@ -84,6 +84,7 @@ from .web.middleware import (
     SecurityBlockMiddleware,
 )
 from .web.profile_routes import profile_router
+from .web.review_routes import router as review_router
 from .web.routes import app_router, spa_router
 from .web.routes import router as web_router
 from .web.sync_routes import sync_router
@@ -287,6 +288,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.billing_service = None
     app.state.admin_store = None
     app.state.audit_store = None
+    app.state.pr_review_store = None
     if settings.database_url:
         try:
             pool = await create_pool(settings.database_url)
@@ -310,6 +312,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                     provider=app.state.oidc_provider,
                     cache=app.state.cache,
                 )
+            from .db.pr_review_store import PRReviewStore
+
+            app.state.pr_review_store = PRReviewStore(pool)
             if AuditStore is not None:
                 app.state.audit_store = AuditStore(pool)
             logger.info("Database pool initialised")
@@ -805,6 +810,7 @@ app.include_router(integration_router)
 app.include_router(api_v1_actions_router)
 app.include_router(ticket_router)
 app.include_router(sync_router)
+app.include_router(review_router)
 # Admin API router must come before the SPA catch-all (cloud-only)
 if admin_router is not None:
     app.include_router(admin_router)

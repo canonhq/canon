@@ -109,6 +109,24 @@ async def on_pull_request_merged(client, payload: dict) -> None:
     # Extract embedded analysis data
     analysis = extract_analysis_data(bot_comment["body"])
     if not analysis:
+        # Fallback: try loading from pr_reviews DB table
+        try:
+            from canon.main import app
+
+            pr_review_store = getattr(app.state, "pr_review_store", None)
+            if pr_review_store is not None:
+                db_review = await pr_review_store.get_latest_review(f"{owner}/{repo}", pr_number)
+                if db_review and db_review.get("analysis"):
+                    a = db_review["analysis"]
+                    analysis = {
+                        "realizations": a.get("realizations", []),
+                        "discrepancies": a.get("discrepancies", []),
+                        "doc_updates": a.get("doc_updates", []),
+                    }
+                    logger.info("PR #%d — loaded analysis from DB fallback", pr_number)
+        except Exception:
+            logger.warning("PR #%d — DB fallback for analysis failed", pr_number, exc_info=True)
+    if not analysis:
         return
 
     # Build realization insertions from embedded data

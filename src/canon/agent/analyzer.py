@@ -493,6 +493,8 @@ def format_analysis_comment(
     base_url: str = "",
     owner: str = "",
     repo: str = "",
+    pr_number: int = 0,
+    head_sha: str = "",
     doc_patterns: list[str] | None = None,
 ) -> str:
     """Format an analysis result as a GitHub markdown comment."""
@@ -666,7 +668,10 @@ def format_analysis_comment(
     footer_parts = [f"{model_display}", f"{tokens_in} in, {tokens_out} out", f"${cost}"]
     if preview_url:
         footer_parts.append(f"[preview]({preview_url})")
-    if base_url and owner and repo:
+    if base_url and owner and repo and pr_number:
+        review_url = f"{base_url.rstrip('/')}/reviews/{owner}/{repo}/{pr_number}"
+        footer_parts.append(f"[View in Canon]({review_url})")
+    elif base_url and owner and repo:
         specs_url = f"{base_url.rstrip('/')}/{owner}/{repo}"
         footer_parts.append(f"[View in Canon]({specs_url})")
     footer_parts.extend(["dismiss", "reanalyze"])
@@ -675,13 +680,14 @@ def format_analysis_comment(
     lines.append("---")
     lines.append(f"<sub>canon \u00b7 {' \u00b7 '.join(footer_parts)}</sub>")
 
-    embedded_json = json.dumps(
-        {
-            "docUpdates": [u.model_dump() for u in result.doc_updates],
-            "discrepancies": [d.model_dump() for d in result.discrepancies],
-            "realizations": [r.model_dump() for r in result.realizations],
-        }
-    )
+    embedded_data = {
+        "docUpdates": [u.model_dump() for u in result.doc_updates],
+        "discrepancies": [d.model_dump() for d in result.discrepancies],
+        "realizations": [r.model_dump() for r in result.realizations],
+    }
+    if head_sha:
+        embedded_data["headSha"] = head_sha
+    embedded_json = json.dumps(embedded_data)
     # Base64-encode to avoid breaking HTML comments — raw JSON can contain
     # "--" sequences (em dashes, etc.) which prematurely close the comment.
     encoded = base64.b64encode(embedded_json.encode()).decode()

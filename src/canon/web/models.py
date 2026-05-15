@@ -291,3 +291,45 @@ class ProfileResponse(BaseModel):
     github_user: ProfileGitHubUser | None = None
     last_login_at: str | None = None
     inferred_role: str
+
+
+class ReviewSummary(BaseModel):
+    """Summary of a single PR review."""
+
+    id: int
+    pr_number: int
+    pr_url: str
+    pr_title: str
+    pr_author: str
+    head_sha: str
+    base_ref: str
+    model: str
+    tokens_in: int
+    tokens_out: int
+    cost_estimate: float
+    review_kind: str
+    created_at: str  # ISO format
+    spec_reference_count: int = 0
+    discrepancy_count: int = 0
+    realization_count: int = 0
+    realized_count: int = 0
+
+
+class ReviewDetail(ReviewSummary):
+    """Full PR review detail including analysis payload."""
+
+    analysis: dict  # full PRAnalysisResult
+
+
+class PRReviewResponse(BaseModel):
+    """JSON response for GET /reviews/{owner}/{repo}/{pr_number}."""
+
+    review: ReviewDetail | None = None
+    history: list[ReviewSummary] = []
+
+
+class RepoReviewListResponse(BaseModel):
+    """JSON response for GET /reviews/{owner}/{repo}."""
+
+    reviews: list[ReviewSummary] = []
+    total: int = 0

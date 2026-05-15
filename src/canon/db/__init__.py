@@ -8,6 +8,7 @@ from .content_cache_store import ContentCacheStore
 from .error_store import ErrorStore
 from .integration_store import IntegrationStore
 from .pool import close_pool, create_pool
+from .pr_review_store import PRReviewStore
 from .registry import InstallationRegistry
 from .schema import ensure_schema
 from .session_store import SessionStore
@@ -20,6 +21,7 @@ __all__ = [
     "ErrorStore",
     "InstallationRegistry",
     "IntegrationStore",
+    "PRReviewStore",
     "SessionStore",
     "SyncHistoryStore",
     "UserConnectionStore",

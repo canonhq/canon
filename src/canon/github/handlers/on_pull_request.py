@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC
 
 import httpx
 
@@ -213,6 +214,55 @@ def _get_agent_store():
         return None
 
 
+def _get_pr_review_store():
+    """Return PRReviewStore from app.state, or None if unavailable."""
+    try:
+        from canon.main import app
+
+        return getattr(app.state, "pr_review_store", None)
+    except Exception:
+        return None
+
+
+def _should_skip_reanalysis(
+    prev_review: dict,
+    raw_files: list[dict],
+    pr: dict,
+) -> str | None:
+    """Check if re-analysis can be skipped. Returns skip reason or None."""
+    from datetime import datetime
+
+    # Same SHA as previously reviewed → no changes at all
+    current_sha = pr["head"].get("sha", "")
+    if current_sha and prev_review.get("head_sha") == current_sha:
+        return "no_changes"
+
+    # All changed files are config-only
+    filenames = [f["filename"] for f in raw_files]
+    if filenames and all(CONFIG_ONLY_RE.match(fn) for fn in filenames):
+        return "config_only_changes"
+
+    # Spec files changed → always re-analyze
+    spec_files = filter_spec_files(filenames)
+    if spec_files:
+        return None
+
+    # Staleness: if previous review is >24h old, always re-analyze
+    prev_created = prev_review.get("created_at")
+    if prev_created is not None:
+        if isinstance(prev_created, datetime):
+            if prev_created.tzinfo is None:
+                age = datetime.now(UTC) - prev_created.replace(tzinfo=UTC)
+            else:
+                age = datetime.now(UTC) - prev_created
+        else:
+            age = None
+        if age is not None and age.total_seconds() > 86400:
+            return None
+
+    return "no_spec_relevant_changes"
+
+
 def _build_search_query(pr: dict, raw_files: list[dict], max_chars: int = 500) -> str:
     """Build a search query from PR title + body + filenames."""
     parts: list[str] = [pr["title"]]
@@ -360,6 +410,7 @@ async def on_pull_request(client, payload: dict) -> None:
     owner = payload["repository"]["owner"]["login"]
     repo = payload["repository"]["name"]
     pr_number = pr["number"]
+    action = payload.get("action")
     tag = f"[canon] {owner}/{repo}#{pr_number}"
 
     try:
@@ -369,6 +420,37 @@ async def on_pull_request(client, payload: dict) -> None:
         has_non_config = any(not CONFIG_ONLY_RE.match(f["filename"]) for f in raw_files)
         if not has_non_config:
             return
+
+        # Smart re-analysis: skip if prior review exists and changes are trivial
+        if action == "synchronize":
+            pr_review_store = _get_pr_review_store()
+            if pr_review_store is not None:
+                prev_review = await pr_review_store.get_latest_review(f"{owner}/{repo}", pr_number)
+                if prev_review is not None:
+                    skip_reason = _should_skip_reanalysis(prev_review, raw_files, pr)
+                    if skip_reason:
+                        # Preserve existing comment and add skip note
+                        prev_sha = prev_review["head_sha"][:7]
+                        await client.upsert_bot_comment(
+                            owner,
+                            repo,
+                            pr_number,
+                            f"<!-- canon-bot -->\n## Canon\n\n"
+                            f"_Previous review (at `{prev_sha}`) still applies — "
+                            f"new changes are {skip_reason.replace('_', ' ')}._\n\n"
+                            f"<sub>Use `@canon reanalyze` to force a new review.</sub>",
+                        )
+                        analytics.track(
+                            "pr_analysis_skipped",
+                            properties={
+                                "repo": f"{owner}/{repo}",
+                                "pr_number": pr_number,
+                                "skip_reason": skip_reason,
+                            },
+                            groups={"organization": owner},
+                        )
+                        logger.info("%s — skipped re-analysis: %s", tag, skip_reason)
+                        return
 
         # Load repo config to get configurable doc_paths
         config = await load_repo_config(client, owner, repo, ref=pr["base"]["ref"])
@@ -511,6 +593,8 @@ async def on_pull_request(client, payload: dict) -> None:
                 base_url=_settings.platform_url,
                 owner=owner,
                 repo=repo,
+                pr_number=pr_number,
+                head_sha=pr["head"]["sha"],
                 doc_patterns=doc_paths,
             )
             await client.upsert_bot_comment(owner, repo, pr_number, comment)
@@ -602,6 +686,35 @@ async def on_pull_request(client, payload: dict) -> None:
                         )
                     except Exception:
                         logger.warning("%s — failed to store realizations", tag, exc_info=True)
+
+            # Persist the full review (best-effort)
+            pr_review_store = _get_pr_review_store()
+            if pr_review_store is not None:
+                try:
+                    from ..agent.analyzer import estimate_cost
+
+                    cost_str = estimate_cost(
+                        result.tokens_used.input,
+                        result.tokens_used.output,
+                        DEFAULT_AGENT_CONFIG.model,
+                    )
+                    await pr_review_store.upsert_review(
+                        org=owner,
+                        repo=f"{owner}/{repo}",
+                        pr_number=pr_number,
+                        pr_url=pr["html_url"],
+                        pr_title=pr["title"],
+                        pr_author=pr["user"]["login"],
+                        head_sha=pr["head"]["sha"],
+                        base_ref=pr["base"]["ref"],
+                        analysis=result.model_dump(mode="json"),
+                        model=DEFAULT_AGENT_CONFIG.model,
+                        tokens_in=result.tokens_used.input,
+                        tokens_out=result.tokens_used.output,
+                        cost_estimate=float(cost_str),
+                    )
+                except Exception:
+                    logger.warning("%s — failed to store PR review", tag, exc_info=True)
         else:
             spec_list_md = "\n".join(f"- `{s['file_path']}`" for s in specs_data)
             await client.upsert_bot_comment(
