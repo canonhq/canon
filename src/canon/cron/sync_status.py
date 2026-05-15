@@ -396,6 +396,7 @@ async def run_reverse_sync() -> list[dict]:
                                 adapter,
                                 system_config=resolved_sys_config,
                                 repo=full_repo,
+                                org=owner,
                                 installation_id=int(install_id),
                                 ref_store=ref_store,
                             )
@@ -464,14 +465,31 @@ def main() -> None:
             posthog_host=settings.posthog_host,
         )
 
+    import importlib.metadata
+    import socket
+
+    try:
+        app_version = importlib.metadata.version("canonhq")
+    except importlib.metadata.PackageNotFoundError:
+        app_version = "dev"
+
+    analytics.init(
+        settings.posthog_key,
+        settings.posthog_host,
+        super_properties={
+            "service": "canon-cron",
+            "environment": settings.environment,
+            "version": app_version,
+            "hostname": socket.gethostname(),
+        },
+    )
+
     total_errors = 0
     try:
         results = asyncio.run(run_reverse_sync())
 
         total_changed = sum(r["changed"] for r in results)
         total_errors = sum(r["errors"] for r in results)
-
-        from canon import analytics
 
         analytics.track(
             "reverse_sync_cron_summary",
@@ -489,6 +507,7 @@ def main() -> None:
             total_errors,
         )
     finally:
+        analytics.shutdown()
         otel_logging.shutdown()
 
     if total_errors > 0:

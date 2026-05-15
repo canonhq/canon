@@ -8,6 +8,7 @@ metadata:
 spec:
   schedule: {{ .Values.cronJob.schedule | quote }}
   concurrencyPolicy: {{ .Values.cronJob.concurrencyPolicy }}
+  startingDeadlineSeconds: 600
   jobTemplate:
     spec:
       template:
@@ -52,6 +53,10 @@ spec:
               {{- if or .Values.secrets.auth0.domain .Values.secrets.auth0.existingSecret }}
                 - secretRef:
                     name: {{ include "canon.auth0SecretName" . }}
+              {{- end }}
+              {{- if or .Values.secrets.posthog.apiKey .Values.secrets.posthog.existingSecret }}
+                - secretRef:
+                    name: {{ include "canon.posthogSecretName" . }}
               {{- end }}
               resources:
                 {{- toYaml .Values.resources | nindent 16 }}
