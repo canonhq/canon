@@ -526,3 +526,392 @@ class TestIlikeSearch:
         assert len(results) == 1
         assert results[0].heading == "Login"
         assert results[0].rrf_score == 0.0
+
+    async def test_ilike_with_repo_filter(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        await index._ilike_search(query_text="test", repo="org/repo")
+
+        sql = mock_conn.fetch.call_args[0][0]
+        assert "d.repo = $2" in sql
+
+    async def test_ilike_with_status_filter(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        await index._ilike_search(query_text="test", status="done")
+
+        sql = mock_conn.fetch.call_args[0][0]
+        assert "s.status = $2" in sql
+
+    async def test_ilike_with_both_filters(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        await index._ilike_search(query_text="test", repo="org/r", status="draft")
+
+        sql = mock_conn.fetch.call_args[0][0]
+        assert "d.repo = $2" in sql
+        assert "s.status = $3" in sql
+
+
+# ---------------------------------------------------------------------------
+# _vector_only_search
+# ---------------------------------------------------------------------------
+
+
+class TestVectorOnlySearch:
+    async def test_returns_results_with_similarity_score(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = [
+            {
+                "section_id": 1,
+                "document_id": 10,
+                "repo": "org/repo",
+                "path": "docs/specs/auth.md",
+                "doc_title": "Auth",
+                "heading": "Phase 1",
+                "body": "Do auth",
+                "status": "draft",
+                "similarity": 0.85,
+            },
+        ]
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        results = await index._vector_only_search(
+            query_embedding=[0.1, 0.2, 0.3],
+        )
+
+        assert len(results) == 1
+        assert results[0].rrf_score == pytest.approx(0.85)
+
+    async def test_vector_only_with_repo_filter(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        await index._vector_only_search(
+            query_embedding=[0.1],
+            repo="org/repo",
+        )
+
+        sql = mock_conn.fetch.call_args[0][0]
+        assert "d.repo = $2" in sql
+
+    async def test_vector_only_with_status_filter(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        await index._vector_only_search(
+            query_embedding=[0.1],
+            status="in-progress",
+        )
+
+        sql = mock_conn.fetch.call_args[0][0]
+        assert "s.status = $2" in sql
+
+    async def test_vector_only_with_both_filters(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        await index._vector_only_search(
+            query_embedding=[0.1],
+            repo="org/repo",
+            status="done",
+        )
+
+        sql = mock_conn.fetch.call_args[0][0]
+        assert "d.repo = $2" in sql
+        assert "s.status = $3" in sql
+
+
+# ---------------------------------------------------------------------------
+# _bm25_only_search
+# ---------------------------------------------------------------------------
+
+
+class TestBm25OnlySearch:
+    async def test_with_repo_filter(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        await index._bm25_only_search(query_text="test", repo="org/repo")
+
+        sql = mock_conn.fetch.call_args[0][0]
+        assert "d.repo = $2" in sql
+
+    async def test_with_status_filter(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        await index._bm25_only_search(query_text="test", status="done")
+
+        sql = mock_conn.fetch.call_args[0][0]
+        assert "s.status = $2" in sql
+
+    async def test_falls_back_to_ilike_on_paradedb_error(self):
+        """When ParadeDB is unavailable, falls back to ILIKE search."""
+        mock_conn = AsyncMock()
+        # First call (BM25) raises, second call (ILIKE fallback) works
+        mock_conn.fetch = AsyncMock(
+            side_effect=[
+                Exception("paradedb not installed"),
+                [
+                    {
+                        "section_id": 1,
+                        "document_id": 10,
+                        "repo": "org/repo",
+                        "path": "p.md",
+                        "doc_title": "T",
+                        "heading": "H",
+                        "body": "B",
+                        "status": "draft",
+                    },
+                ],
+            ]
+        )
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        results = await index._bm25_only_search(query_text="test")
+
+        assert len(results) == 1
+        assert results[0].rrf_score == 0.0  # ILIKE fallback score
+
+
+# ---------------------------------------------------------------------------
+# hybrid_search fallback to vector-only
+# ---------------------------------------------------------------------------
+
+
+class TestHybridSearchFallback:
+    async def test_falls_back_to_vector_only_when_bm25_unavailable(self):
+        """When the hybrid SQL fails (e.g. ParadeDB not installed), falls
+        back to vector-only search."""
+        mock_conn = AsyncMock()
+        # First call (hybrid) raises, second call (vector-only) works
+        mock_conn.fetch = AsyncMock(
+            side_effect=[
+                Exception("paradedb not installed"),
+                [
+                    {
+                        "section_id": 1,
+                        "document_id": 10,
+                        "repo": "org/repo",
+                        "path": "p.md",
+                        "doc_title": "T",
+                        "heading": "H",
+                        "body": "B",
+                        "status": "draft",
+                        "similarity": 0.9,
+                    },
+                ],
+            ]
+        )
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        results = await index.hybrid_search(
+            query_embedding=[0.1, 0.2],
+            query_text="test",
+        )
+
+        assert len(results) == 1
+        assert results[0].rrf_score == pytest.approx(0.9)
+
+
+# ---------------------------------------------------------------------------
+# get_facet_counts
+# ---------------------------------------------------------------------------
+
+
+class TestGetFacetCounts:
+    async def test_returns_status_and_repo_counts(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(
+            side_effect=[
+                # status query
+                [
+                    {"status": "draft", "cnt": 5},
+                    {"status": "done", "cnt": 2},
+                ],
+                # repo query
+                [
+                    {"repo": "org/repo1", "cnt": 4},
+                    {"repo": "org/repo2", "cnt": 3},
+                ],
+            ]
+        )
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        result = await index.get_facet_counts()
+
+        assert result["status"] == {"draft": 5, "done": 2}
+        assert result["repo"] == {"org/repo1": 4, "org/repo2": 3}
+
+    async def test_with_repo_filter(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(
+            side_effect=[
+                [{"status": "draft", "cnt": 1}],
+                [{"repo": "org/r", "cnt": 1}],
+            ]
+        )
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        await index.get_facet_counts(repo="org/r")
+
+        # Both queries should include WHERE clause
+        for call in mock_conn.fetch.call_args_list:
+            sql = call[0][0]
+            assert "WHERE" in sql
+
+    async def test_filters_out_empty_status(self):
+        """Rows with empty-string status are excluded."""
+        mock_conn = AsyncMock()
+        mock_conn.fetch = AsyncMock(
+            side_effect=[
+                [{"status": "", "cnt": 2}, {"status": "draft", "cnt": 3}],
+                [],
+            ]
+        )
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        result = await index.get_facet_counts()
+        assert "" not in result["status"]
+        assert result["status"] == {"draft": 3}
+
+
+# ---------------------------------------------------------------------------
+# mark_code_change
+# ---------------------------------------------------------------------------
+
+
+class TestMarkCodeChange:
+    async def test_returns_empty_when_no_paths(self):
+        mock_pool = MagicMock()
+        index = SearchIndex(mock_pool)
+        result = await index.mark_code_change("org/repo", [])
+        assert result == []
+
+    async def test_updates_last_code_change_and_returns_stale_ids(self):
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value="UPDATE 3")
+        mock_conn.fetch = AsyncMock(return_value=[{"id": 42}, {"id": 99}])
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        result = await index.mark_code_change("org/repo", ["src/auth.py"])
+
+        assert result == [42, 99]
+        # Verify the UPDATE for last_code_change_at was called
+        update_sql = mock_conn.execute.call_args[0][0]
+        assert "last_code_change_at" in update_sql
+        # Verify the stale_since UPDATE+RETURNING was called
+        stale_sql = mock_conn.fetch.call_args[0][0]
+        assert "stale_since" in stale_sql
+
+    async def test_returns_empty_when_no_docs_become_stale(self):
+        mock_conn = AsyncMock()
+        mock_conn.execute = AsyncMock(return_value="UPDATE 1")
+        mock_conn.fetch = AsyncMock(return_value=[])
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        result = await index.mark_code_change("org/repo", ["src/main.py"])
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# find_related_docs
+# ---------------------------------------------------------------------------
+
+
+class TestFindRelatedDocs:
+    async def test_returns_empty_when_no_code_paths(self):
+        mock_pool = MagicMock()
+        index = SearchIndex(mock_pool)
+        result = await index.find_related_docs("org/repo", [])
+        assert result == []
+
+    async def test_returns_empty_when_no_dirs_extracted(self):
+        """Single-component paths produce no directory prefixes."""
+        mock_pool = MagicMock()
+        index = SearchIndex(mock_pool)
+        result = await index.find_related_docs("org/repo", ["README.md"])
+        assert result == []
+
+    async def test_returns_results_matching_dirs(self):
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = [
+            {
+                "section_id": 1,
+                "document_id": 10,
+                "repo": "org/repo",
+                "path": "docs/specs/auth.md",
+                "doc_title": "Auth",
+                "heading": "Login",
+                "body": "src/auth code",
+                "status": "draft",
+            },
+        ]
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        results = await index.find_related_docs("org/repo", ["src/auth/handler.py"])
+
+        assert len(results) == 1
+        assert results[0].heading == "Login"
+        assert results[0].rrf_score == 0.0
+
+    async def test_limits_to_5_dirs(self):
+        """Only the first 5 unique directory prefixes are used in the query."""
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = []
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        paths = [f"dir{i}/file.py" for i in range(10)]
+        await index.find_related_docs("org/repo", paths)
+
+        sql = mock_conn.fetch.call_args[0][0]
+        # Should have at most 5 ILIKE conditions
+        ilike_count = sql.count("ILIKE")
+        assert ilike_count <= 5
+
+
+# ---------------------------------------------------------------------------
+# delete_repo edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteRepoEdgeCases:
+    async def test_handles_unexpected_result_format(self):
+        """If execute returns something unparseable, returns 0."""
+        mock_conn = AsyncMock()
+        mock_conn.execute.return_value = "UNEXPECTED"
+        mock_pool = _mock_pool_with_conn(mock_conn)
+
+        index = SearchIndex(mock_pool)
+        count = await index.delete_repo("org/repo")
+        assert count == 0

@@ -272,3 +272,75 @@ class TestPerBackendErrorReporting:
         assert "opensearch_error" in d
         assert d["postgres_error"] is not None
         assert d["opensearch_error"] is None
+
+
+class TestCorpusReportToDict:
+    async def test_to_dict_structure(self):
+        results = [_result("o/r", "a.md", f"H{i}") for i in range(3)]
+        pg = _backend_returning(results)
+        os_ = _backend_returning(results)
+
+        report = await compare_corpus(queries=["q1"], postgres=pg, opensearch=os_, limit=3)
+        d = report.to_dict()
+        assert "query_count" in d
+        assert "mean_overlap_at_5" in d
+        assert "mean_overlap_at_10" in d
+        assert "mean_overlap_at_20" in d
+        assert "mean_rank_correlation" in d
+        assert "queries_with_zero_overlap" in d
+        assert "failures" in d
+        assert "per_query" in d
+        assert len(d["per_query"]) == 1
+
+
+class TestSerialiseResult:
+    def test_short_body_not_truncated(self):
+        from canon.search.parity import _serialise_result
+
+        r = _result("o/r", "p.md", "H")
+        d = _serialise_result(r)
+        assert not d["body"].endswith("\u2026")
+
+    def test_long_body_truncated(self):
+        from canon.search.parity import _serialise_result
+
+        r = SearchResult(1, 1, "o/r", "p.md", "T", "H", "x" * 300, "draft", 0.5)
+        d = _serialise_result(r)
+        assert d["body"].endswith("\u2026")
+        assert len(d["body"]) == 161
+
+
+class TestCompareQueryEmbeddingError:
+    async def test_embedding_failure_falls_back_to_text_only(self):
+        """When embed_client.embed_query raises, the comparison proceeds
+        with None embedding (text-only) rather than failing."""
+        pg = _backend_returning([])
+        os_ = _backend_returning([])
+        embed = MagicMock()
+        embed.is_available = True
+        embed.embed_query.side_effect = RuntimeError("API quota exceeded")
+
+        cmp = await compare_query(query="auth", postgres=pg, opensearch=os_, embed_client=embed)
+        # Both backends were called with None embedding
+        for backend in (pg, os_):
+            kwargs = backend.hybrid_search.await_args.kwargs
+            assert kwargs["query_embedding"] is None
+        # No error fields set - only embedding failed, not the backends
+        assert cmp.postgres_error is None
+        assert cmp.opensearch_error is None
+
+
+class TestCompareCorpusExceptionHandling:
+    async def test_compare_query_exception_counts_as_failure(self):
+        """When compare_query itself raises (not a backend error), it
+        counts as a failure and the query is skipped."""
+        pg = MagicMock()
+        # First call raises from compare_query level
+        pg.hybrid_search = AsyncMock(side_effect=[RuntimeError("unexpected"), []])
+        os_ = _backend_returning([])
+
+        report = await compare_corpus(queries=["bad", "good"], postgres=pg, opensearch=os_)
+        # "bad" query: pg raises, captured as postgres_error -> failure
+        # "good" query: succeeds
+        assert report.query_count == 2
+        assert report.failures >= 1

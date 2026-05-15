@@ -688,3 +688,371 @@ class TestOpenSearchGetRelated:
 
         backend = OpenSearchBackend(client)
         assert await backend.get_related(repo="o/r", path="p.md") == []
+
+    async def test_swallows_source_spec_lookup_error(self):
+        """If the GET for the source spec raises, return [] rather than crash."""
+        raw = MagicMock()
+        raw.get = AsyncMock(side_effect=RuntimeError("network error"))
+        client = MagicMock()
+        client.is_enabled = True
+        client._client = raw
+        client.specs_index = "canon-specs"
+
+        backend = OpenSearchBackend(client)
+        assert await backend.get_related(repo="o/r", path="p.md") == []
+
+    async def test_swallows_knn_search_error(self):
+        """If the kNN search raises, return [] rather than crash."""
+        raw = MagicMock()
+        raw.get = AsyncMock(return_value={"found": True, "_source": {"embedding": [0.1, 0.2]}})
+        raw.search = AsyncMock(side_effect=RuntimeError("search failed"))
+        client = MagicMock()
+        client.is_enabled = True
+        client._client = raw
+        client.specs_index = "canon-specs"
+
+        backend = OpenSearchBackend(client)
+        assert await backend.get_related(repo="o/r", path="p.md") == []
+
+    async def test_surfaces_ai_exposure_and_tags_on_results(self):
+        """OpenSearch get_related must surface ai_exposure and tags so the MCP
+        layer can enforce per-spec exposure filtering."""
+        raw = MagicMock()
+        raw.get = AsyncMock(return_value={"found": True, "_source": {"embedding": [0.1, 0.2]}})
+        raw.search = AsyncMock(
+            return_value={
+                "hits": {
+                    "hits": [
+                        {
+                            "_score": 0.9,
+                            "_source": {
+                                "repo": "o/r",
+                                "path": "hidden.md",
+                                "title": "Hidden",
+                                "ai_exposure": "none",
+                                "tags": ["secret"],
+                            },
+                        },
+                        {
+                            "_score": 0.8,
+                            "_source": {
+                                "repo": "o/r",
+                                "path": "ok.md",
+                                "title": "OK",
+                                "ai_exposure": "",
+                                "tags": None,
+                            },
+                        },
+                    ]
+                }
+            }
+        )
+        client = MagicMock()
+        client.is_enabled = True
+        client._client = raw
+        client.specs_index = "canon-specs"
+
+        backend = OpenSearchBackend(client)
+        results = await backend.get_related(repo="o/r", path="src.md")
+        assert len(results) == 2
+        assert results[0].ai_exposure == "none"
+        assert results[0].tags == ["secret"]
+        assert results[1].ai_exposure == ""
+        assert results[1].tags == []
+
+    async def test_repo_without_slash_uses_whole_name_as_owner(self):
+        """When repo has no slash, the whole string is the owner."""
+        raw = MagicMock()
+        raw.get = AsyncMock(return_value={"found": True, "_source": {"embedding": [0.1]}})
+        raw.search = AsyncMock(return_value={"hits": {"hits": []}})
+        client = MagicMock()
+        client.is_enabled = True
+        client._client = raw
+        client.specs_index = "canon-specs"
+
+        backend = OpenSearchBackend(client)
+        await backend.get_related(repo="monorepo", path="p.md")
+        body = raw.search.await_args.kwargs["body"]
+        knn = body["query"]["bool"]["must"][0]["knn"]
+        assert knn["embedding"]["filter"] == {"term": {"owner": "monorepo"}}
+
+
+class TestOpenSearchFacetCountsErrorHandling:
+    async def test_swallows_search_errors_and_returns_empty(self):
+        raw = MagicMock()
+        raw.search = AsyncMock(side_effect=RuntimeError("cluster down"))
+        client = MagicMock()
+        client.is_enabled = True
+        client._client = raw
+        client.specs_index = "canon-specs"
+        backend = OpenSearchBackend(client)
+        result = await backend.get_facet_counts()
+        assert result == {"status": {}, "repo": {}, "team": {}, "tags": {}}
+
+    async def test_filters_out_null_and_empty_bucket_keys(self):
+        """Buckets with None or empty-string keys must be excluded from facets."""
+        backend, _raw = _opensearch_backend_with_response(
+            {
+                "aggregations": {
+                    "status": {
+                        "buckets": [
+                            {"key": "draft", "doc_count": 3},
+                            {"key": None, "doc_count": 1},
+                            {"key": "", "doc_count": 2},
+                        ]
+                    },
+                    "repo": {"buckets": []},
+                    "team": {"buckets": []},
+                    "tags": {"buckets": []},
+                }
+            }
+        )
+        result = await backend.get_facet_counts()
+        assert result["status"] == {"draft": 3}
+
+    async def test_no_repo_filter_uses_match_all(self):
+        backend, raw = _opensearch_backend_with_response({"aggregations": {}})
+        await backend.get_facet_counts(repo=None)
+        body = raw.search.await_args.kwargs["body"]
+        assert body["query"] == {"match_all": {}}
+
+
+class TestSynthInt:
+    def test_empty_string_returns_zero(self):
+        from canon.search.backend import _synth_int
+
+        assert _synth_int("") == 0
+
+    def test_non_empty_returns_positive_int(self):
+        from canon.search.backend import _synth_int
+
+        result = _synth_int("some-doc-id")
+        assert isinstance(result, int)
+        assert result >= 0
+
+    def test_deterministic(self):
+        from canon.search.backend import _synth_int
+
+        assert _synth_int("abc") == _synth_int("abc")
+
+    def test_bounded_to_31_bits(self):
+        from canon.search.backend import _synth_int
+
+        result = _synth_int("any-value")
+        assert result < 2**31 - 1
+
+
+class TestOpenSearchHybridSearchRaiseOnError:
+    async def test_raises_when_raise_on_error_true(self):
+        """When raise_on_error=True, search exceptions propagate."""
+        import pytest as _pytest
+
+        raw = MagicMock()
+        raw.search = AsyncMock(side_effect=RuntimeError("boom"))
+        client = MagicMock()
+        client.is_enabled = True
+        client._client = raw
+        client.sections_index = "canon-sections"
+        backend = OpenSearchBackend(client)
+        with _pytest.raises(RuntimeError):
+            await backend.hybrid_search(
+                query_embedding=None,
+                query_text="x",
+                raise_on_error=True,
+            )
+
+
+class TestPostgresGetRelatedEdgeCases:
+    async def test_returns_empty_when_source_spec_not_found(self):
+        """fetchrow returns None (source spec not in DB)."""
+
+        class _AsyncCM:
+            def __init__(self, conn):
+                self._conn = conn
+
+            async def __aenter__(self):
+                return self._conn
+
+            async def __aexit__(self, *_args):
+                return False
+
+        conn = MagicMock()
+        conn.fetchrow = AsyncMock(return_value=None)
+        pool = MagicMock()
+        pool.acquire = MagicMock(return_value=_AsyncCM(conn))
+        index = MagicMock()
+        index._pool = pool
+
+        backend = PostgresSearchBackend(index)
+        result = await backend.get_related(repo="o/r", path="missing.md")
+        assert result == []
+
+    async def test_returns_empty_when_embedding_is_none(self):
+        """fetchrow returns a row but embedding column is None."""
+
+        class _AsyncCM:
+            def __init__(self, conn):
+                self._conn = conn
+
+            async def __aenter__(self):
+                return self._conn
+
+            async def __aexit__(self, *_args):
+                return False
+
+        conn = MagicMock()
+        conn.fetchrow = AsyncMock(return_value={"embedding": None})
+        pool = MagicMock()
+        pool.acquire = MagicMock(return_value=_AsyncCM(conn))
+        index = MagicMock()
+        index._pool = pool
+
+        backend = PostgresSearchBackend(index)
+        result = await backend.get_related(repo="o/r", path="no-embed.md")
+        assert result == []
+
+    async def test_swallows_db_error_and_returns_empty(self):
+        """Any asyncpg failure is logged and an empty list returned."""
+
+        class _AsyncCM:
+            def __init__(self, conn):
+                self._conn = conn
+
+            async def __aenter__(self):
+                return self._conn
+
+            async def __aexit__(self, *_args):
+                return False
+
+        conn = MagicMock()
+        conn.fetchrow = AsyncMock(side_effect=RuntimeError("connection lost"))
+        pool = MagicMock()
+        pool.acquire = MagicMock(return_value=_AsyncCM(conn))
+        index = MagicMock()
+        index._pool = pool
+
+        backend = PostgresSearchBackend(index)
+        result = await backend.get_related(repo="o/r", path="p.md")
+        assert result == []
+
+    async def test_repo_without_slash_uses_whole_name_as_owner(self):
+        """When repo has no slash, the whole string is the owner."""
+
+        class _AsyncCM:
+            def __init__(self, conn):
+                self._conn = conn
+
+            async def __aenter__(self):
+                return self._conn
+
+            async def __aexit__(self, *_args):
+                return False
+
+        conn = MagicMock()
+        conn.fetchrow = AsyncMock(return_value={"embedding": [0.1]})
+        conn.fetch = AsyncMock(return_value=[])
+        pool = MagicMock()
+        pool.acquire = MagicMock(return_value=_AsyncCM(conn))
+        index = MagicMock()
+        index._pool = pool
+
+        backend = PostgresSearchBackend(index)
+        await backend.get_related(repo="monorepo", path="p.md")
+        assert conn.fetch.await_args.args[5] == "monorepo"
+
+
+class TestOpenSearchIndexedPathsScrolling:
+    async def test_paginates_across_multiple_scroll_pages(self):
+        """Multi-page scroll with get_indexed_paths."""
+        raw = MagicMock()
+        page1 = {
+            "_scroll_id": "s1",
+            "hits": {
+                "hits": [
+                    {
+                        "_source": {
+                            "repo": "org/r",
+                            "path": "a.md",
+                            "synced_at": "2026-01-01T00:00:00Z",
+                            "has_embedding": True,
+                        }
+                    }
+                ]
+            },
+        }
+        page2 = {
+            "_scroll_id": "s2",
+            "hits": {
+                "hits": [
+                    {
+                        "_source": {
+                            "repo": "org/r",
+                            "path": "b.md",
+                            "synced_at": "2026-01-02T00:00:00Z",
+                            "has_embedding": False,
+                        }
+                    }
+                ]
+            },
+        }
+        page3 = {"_scroll_id": "s3", "hits": {"hits": []}}
+        raw.search = AsyncMock(return_value=page1)
+        raw.scroll = AsyncMock(side_effect=[page2, page3])
+        raw.clear_scroll = AsyncMock()
+
+        client = MagicMock()
+        client.is_enabled = True
+        client._client = raw
+        client.specs_index = "canon-specs"
+
+        backend = OpenSearchBackend(client)
+        result = await backend.get_indexed_paths()
+        assert len(result) == 2
+        assert "org/r/a.md" in result
+        assert "org/r/b.md" in result
+        raw.clear_scroll.assert_awaited_once()
+
+    async def test_skips_hits_with_empty_repo_or_path(self):
+        """Hits where repo or path is empty are skipped."""
+        backend, _raw = _opensearch_backend_with_response(
+            {
+                "hits": {
+                    "hits": [
+                        {
+                            "_source": {
+                                "repo": "",
+                                "path": "a.md",
+                                "synced_at": None,
+                                "has_embedding": False,
+                            }
+                        },
+                        {
+                            "_source": {
+                                "repo": "org/r",
+                                "path": "",
+                                "synced_at": None,
+                                "has_embedding": False,
+                            }
+                        },
+                        {
+                            "_source": {
+                                "repo": "org/r",
+                                "path": "good.md",
+                                "synced_at": "t",
+                                "has_embedding": True,
+                            }
+                        },
+                    ]
+                }
+            }
+        )
+        result = await backend.get_indexed_paths()
+        assert len(result) == 1
+        assert "org/r/good.md" in result
+
+    async def test_repo_filter_uses_term_query(self):
+        """When repo is provided, uses a term query instead of match_all."""
+        backend, raw = _opensearch_backend_with_response({"hits": {"hits": []}})
+        await backend.get_indexed_paths(repo="org/r")
+        body = raw.search.await_args.kwargs["body"]
+        assert body["query"] == {"term": {"repo": "org/r"}}

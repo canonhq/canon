@@ -115,15 +115,15 @@ addopts = "-m 'not integration and not scenario'"
 [tool.coverage.run]
 source = ["canon"]
 branch = true
-parallel = true
 
 [tool.coverage.paths]
-source = ["src/canon", "*/canon"]
+source = ["src/canon", "*/src/canon"]
 
 [tool.coverage.report]
 show_missing = true
 skip_empty = true
 precision = 1
+fail_under = 65
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",

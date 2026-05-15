@@ -297,8 +297,10 @@ def group_by_minor(versions: list[Version]) -> list[tuple[str, dict[str, list[En
 
 
 def rewrite_links(text: str) -> str:
-    """Replace private repo URLs with public repo URLs."""
-    return text.replace(PRIVATE_REPO_URL, PUBLIC_REPO_URL)
+    """Replace private repo URLs and bare references with public equivalents."""
+    text = text.replace(PRIVATE_REPO_URL, PUBLIC_REPO_URL)
+    text = text.replace("canon-private", "canon")
+    return text
 
 
 def strip_entry_links(text: str) -> str:

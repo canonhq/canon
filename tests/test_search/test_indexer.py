@@ -436,6 +436,175 @@ class TestOpenSearchDualWrite:
         mock_index.upsert_spec.assert_awaited_once()
 
 
+class TestOpensearchDocId:
+    def test_combines_repo_and_path(self):
+        from canon.search.indexer import opensearch_doc_id
+
+        assert opensearch_doc_id("org/repo", "docs/specs/a.md") == "org/repo:docs/specs/a.md"
+
+    def test_with_special_characters(self):
+        from canon.search.indexer import opensearch_doc_id
+
+        assert opensearch_doc_id("org/repo", "specs/my spec.md") == "org/repo:specs/my spec.md"
+
+
+class TestFlattenSectionsDelta:
+    def test_delta_included_when_present(self):
+        """Sections with a delta field should have it in the flattened output."""
+        section = _make_section(title="Changed", content="New content")
+        section.delta = "added 3 lines"
+        result = flatten_sections([section])
+        assert result[0]["delta"] == "added 3 lines"
+
+    def test_delta_absent_when_not_set(self):
+        """Sections without delta should not have the key in the output."""
+        section = _make_section(title="Unchanged")
+        result = flatten_sections([section])
+        assert "delta" not in result[0]
+
+
+class TestIndexSpecAiExposureAndTags:
+    async def test_ai_exposure_passthrough(self):
+        """ai_exposure from frontmatter is forwarded to upsert_spec."""
+        doc = _make_doc(sections=[])
+        doc.frontmatter.ai_exposure = "limited"
+        mock_index = AsyncMock()
+        mock_index.upsert_spec.return_value = 1
+
+        await index_spec(doc=doc, repo="org/repo", search_index=mock_index)
+
+        call_kwargs = mock_index.upsert_spec.call_args.kwargs
+        assert call_kwargs["ai_exposure"] == "limited"
+
+    async def test_tags_passthrough(self):
+        """tags from frontmatter are forwarded to upsert_spec."""
+        doc = _make_doc(sections=[])
+        doc.frontmatter.tags = ["infra", "auth"]
+        mock_index = AsyncMock()
+        mock_index.upsert_spec.return_value = 1
+
+        await index_spec(doc=doc, repo="org/repo", search_index=mock_index)
+
+        call_kwargs = mock_index.upsert_spec.call_args.kwargs
+        assert call_kwargs["tags"] == ["infra", "auth"]
+
+    async def test_ai_exposure_defaults_to_empty_string(self):
+        """When frontmatter has no ai_exposure, defaults to empty string."""
+        doc = _make_doc(sections=[])
+        mock_index = AsyncMock()
+        mock_index.upsert_spec.return_value = 1
+
+        await index_spec(doc=doc, repo="org/repo", search_index=mock_index)
+
+        call_kwargs = mock_index.upsert_spec.call_args.kwargs
+        assert call_kwargs["ai_exposure"] == ""
+
+    async def test_tags_defaults_to_empty_list(self):
+        """When frontmatter has no tags, defaults to empty list."""
+        doc = _make_doc(sections=[])
+        mock_index = AsyncMock()
+        mock_index.upsert_spec.return_value = 1
+
+        await index_spec(doc=doc, repo="org/repo", search_index=mock_index)
+
+        call_kwargs = mock_index.upsert_spec.call_args.kwargs
+        assert call_kwargs["tags"] == []
+
+
+class TestIndexSpecDocType:
+    async def test_doc_type_classified_from_path(self):
+        """doc_type is derived from file_path via classify_doc_type."""
+        doc = _make_doc(sections=[], file_path="docs/specs/auth.md")
+        mock_index = AsyncMock()
+        mock_index.upsert_spec.return_value = 1
+
+        await index_spec(doc=doc, repo="org/repo", search_index=mock_index)
+
+        call_kwargs = mock_index.upsert_spec.call_args.kwargs
+        assert isinstance(call_kwargs["doc_type"], str)
+        assert len(call_kwargs["doc_type"]) > 0
+
+
+class TestOpenSearchDualWriteAiExposure:
+    async def test_ai_exposure_and_tags_in_spec_doc(self):
+        """OpenSearch spec doc includes ai_exposure and tags from frontmatter."""
+        doc = _make_doc(sections=[_make_section()])
+        doc.frontmatter.ai_exposure = "none"
+        doc.frontmatter.tags = ["secret"]
+
+        mock_index = AsyncMock()
+        mock_index.upsert_spec.return_value = 1
+
+        opensearch = MagicMock()
+        opensearch.is_enabled = True
+        opensearch.index_spec = AsyncMock()
+        opensearch.delete_sections_for_spec = AsyncMock(return_value=True)
+        opensearch.index_sections = AsyncMock(return_value=True)
+
+        await index_spec(
+            doc=doc,
+            repo="org/repo",
+            search_index=mock_index,
+            opensearch_client=opensearch,
+        )
+
+        spec_doc = opensearch.index_spec.await_args.kwargs["document"]
+        assert spec_doc["ai_exposure"] == "none"
+        assert spec_doc["tags"] == ["secret"]
+
+    async def test_team_and_tags_in_section_docs(self):
+        """OpenSearch section docs carry team and tags from the spec."""
+        doc = _make_doc(sections=[_make_section(title="S1")])
+
+        mock_index = AsyncMock()
+        mock_index.upsert_spec.return_value = 1
+
+        opensearch = MagicMock()
+        opensearch.is_enabled = True
+        opensearch.index_spec = AsyncMock()
+        opensearch.delete_sections_for_spec = AsyncMock(return_value=True)
+        opensearch.index_sections = AsyncMock(return_value=True)
+
+        await index_spec(
+            doc=doc,
+            repo="org/repo",
+            search_index=mock_index,
+            opensearch_client=opensearch,
+        )
+
+        section = opensearch.index_sections.await_args.args[0][0]
+        assert section["team"] == "platform"
+        assert section["tags"] == []
+
+    async def test_content_hash_is_16_char_sha256(self):
+        """Content hash matches the 16-char truncated SHA256 convention."""
+        import hashlib
+
+        doc = _make_doc(sections=[_make_section()])
+        raw = doc.raw
+        expected_hash = hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+        mock_index = AsyncMock()
+        mock_index.upsert_spec.return_value = 1
+
+        opensearch = MagicMock()
+        opensearch.is_enabled = True
+        opensearch.index_spec = AsyncMock()
+        opensearch.delete_sections_for_spec = AsyncMock(return_value=True)
+        opensearch.index_sections = AsyncMock(return_value=True)
+
+        await index_spec(
+            doc=doc,
+            repo="org/repo",
+            search_index=mock_index,
+            opensearch_client=opensearch,
+        )
+
+        spec_doc = opensearch.index_spec.await_args.kwargs["document"]
+        assert spec_doc["content_hash"] == expected_hash
+        assert len(spec_doc["content_hash"]) == 16
+
+
 class TestEmbedAvailability:
     async def test_embed_client_not_available(self):
         """If embed_client exists but is_available is False, skip embeddings."""

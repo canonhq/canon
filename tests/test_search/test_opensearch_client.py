@@ -196,13 +196,13 @@ class TestIndexSections:
     async def test_skips_sections_without_id(self):
         client, mock = _client_with_mock()
         await client.index_sections([{"spec_path": "no-id.md"}])
-        mock.bulk.assert_not_awaited()
+        mock.bulk.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_empty_list_no_op(self):
         client, mock = _client_with_mock()
         await client.index_sections([])
-        mock.bulk.assert_not_awaited()
+        mock.bulk.assert_not_called()
 
 
 class TestDeleteSpec:
@@ -357,3 +357,159 @@ class TestListSpecHashes:
         assert result == {"o/r:a.md": "h1", "o/r:b.md": "h2"}
         # Final scroll_id (from the empty page) is what gets cleared.
         mock.clear_scroll.assert_awaited_once_with(scroll_id="scroll-3")
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_disabled(self):
+        client = OpenSearchClient(enabled=False)
+        assert await client.list_spec_hashes() == {}
+
+    @pytest.mark.asyncio
+    async def test_single_page_no_scroll(self):
+        """A single page with no scroll_id ends the loop immediately."""
+        client, mock = _client_with_mock()
+        mock.search = AsyncMock(
+            return_value={
+                "hits": {"hits": [{"_id": "o/r:a.md", "_source": {"content_hash": "h1"}}]},
+            }
+        )
+        result = await client.list_spec_hashes()
+        assert result == {"o/r:a.md": "h1"}
+        mock.scroll.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_filters_by_repo_when_provided(self):
+        client, mock = _client_with_mock()
+        mock.search = AsyncMock(return_value={"hits": {"hits": []}})
+        await client.list_spec_hashes(repo="org/r")
+        body = mock.search.await_args.kwargs["body"]
+        assert body["query"] == {"term": {"repo": "org/r"}}
+
+    @pytest.mark.asyncio
+    async def test_uses_match_all_when_no_repo(self):
+        client, mock = _client_with_mock()
+        mock.search = AsyncMock(return_value={"hits": {"hits": []}})
+        await client.list_spec_hashes()
+        body = mock.search.await_args.kwargs["body"]
+        assert body["query"] == {"match_all": {}}
+
+
+class TestClose:
+    @pytest.mark.asyncio
+    async def test_close_calls_underlying_client(self):
+        client, mock = _client_with_mock()
+        await client.close()
+        mock.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_close_no_op_when_no_client(self):
+        client = OpenSearchClient(enabled=False)
+        await client.close()  # should not raise
+
+    @pytest.mark.asyncio
+    async def test_close_swallows_errors(self):
+        client, mock = _client_with_mock()
+        mock.close = AsyncMock(side_effect=RuntimeError("transport gone"))
+        await client.close()  # should not raise
+
+
+class TestDeleteSectionsForSpec:
+    @pytest.mark.asyncio
+    async def test_returns_true_on_success(self):
+        client, mock = _client_with_mock()
+        result = await client.delete_sections_for_spec("org/r:p.md")
+        assert result is True
+        mock.delete_by_query.assert_awaited_once()
+        kwargs = mock.delete_by_query.await_args.kwargs
+        assert kwargs["index"] == "canon-sections"
+        assert kwargs["body"]["query"]["term"]["_spec_doc_id"] == "org/r:p.md"
+
+    @pytest.mark.asyncio
+    async def test_returns_true_when_disabled(self):
+        client = OpenSearchClient(enabled=False)
+        assert await client.delete_sections_for_spec("x") is True
+
+    @pytest.mark.asyncio
+    async def test_returns_false_on_error(self):
+        client, mock = _client_with_mock()
+        mock.delete_by_query = AsyncMock(side_effect=RuntimeError("boom"))
+        assert await client.delete_sections_for_spec("x") is False
+
+
+class TestBulkIndex:
+    @pytest.mark.asyncio
+    async def test_calls_bulk_with_actions(self):
+        client, mock = _client_with_mock()
+        actions = [
+            {"index": {"_index": "canon-specs", "_id": "1"}},
+            {"title": "Test"},
+        ]
+        await client.bulk_index(actions)
+        mock.bulk.assert_awaited_once()
+        assert mock.bulk.await_args.kwargs["body"] == actions
+
+    @pytest.mark.asyncio
+    async def test_swallows_bulk_errors(self):
+        client, mock = _client_with_mock()
+        mock.bulk = AsyncMock(side_effect=RuntimeError("cluster down"))
+        await client.bulk_index([{"index": {"_index": "x"}}, {"a": 1}])
+
+    @pytest.mark.asyncio
+    async def test_logs_item_errors(self):
+        """When bulk returns errors=True, logs but does not raise."""
+        client, mock = _client_with_mock()
+        mock.bulk = AsyncMock(
+            return_value={
+                "errors": True,
+                "items": [{"index": {"_id": "1", "error": {"type": "error"}}}],
+            }
+        )
+        # Should not raise
+        await client.bulk_index([{"index": {"_index": "x", "_id": "1"}}, {"a": 1}])
+
+    @pytest.mark.asyncio
+    async def test_empty_actions_no_op(self):
+        client, mock = _client_with_mock()
+        await client.bulk_index([])
+        mock.bulk.assert_not_called()
+
+
+class TestEnsureIndexEdgeCases:
+    @pytest.mark.asyncio
+    async def test_swallows_exists_check_error(self):
+        """If indices.exists raises, the index creation is skipped."""
+        client, mock = _client_with_mock()
+        mock.indices.exists = AsyncMock(side_effect=RuntimeError("cluster unreachable"))
+        await client.ensure_indexes()  # should not raise
+        mock.indices.create.assert_not_called()
+
+
+class TestProperties:
+    def test_specs_index_name(self):
+        client = OpenSearchClient(specs_index="my-specs", enabled=False)
+        assert client.specs_index == "my-specs"
+
+    def test_sections_index_name(self):
+        client = OpenSearchClient(sections_index="my-sections", enabled=False)
+        assert client.sections_index == "my-sections"
+
+
+class TestBuildClientFromSettingsWarning:
+    def test_warns_when_enabled_but_no_url(self, caplog):
+        """Operator-visible warning when flag is on but URL is empty."""
+        import logging
+
+        settings = MagicMock()
+        settings.opensearch_url = ""
+        settings.opensearch_username = ""
+        settings.opensearch_password = ""
+        settings.opensearch_specs_index = "canon-specs"
+        settings.opensearch_sections_index = "canon-sections"
+        settings.opensearch_enabled = True
+
+        with caplog.at_level(logging.WARNING, logger="canon.search.opensearch_client"):
+            client = build_client_from_settings(settings)
+        assert client.is_enabled is False
+        assert any(
+            "OPENSEARCH_ENABLED=true but OPENSEARCH_URL is empty" in r.message
+            for r in caplog.records
+        )

@@ -197,3 +197,65 @@ class TestEmbedQuery:
         config = call_kwargs["config"]
         assert config.task_type == "RETRIEVAL_QUERY"
         assert config.output_dimensionality == DIMENSIONS
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+
+class TestConstants:
+    def test_model_name(self):
+        assert MODEL == "gemini-embedding-001"
+
+    def test_dimensions(self):
+        assert DIMENSIONS == 1024
+
+    def test_max_batch_size(self):
+        assert MAX_BATCH_SIZE == 250
+
+
+# ---------------------------------------------------------------------------
+# Error classes
+# ---------------------------------------------------------------------------
+
+
+class TestErrorClasses:
+    def test_embedding_unavailable_error_message(self):
+        err = EmbeddingUnavailableError()
+        assert "GCP credentials" in str(err)
+
+    def test_embedding_api_error_message(self):
+        err = EmbeddingAPIError("quota exceeded")
+        assert str(err) == "quota exceeded"
+
+
+# ---------------------------------------------------------------------------
+# embed_documents edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestEmbedDocumentsEdgeCases:
+    def test_empty_list(self):
+        """Embedding an empty list of texts returns an empty list."""
+        client, mock_genai = _make_client_with_mock()
+        # embed_documents with 0 texts should not call the API
+        result = client.embed_documents([])
+        assert result == []
+        mock_genai.models.embed_content.assert_not_called()
+
+    def test_exact_batch_boundary(self):
+        """Texts exactly equal to MAX_BATCH_SIZE produce one batch."""
+        client, mock_genai = _make_client_with_mock()
+
+        def _side_effect(**kwargs):
+            batch_size = len(kwargs["contents"])
+            return FakeEmbedResponse(
+                embeddings=[FakeEmbedding(values=[1.0]) for _ in range(batch_size)]
+            )
+
+        mock_genai.models.embed_content.side_effect = _side_effect
+
+        result = client.embed_documents([f"t{i}" for i in range(MAX_BATCH_SIZE)])
+        assert len(result) == MAX_BATCH_SIZE
+        assert mock_genai.models.embed_content.call_count == 1
