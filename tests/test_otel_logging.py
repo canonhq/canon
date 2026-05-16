@@ -1,4 +1,4 @@
-"""Tests for the OpenTelemetry log export module."""
+"""Tests for the OpenTelemetry log and trace export module."""
 
 from __future__ import annotations
 
@@ -13,13 +13,15 @@ from canon import otel_logging
 @pytest.fixture(autouse=True)
 def _reset():
     """Ensure module state is reset between tests."""
-    otel_logging._provider = None
+    otel_logging._log_provider = None
+    otel_logging._trace_provider = None
     otel_logging._handler = None
     yield
     # Clean up any handler left on root logger
     if otel_logging._handler is not None:
         logging.getLogger().removeHandler(otel_logging._handler)
-    otel_logging._provider = None
+    otel_logging._log_provider = None
+    otel_logging._trace_provider = None
     otel_logging._handler = None
 
 
@@ -28,23 +30,42 @@ def _otel_patches():
 
     class _Ctx:
         def __init__(self):
-            self.exporter_cls = MagicMock()
-            self.provider_cls = MagicMock()
+            self.log_exporter_cls = MagicMock()
+            self.span_exporter_cls = MagicMock()
+            self.log_provider_cls = MagicMock()
+            self.trace_provider_cls = MagicMock()
             self.handler_cls = MagicMock()
-            self.processor_cls = MagicMock()
+            self.log_processor_cls = MagicMock()
+            self.span_processor_cls = MagicMock()
+            self.resource_cls = MagicMock()
+            self.trace_mod = MagicMock()
 
         def __enter__(self):
             self._stack = [
                 patch(
                     "opentelemetry.exporter.otlp.proto.http._log_exporter.OTLPLogExporter",
-                    self.exporter_cls,
+                    self.log_exporter_cls,
                 ),
-                patch("opentelemetry.sdk._logs.LoggerProvider", self.provider_cls),
+                patch(
+                    "opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter",
+                    self.span_exporter_cls,
+                ),
+                patch("opentelemetry.sdk._logs.LoggerProvider", self.log_provider_cls),
                 patch("opentelemetry.sdk._logs.LoggingHandler", self.handler_cls),
                 patch(
                     "opentelemetry.sdk._logs.export.BatchLogRecordProcessor",
-                    self.processor_cls,
+                    self.log_processor_cls,
                 ),
+                patch(
+                    "opentelemetry.sdk.trace.TracerProvider",
+                    self.trace_provider_cls,
+                ),
+                patch(
+                    "opentelemetry.sdk.trace.export.BatchSpanProcessor",
+                    self.span_processor_cls,
+                ),
+                patch("opentelemetry.sdk.resources.Resource", self.resource_cls),
+                patch("opentelemetry.trace", self.trace_mod),
             ]
             for p in self._stack:
                 p.__enter__()
@@ -62,7 +83,8 @@ def _otel_patches():
 
 def test_init_noop_without_key():
     otel_logging.init("")
-    assert otel_logging._provider is None
+    assert otel_logging._log_provider is None
+    assert otel_logging._trace_provider is None
     assert otel_logging._handler is None
 
 
@@ -70,25 +92,43 @@ def test_init_creates_provider_and_handler():
     with _otel_patches() as m:
         otel_logging.init("phc_test_key")
 
-    # Exporter created with default US endpoint
-    m.exporter_cls.assert_called_once_with(
+    # Log exporter created with logs endpoint
+    m.log_exporter_cls.assert_called_once_with(
         endpoint="https://us.i.posthog.com/i/v1/logs",
         headers={"Authorization": "Bearer phc_test_key"},
     )
 
-    # Provider created and processor added
-    m.provider_cls.assert_called_once()
-    m.provider_cls.return_value.add_log_record_processor.assert_called_once_with(
-        m.processor_cls.return_value,
+    # Span exporter created with traces endpoint
+    m.span_exporter_cls.assert_called_once_with(
+        endpoint="https://us.i.posthog.com/i/v1/traces",
+        headers={"Authorization": "Bearer phc_test_key"},
+    )
+
+    # Log provider created and processor added
+    m.log_provider_cls.assert_called_once()
+    m.log_provider_cls.return_value.add_log_record_processor.assert_called_once_with(
+        m.log_processor_cls.return_value,
+    )
+
+    # Trace provider created and processor added
+    m.trace_provider_cls.assert_called_once()
+    m.trace_provider_cls.return_value.add_span_processor.assert_called_once_with(
+        m.span_processor_cls.return_value,
+    )
+
+    # Global tracer provider set
+    m.trace_mod.set_tracer_provider.assert_called_once_with(
+        m.trace_provider_cls.return_value,
     )
 
     # Handler created at WARNING level by default
     m.handler_cls.assert_called_once_with(
         level=logging.WARNING,
-        logger_provider=m.provider_cls.return_value,
+        logger_provider=m.log_provider_cls.return_value,
     )
 
-    assert otel_logging._provider is m.provider_cls.return_value
+    assert otel_logging._log_provider is m.log_provider_cls.return_value
+    assert otel_logging._trace_provider is m.trace_provider_cls.return_value
     assert otel_logging._handler is m.handler_cls.return_value
 
 
@@ -98,7 +138,7 @@ def test_init_custom_min_level():
 
     m.handler_cls.assert_called_once_with(
         level=logging.ERROR,
-        logger_provider=m.provider_cls.return_value,
+        logger_provider=m.log_provider_cls.return_value,
     )
 
 
@@ -106,8 +146,12 @@ def test_init_derives_endpoint_from_posthog_host():
     with _otel_patches() as m:
         otel_logging.init("phc_test_key", posthog_host="https://eu.i.posthog.com")
 
-    m.exporter_cls.assert_called_once_with(
+    m.log_exporter_cls.assert_called_once_with(
         endpoint="https://eu.i.posthog.com/i/v1/logs",
+        headers={"Authorization": "Bearer phc_test_key"},
+    )
+    m.span_exporter_cls.assert_called_once_with(
+        endpoint="https://eu.i.posthog.com/i/v1/traces",
         headers={"Authorization": "Bearer phc_test_key"},
     )
 
@@ -116,7 +160,7 @@ def test_init_strips_trailing_slash_from_host():
     with _otel_patches() as m:
         otel_logging.init("phc_test_key", posthog_host="https://eu.i.posthog.com/")
 
-    m.exporter_cls.assert_called_once_with(
+    m.log_exporter_cls.assert_called_once_with(
         endpoint="https://eu.i.posthog.com/i/v1/logs",
         headers={"Authorization": "Bearer phc_test_key"},
     )
@@ -129,7 +173,7 @@ def test_init_swallows_exception():
     ):
         otel_logging.init("phc_test_key")
 
-    assert otel_logging._provider is None
+    assert otel_logging._log_provider is None
     assert otel_logging._handler is None
 
 
@@ -148,22 +192,29 @@ def test_init_adds_handler_to_root_logger():
 
 def test_endpoint_for_host_default():
     assert (
-        otel_logging._endpoint_for_host("https://us.i.posthog.com")
+        otel_logging._endpoint_for_host("https://us.i.posthog.com", "/i/v1/logs")
         == "https://us.i.posthog.com/i/v1/logs"
     )
 
 
 def test_endpoint_for_host_eu():
     assert (
-        otel_logging._endpoint_for_host("https://eu.i.posthog.com")
+        otel_logging._endpoint_for_host("https://eu.i.posthog.com", "/i/v1/logs")
         == "https://eu.i.posthog.com/i/v1/logs"
     )
 
 
 def test_endpoint_for_host_trailing_slash():
     assert (
-        otel_logging._endpoint_for_host("https://eu.i.posthog.com/")
+        otel_logging._endpoint_for_host("https://eu.i.posthog.com/", "/i/v1/logs")
         == "https://eu.i.posthog.com/i/v1/logs"
+    )
+
+
+def test_endpoint_for_host_traces():
+    assert (
+        otel_logging._endpoint_for_host("https://us.i.posthog.com", "/i/v1/traces")
+        == "https://us.i.posthog.com/i/v1/traces"
     )
 
 
@@ -172,35 +223,43 @@ def test_endpoint_for_host_trailing_slash():
 
 def test_shutdown_noop_when_not_initialised():
     otel_logging.shutdown()
-    assert otel_logging._provider is None
+    assert otel_logging._log_provider is None
+    assert otel_logging._trace_provider is None
     assert otel_logging._handler is None
 
 
-def test_shutdown_removes_handler_and_shuts_down_provider():
-    mock_provider = MagicMock()
+def test_shutdown_removes_handler_and_shuts_down_providers():
+    mock_log_provider = MagicMock()
+    mock_trace_provider = MagicMock()
     mock_handler = MagicMock(spec=logging.Handler)
 
-    otel_logging._provider = mock_provider
+    otel_logging._log_provider = mock_log_provider
+    otel_logging._trace_provider = mock_trace_provider
     otel_logging._handler = mock_handler
     logging.getLogger().addHandler(mock_handler)
 
     otel_logging.shutdown()
 
-    mock_provider.shutdown.assert_called_once()
+    mock_log_provider.shutdown.assert_called_once()
+    mock_trace_provider.shutdown.assert_called_once()
     assert mock_handler not in logging.getLogger().handlers
-    assert otel_logging._provider is None
+    assert otel_logging._log_provider is None
+    assert otel_logging._trace_provider is None
     assert otel_logging._handler is None
 
 
 def test_shutdown_swallows_provider_exception():
-    mock_provider = MagicMock()
-    mock_provider.shutdown.side_effect = RuntimeError("shutdown error")
+    mock_log_provider = MagicMock()
+    mock_log_provider.shutdown.side_effect = RuntimeError("shutdown error")
+    mock_trace_provider = MagicMock()
     mock_handler = MagicMock(spec=logging.Handler)
 
-    otel_logging._provider = mock_provider
+    otel_logging._log_provider = mock_log_provider
+    otel_logging._trace_provider = mock_trace_provider
     otel_logging._handler = mock_handler
 
     otel_logging.shutdown()
 
-    assert otel_logging._provider is None
+    assert otel_logging._log_provider is None
+    assert otel_logging._trace_provider is None
     assert otel_logging._handler is None

@@ -692,7 +692,7 @@ async def on_pull_request(client, payload: dict) -> None:
             pr_review_store = _get_pr_review_store()
             if pr_review_store is not None:
                 try:
-                    from ..agent.analyzer import estimate_cost
+                    from ...agent.analyzer import estimate_cost
 
                     cost_str = estimate_cost(
                         result.tokens_used.input,

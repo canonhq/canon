@@ -227,7 +227,7 @@ config:
   cacheTtlSeconds: 300
   posthogHost: "https://us.i.posthog.com"
   posthogLogsEnabled: "false"
-  posthogLogsMinLevel: "WARNING"
+  posthogLogsMinLevel: "INFO"
   platformUrl: ""
   environment: "development"
   ## Auth0 Organizations mode — when true, permissions come from JWT claims

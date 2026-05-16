@@ -114,14 +114,14 @@ def from_config(
         email = os.environ.get(f"{prefix}EMAIL", "")
         api_token = os.environ.get(f"{prefix}API_TOKEN", "")
         if not host or not email or not api_token:
-            logger.warning("Ticket system %r: missing Jira credentials (prefix=%s)", name, prefix)
+            logger.debug("Ticket system %r: missing Jira credentials (prefix=%s)", name, prefix)
             return None
         return JiraAdapter(JiraConfig(host=host, email=email, api_token=api_token))
 
     if config.system == "linear":
         api_key = os.environ.get(f"{prefix}API_KEY", "")
         if not api_key:
-            logger.warning("Ticket system %r: missing Linear API key (prefix=%s)", name, prefix)
+            logger.debug("Ticket system %r: missing Linear API key (prefix=%s)", name, prefix)
             return None
         return LinearAdapter(LinearConfig(api_key=api_key))
 

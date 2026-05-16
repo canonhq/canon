@@ -207,7 +207,7 @@ async def run_reverse_sync() -> list[dict]:
                         ]
                     except Exception:
                         # Fallback to per-directory listing if Trees API fails
-                        logger.warning(
+                        logger.debug(
                             "Git Trees API failed for %s/%s — falling back to Contents API",
                             owner,
                             repo_name,

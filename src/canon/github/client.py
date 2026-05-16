@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import time
@@ -12,6 +13,52 @@ import httpx
 import jwt
 
 logger = logging.getLogger(__name__)
+
+_RATE_LIMIT_MAX_RETRIES = 3
+_RATE_LIMIT_BASE_DELAY = 2.0  # seconds
+
+
+def _is_rate_limit_response(resp: httpx.Response) -> bool:
+    """Detect GitHub rate limiting — both 429 and 403 secondary rate limits."""
+    if resp.status_code == 429:
+        return True
+    if resp.status_code == 403:
+        # GitHub secondary rate limits return 403 with specific messages
+        remaining = resp.headers.get("x-ratelimit-remaining")
+        if remaining == "0":
+            return True
+        body = resp.text.lower()
+        if "rate limit" in body or "secondary rate limit" in body:
+            return True
+    return False
+
+
+def _retry_after(resp: httpx.Response) -> float | None:
+    """Extract wait time from rate-limit response headers.
+
+    Returns the server-specified wait in seconds, or ``None`` when no
+    header is present (so the caller can apply its own backoff).
+    """
+    # Prefer Retry-After header
+    retry_after = resp.headers.get("retry-after")
+    if retry_after:
+        try:
+            return float(retry_after)
+        except ValueError:
+            pass
+
+    # Fall back to x-ratelimit-reset (Unix timestamp)
+    reset = resp.headers.get("x-ratelimit-reset")
+    if reset:
+        try:
+            wait = float(reset) - time.time()
+            if wait > 0:
+                return min(wait, 60.0)  # cap at 60s
+        except ValueError:
+            pass
+
+    return None
+
 
 GITHUB_API = "https://api.github.com"
 
@@ -119,9 +166,62 @@ class GitHubClient:
 
     # ─── API helpers ──────────────────────────────────
 
+    async def _request_with_retry(
+        self,
+        method: str,
+        path: str,
+        *,
+        headers: dict[str, str] | None = None,
+        params: dict[str, str] | None = None,
+        json: dict | None = None,
+    ) -> httpx.Response:
+        """Execute an HTTP request with rate-limit-aware retry."""
+        if headers is None:
+            headers = await self._auth_headers()
+
+        for attempt in range(_RATE_LIMIT_MAX_RETRIES + 1):
+            resp = await self._http.request(
+                method,
+                path,
+                headers=headers,
+                params=params,
+                json=json,
+            )
+            if not _is_rate_limit_response(resp):
+                return resp
+
+            if attempt == _RATE_LIMIT_MAX_RETRIES:
+                logger.warning(
+                    "GitHub rate limit exhausted after %d retries for %s %s",
+                    _RATE_LIMIT_MAX_RETRIES,
+                    method,
+                    path,
+                )
+                return resp  # let caller handle via raise_for_status
+
+            server_wait = _retry_after(resp)
+            wait = min(
+                server_wait if server_wait is not None else _RATE_LIMIT_BASE_DELAY * (2**attempt),
+                60.0,
+            )
+            logger.info(
+                "GitHub rate limited on %s %s — retrying in %.1fs (attempt %d/%d)",
+                method,
+                path,
+                wait,
+                attempt + 1,
+                _RATE_LIMIT_MAX_RETRIES,
+            )
+            await asyncio.sleep(wait)
+            # Refresh auth token in case it expired during wait,
+            # but preserve any extra headers (e.g. If-None-Match for ETags)
+            fresh_auth = await self._auth_headers()
+            headers = {**headers, **fresh_auth}
+
+        return resp  # unreachable, but satisfies type checker
+
     async def _get(self, path: str, **params: str) -> dict:
-        headers = await self._auth_headers()
-        resp = await self._http.get(path, headers=headers, params=params)
+        resp = await self._request_with_retry("GET", path, params=params)
         resp.raise_for_status()
         return resp.json()
 
@@ -136,7 +236,7 @@ class GitHubClient:
         if cached is not None:
             headers["If-None-Match"] = cached[0]
 
-        resp = await self._http.get(path, headers=headers, params=params)
+        resp = await self._request_with_retry("GET", path, headers=headers, params=params)
         if resp.status_code == 304:
             if cached is not None:
                 return cached[1]
@@ -144,7 +244,7 @@ class GitHubClient:
             # conditional headers rather than crashing on an empty body.
             logger.warning("GitHub returned 304 without prior ETag for %s", path)
             headers.pop("If-None-Match", None)
-            resp = await self._http.get(path, headers=headers, params=params)
+            resp = await self._request_with_retry("GET", path, headers=headers, params=params)
         resp.raise_for_status()
         data = resp.json()
 
@@ -158,8 +258,7 @@ class GitHubClient:
 
     async def _get_list(self, path: str, **params: str) -> list[dict]:
         """GET that returns a JSON array (issues, files, directory listings)."""
-        headers = await self._auth_headers()
-        resp = await self._http.get(path, headers=headers, params=params)
+        resp = await self._request_with_retry("GET", path, params=params)
         resp.raise_for_status()
         data = resp.json()
         if not isinstance(data, list):
@@ -167,26 +266,22 @@ class GitHubClient:
         return data
 
     async def _post(self, path: str, json: dict | None = None) -> dict:
-        headers = await self._auth_headers()
-        resp = await self._http.post(path, headers=headers, json=json)
+        resp = await self._request_with_retry("POST", path, json=json)
         resp.raise_for_status()
         return resp.json()
 
     async def _patch(self, path: str, json: dict | None = None) -> dict:
-        headers = await self._auth_headers()
-        resp = await self._http.patch(path, headers=headers, json=json)
+        resp = await self._request_with_retry("PATCH", path, json=json)
         resp.raise_for_status()
         return resp.json()
 
     async def _put(self, path: str, json: dict | None = None) -> dict:
-        headers = await self._auth_headers()
-        resp = await self._http.put(path, headers=headers, json=json)
+        resp = await self._request_with_retry("PUT", path, json=json)
         resp.raise_for_status()
         return resp.json()
 
     async def _delete(self, path: str) -> None:
-        headers = await self._auth_headers()
-        resp = await self._http.delete(path, headers=headers)
+        resp = await self._request_with_retry("DELETE", path)
         resp.raise_for_status()
 
     # ─── Factory ───────────────────────────────────────

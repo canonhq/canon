@@ -183,13 +183,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                 "production. SRE alerting is offline."
             )
 
-    # OTel logs to PostHog (opt-in)
+    # OTel logs + tracing to PostHog (opt-in)
     if settings.posthog_logs_enabled:
         otel_logging.init(
             settings.posthog_key,
             min_level=settings.posthog_logs_min_level,
             posthog_host=settings.posthog_host,
         )
+        otel_logging.instrument_fastapi(app)
 
     # OIDC provider (optional — selects Auth0Provider or GenericOIDCProvider)
     app.state.oidc_provider = None

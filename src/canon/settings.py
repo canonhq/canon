@@ -170,7 +170,7 @@ class Settings(BaseSettings):
 
     # PostHog logs via OpenTelemetry (opt-in)
     posthog_logs_enabled: bool = False
-    posthog_logs_min_level: str = "WARNING"
+    posthog_logs_min_level: str = "INFO"
 
     # PostHog Query API (read access for analytics dashboard)
     posthog_personal_api_key: str = ""
