@@ -13,7 +13,6 @@ from canon.main import app
 from canon.web.cache import TTLCache
 from canon.web.editor_routes import (
     _check_generate_rate,
-    _extract_prose,
     _generate_rate,
     _section_to_dict,
     _validate_file_path,
@@ -250,6 +249,7 @@ class TestEditorParse:
         assert "Users must be able to log in" in prose
         assert "- [x]" not in prose
         assert "specwright:system" not in prose
+        assert "specwright:ticket" not in prose
 
     @pytest.mark.asyncio
     async def test_parse_returns_401_without_auth(self, client):
@@ -403,44 +403,6 @@ class TestEditorConflictDetection:
 
 class TestMarkdownRoundTrip:
     """Tests for parse → reconstruct → re-parse roundtrip fidelity."""
-
-    def test_extract_prose_strips_acs_and_comments(self):
-        """_extract_prose removes AC checkboxes and system comments."""
-        content = (
-            "<!-- specwright:system:foo status:draft -->\n"
-            "<!-- specwright:ticket:github:PROJ-1 -->\n"
-            "\n"
-            "Some description text.\n"
-            "\n"
-            "### Acceptance Criteria\n"
-            "\n"
-            "- [x] First AC\n"
-            "<!-- specwright:realized-in:PR#1 file:foo.py -->\n"
-            "- [ ] Second AC\n"
-        )
-        prose = _extract_prose(content)
-        assert "Some description text." in prose
-        assert "- [x]" not in prose
-        assert "- [ ]" not in prose
-        assert "specwright:system" not in prose
-        assert "specwright:ticket" not in prose
-        assert "specwright:realized-in" not in prose
-
-    def test_extract_prose_excludes_content_after_ac_heading(self):
-        """Content after the AC block should not leak into prose."""
-        content = (
-            "Description paragraph.\n"
-            "\n"
-            "### Acceptance Criteria\n"
-            "\n"
-            "- [x] First AC\n"
-            "- [ ] Second AC\n"
-            "\n"
-            "Note: this trailing content is after the AC block.\n"
-        )
-        prose = _extract_prose(content)
-        assert "Description paragraph." in prose
-        assert "trailing content" not in prose
 
     def test_section_to_dict_preserves_acs(self):
         """_section_to_dict correctly serializes acceptance criteria."""

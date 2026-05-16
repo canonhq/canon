@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 import secrets
 import time
 
@@ -25,7 +24,7 @@ from ..auth.models import CurrentUser
 from ..auth.permissions import Permission
 from ..github.user_client import UserGitHubClient
 from ..parser.models import ParseOptions, SpecSection
-from ..parser.parse import TICKET_RE, parse_spec
+from ..parser.parse import parse_spec
 from .cache import TTLCache
 from .models import AiEditRequest, EditorParseRequest, EditorSavePRRequest, EditorSaveRequest
 from .render import render_spec_html
@@ -486,41 +485,6 @@ async def editor_preview(
     )
 
 
-# --- Regex for extracting prose (mirrors parser patterns) ---
-
-_CHECKBOX_RE = re.compile(r"^(\s*)-\s*\[([ xX])\]\s+(.+)$")
-_REALIZATION_RE = re.compile(
-    r"<!--\s*(?:specwright|canon):realized-in:(?:PR#(\d+)|(audit))\s+file:([^\s]+?)(?::(\S+))?\s*-->"
-)
-_STATUS_RE = re.compile(r"<!--\s*(?:specwright|canon):system:(\S+)\s+status:(\S+)\s*-->")
-_TICKET_RE = TICKET_RE
-_AC_HEADING_RE = re.compile(r"^###\s+Acceptance\s+Criteria\s*$", re.IGNORECASE)
-
-
-def _extract_prose(content: str) -> str:
-    """Extract prose content from a section, stripping ACs, comments, and AC heading.
-
-    Once the ``### Acceptance Criteria`` heading is encountered, all remaining
-    lines are treated as part of the AC block and excluded from prose.  This
-    prevents content after the checklist from being silently reordered on
-    round-trip.
-    """
-    lines = content.split("\n")
-    prose_lines: list[str] = []
-    for line in lines:
-        if _AC_HEADING_RE.match(line.strip()):
-            # Everything from here to end of section is AC — stop collecting prose
-            break
-        # Skip canon/specwright system comments
-        if _STATUS_RE.search(line) or _TICKET_RE.search(line):
-            continue
-        prose_lines.append(line)
-    # Trim trailing blank lines
-    while prose_lines and prose_lines[-1].strip() == "":
-        prose_lines.pop()
-    return "\n".join(prose_lines)
-
-
 def _section_to_dict(section: SpecSection) -> dict:
     """Serialize a SpecSection to a dict for the editor frontend."""
     acs = []
@@ -543,7 +507,7 @@ def _section_to_dict(section: SpecSection) -> dict:
         "title": section.title,
         "depth": section.depth,
         "content": section.content,
-        "prose_content": _extract_prose(section.content),
+        "prose_content": section.prose_content,
         "status": section.status.state,
         "acceptance_criteria": acs,
         "children": [_section_to_dict(c) for c in section.children],

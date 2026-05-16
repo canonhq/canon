@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from typing import Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 # --- Type aliases (single source of truth for Literal + validation sets) ---
 
@@ -72,6 +73,11 @@ class AcceptanceCriterion(BaseModel):
 
 # --- Spec Section ---
 
+_AC_HEADING_RE = re.compile(r"^###\s+Acceptance\s+Criteria\s*$", re.IGNORECASE)
+_SYSTEM_COMMENT_RE = re.compile(
+    r"<!--\s*(?:specwright|canon):(?:system:\S+\s+status:\S+|ticket:\w+:\S+(?:\s+url:\S+)?)\s*-->"
+)
+
 
 class SpecSection(BaseModel):
     id: str
@@ -87,6 +93,27 @@ class SpecSection(BaseModel):
     children: list[SpecSection] = []
     start_line: int
     end_line: int
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def prose_content(self) -> str:
+        """Content with AC block and system comments stripped.
+
+        Cuts at the ``### Acceptance Criteria`` heading (everything from
+        there to end of section is excluded) and drops inline
+        canon/specwright system comments.
+        """
+        lines = self.content.split("\n")
+        prose: list[str] = []
+        for line in lines:
+            if _AC_HEADING_RE.match(line.strip()):
+                break
+            if _SYSTEM_COMMENT_RE.search(line):
+                continue
+            prose.append(line)
+        while prose and prose[-1].strip() == "":
+            prose.pop()
+        return "\n".join(prose)
 
 
 # --- Frontmatter ---

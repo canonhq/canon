@@ -1025,3 +1025,72 @@ More content.
         assert result2.document.sections[0].ticket_link.ticket_id == "CAN-1"
         assert result2.document.sections[1].ticket_link is not None
         assert result2.document.sections[1].ticket_link.ticket_id == "CAN-2"
+
+
+# ─── prose_content computed field ──────────────────────────
+
+
+class TestProseContent:
+    """Tests for SpecSection.prose_content which strips ACs and system comments."""
+
+    def _section(self, content: str) -> object:
+        """Parse a minimal spec and return the first section."""
+        raw = f"""---
+title: Test
+status: draft
+owner: x
+team: x
+---
+
+## 1. Section
+
+{content}
+"""
+        result = parse_spec(raw)
+        return result.document.sections[0]
+
+    def test_strips_ac_heading_and_checklist(self):
+        s = self._section("Some prose.\n\n### Acceptance Criteria\n\n- [x] Done\n- [ ] Todo")
+        assert "Some prose." in s.prose_content
+        assert "Acceptance Criteria" not in s.prose_content
+        assert "- [x]" not in s.prose_content
+        assert "- [ ]" not in s.prose_content
+
+    def test_strips_status_comments(self):
+        s = self._section("Prose here.\n<!-- canon:system:github status:done -->")
+        assert "Prose here." in s.prose_content
+        assert "canon:system" not in s.prose_content
+
+    def test_strips_ticket_comments(self):
+        s = self._section("Prose here.\n<!-- canon:ticket:jira:PAY-142 -->")
+        assert "Prose here." in s.prose_content
+        assert "canon:ticket" not in s.prose_content
+
+    def test_strips_ticket_comments_with_url(self):
+        s = self._section(
+            "Prose here.\n<!-- canon:ticket:github:456 url:https://github.com/o/r/issues/456 -->"
+        )
+        assert "Prose here." in s.prose_content
+        assert "canon:ticket" not in s.prose_content
+
+    def test_strips_specwright_comments(self):
+        s = self._section("Prose.\n<!-- specwright:ticket:github:PROJ-101 -->")
+        assert "Prose." in s.prose_content
+        assert "specwright:ticket" not in s.prose_content
+
+    def test_empty_content(self):
+        s = self._section("")
+        assert s.prose_content == ""
+
+    def test_ac_only_returns_empty(self):
+        s = self._section("### Acceptance Criteria\n\n- [x] Done")
+        assert s.prose_content == ""
+
+    def test_no_ac_heading_preserves_all_prose(self):
+        s = self._section("Line one.\n\nLine two.")
+        assert "Line one." in s.prose_content
+        assert "Line two." in s.prose_content
+
+    def test_trims_trailing_blank_lines(self):
+        s = self._section("Prose.\n\n\n")
+        assert s.prose_content == "Prose."
