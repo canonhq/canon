@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +20,7 @@ from canon.parser.models import Diagnostic, ParseOptions, SpecDocument
 from canon.parser.parse import parse_spec
 
 from ._local import discover_spec_files, load_local_config
+from ._output import get_stdout, print_error
 
 # ─── Data model ───────────────────────────────────────────
 
@@ -98,7 +98,7 @@ def run_lint(
             if json_output:
                 print(json.dumps({"error": msg, "issues": []}))
             else:
-                print(msg, file=sys.stderr)
+                print_error(msg)
             return 2
     else:
         spec_files = all_spec_files
@@ -108,7 +108,7 @@ def run_lint(
         if json_output:
             print(json.dumps({"issues": [], "summary": {"files": 0}}))
         else:
-            print(msg)
+            get_stdout().print(f"[muted]{msg}[/muted]")
         return 0
 
     all_issues: list[LintIssue] = []
@@ -382,14 +382,44 @@ def _report(
         print(json.dumps(payload, indent=2))
     else:
         for issue in issues:
-            print(issue.format_human())
+            loc = (
+                f"[bold]{issue.file_path}[/bold]:{issue.line}"
+                if issue.line
+                else f"[bold]{issue.file_path}[/bold]"
+            )
+            rule_part = f"[muted]\\[{issue.rule}][/muted]"
+            if issue.severity == "error":
+                get_stdout().print(f"{loc}: [error]error:[/error] {rule_part} {issue.message}")
+            elif issue.severity == "warning":
+                get_stdout().print(
+                    f"{loc}: [warning]warning:[/warning] {rule_part} {issue.message}"
+                )
+            else:
+                get_stdout().print(
+                    f"{loc}: [muted]{issue.severity}:[/muted] {rule_part} {issue.message}"
+                )
 
         if issues:
-            print()
-        print(
-            f"canon lint: {len(spec_files)} file(s) checked, "
-            f"{error_count} error(s), {warning_count} warning(s), {info_count} info"
-        )
+            get_stdout().print()
+
+        parts = []
+        if error_count:
+            parts.append(f"[error]{error_count} error(s)[/error]")
+        else:
+            parts.append(f"{error_count} error(s)")
+        if warning_count:
+            parts.append(f"[warning]{warning_count} warning(s)[/warning]")
+        else:
+            parts.append(f"{warning_count} warning(s)")
+        parts.append(f"{info_count} info")
+
+        if not issues:
+            get_stdout().print(
+                f"[success]All specs valid[/success] — "
+                f"{len(spec_files)} file(s) checked, {', '.join(parts)}"
+            )
+        else:
+            get_stdout().print(f"canon lint: {len(spec_files)} file(s) checked, {', '.join(parts)}")
 
     if error_count > 0:
         return 1

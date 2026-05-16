@@ -59,6 +59,8 @@ def run_status(
         return 0
 
     # Aggregate metrics (human view)
+    from ._output import coverage_text, get_stdout, make_table, status_badge
+
     total_specs = len(docs)
     total_sections = 0
     total_ac = 0
@@ -66,7 +68,7 @@ def run_status(
     in_progress_specs = 0
     sections_in_progress = 0
 
-    rows: list[tuple[str, str, str, str, str]] = []
+    table_rows: list[list] = []
     for doc in docs:
         all_sections = _flatten_sections(doc.sections)
         sec_total = len(all_sections)
@@ -74,7 +76,7 @@ def run_status(
         sec_in_prog = sum(1 for s in all_sections if s.status.state == "in_progress")
         ac_total = sum(len(s.acceptance_criteria) for s in all_sections)
         ac_done = sum(sum(1 for ac in s.acceptance_criteria if ac.checked) for s in all_sections)
-        pct = f"{ac_done / ac_total * 100:.0f}%" if ac_total else "—"
+        pct = ac_done / ac_total * 100 if ac_total else 0.0
 
         total_sections += sec_total
         sections_in_progress += sec_in_prog
@@ -83,28 +85,39 @@ def run_status(
         if doc.frontmatter.status == "in_progress":
             in_progress_specs += 1
 
-        rows.append(
-            (
+        table_rows.append(
+            [
                 doc.frontmatter.title[:25],
-                doc.frontmatter.status,
+                status_badge(doc.frontmatter.status),
                 f"{sec_done}/{sec_total}",
                 f"{ac_done}/{ac_total}",
-                pct,
-            )
+                coverage_text(pct) if ac_total else coverage_text(0.0, label="—"),
+            ]
         )
 
-    overall_pct = f"{done_ac / total_ac * 100:.0f}%" if total_ac else "—"
+    overall_pct = done_ac / total_ac * 100 if total_ac else 0.0
+    overall_display = coverage_text(overall_pct) if total_ac else coverage_text(0.0, label="—")
 
-    print("Spec Coverage Dashboard")
-    print("=" * 60)
-    print(
-        f"Overall: {total_specs} specs | {total_sections} sections | {total_ac} ACs | {overall_pct} coverage"
+    get_stdout().print("[heading]Spec Coverage Dashboard[/heading]")
+    get_stdout().print(
+        f"Overall: {total_specs} specs | {total_sections} sections | {total_ac} ACs | ",
+        overall_display,
+        " coverage",
+        sep="",
     )
-    print()
-    print(f"  {'Spec':<27} {'Status':<14} {'Sections':<10} {'ACs':<8} {'Coverage':<8}")
-    print(f"  {'-' * 27} {'-' * 14} {'-' * 10} {'-' * 8} {'-' * 8}")
-    for title, status, secs, acs, pct in rows:
-        print(f"  {title:<27} {status:<14} {secs:<10} {acs:<8} {pct:<8}")
+    get_stdout().print()
+
+    table = make_table(
+        columns=[
+            {"name": "Spec", "min_width": 25},
+            {"name": "Status", "min_width": 12},
+            {"name": "Sections", "justify": "right"},
+            {"name": "ACs", "justify": "right"},
+            {"name": "Coverage", "justify": "right"},
+        ],
+        rows=table_rows,
+    )
+    get_stdout().print(table)
     return 0
 
 
@@ -174,31 +187,33 @@ def _build_payload(docs) -> dict:
 
 def _print_spec_detail(doc):
     """Print section-level breakdown for a single spec."""
+    from ._output import get_stdout, status_badge
+
     all_sections = _flatten_sections(doc.sections)
     ac_total = sum(len(s.acceptance_criteria) for s in all_sections)
     ac_done = sum(sum(1 for ac in s.acceptance_criteria if ac.checked) for s in all_sections)
 
-    print(f"\n{doc.frontmatter.title} ({doc.frontmatter.status})")
-    print("=" * 60)
-    print(f"  File: {doc.file_path}")
-    print(f"  ACs: {ac_done}/{ac_total} checked")
-    print()
+    get_stdout().print()
+    get_stdout().print(f"[heading]{doc.frontmatter.title}[/heading] ({doc.frontmatter.status})")
+    get_stdout().print(f"[muted]{'=' * 60}[/muted]")
+    get_stdout().print(f"  File: {doc.file_path}")
+    get_stdout().print(f"  ACs: {ac_done}/{ac_total} checked")
+    get_stdout().print()
 
     for section in doc.sections:
         sid = section.section_number or section.id
-        indent = "  "
         total = len(section.acceptance_criteria)
         done = sum(1 for ac in section.acceptance_criteria if ac.checked)
         ac_str = f"({done}/{total} ACs)" if total else ""
-        print(
-            f"{indent}{sid}. {section.title} {'.' * (35 - len(section.title))} {section.status.state} {ac_str}"
-        )
+        dots = "." * max(1, 35 - len(section.title))
+        badge = status_badge(section.status.state)
+        get_stdout().print(f"  {sid}. {section.title} {dots} ", badge, f" {ac_str}", sep="")
 
         for child in section.children:
             csid = child.section_number or child.id
             ctotal = len(child.acceptance_criteria)
             cdone = sum(1 for ac in child.acceptance_criteria if ac.checked)
             cac_str = f"({cdone}/{ctotal} ACs)" if ctotal else ""
-            print(
-                f"    {csid}. {child.title} {'.' * (31 - len(child.title))} {child.status.state} {cac_str}"
-            )
+            cdots = "." * max(1, 31 - len(child.title))
+            cbadge = status_badge(child.status.state)
+            get_stdout().print(f"    {csid}. {child.title} {cdots} ", cbadge, f" {cac_str}", sep="")

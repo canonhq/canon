@@ -16,6 +16,9 @@ import glob as globmod
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ._output import prompt as _prompt
+from ._output import prompt_confirm as _prompt_confirm
+
 
 @dataclass
 class WizardState:
@@ -510,18 +513,3 @@ def _load_existing_config(state: WizardState) -> None:
             state.project_key = config.project_key
     except Exception:
         print("    Warning: could not load existing CANON.yaml values")
-
-
-def _prompt(message: str, default: str = "") -> str:
-    if default:
-        raw = input(f"    {message} [{default}]: ").strip()
-        return raw or default
-    return input(f"    {message}: ").strip()
-
-
-def _prompt_confirm(message: str, default: bool = True) -> bool:
-    hint = "Y/n" if default else "y/N"
-    raw = input(f"    {message} [{hint}]: ").strip().lower()
-    if not raw:
-        return default
-    return raw in ("y", "yes")

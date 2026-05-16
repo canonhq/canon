@@ -13,8 +13,20 @@ from canon.parser.parse import parse_spec
 from canon.sync.engine import reverse_sync
 from canon.sync.models import TicketStatusResult
 
-# Existing MockAdapter pattern in tests/test_sync/test_engine.py
-from tests.test_sync.test_engine import MockAdapter
+# Existing MockAdapter pattern in tests/test_sync/test_engine.py, but the
+# base MockAdapter.system_name returns "jira".  These tests use github-linked
+# tickets, so we need a github-flavoured variant to avoid the engine's
+# system-mismatch skip logic.
+from tests.test_sync.test_engine import MockAdapter as _BaseMockAdapter
+
+
+class MockAdapter(_BaseMockAdapter):
+    """MockAdapter with system_name="github" for broken-ref tests."""
+
+    @property
+    def system_name(self) -> str:
+        return "github"
+
 
 _SPEC = """---
 title: Broken ref test

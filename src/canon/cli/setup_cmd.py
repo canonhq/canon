@@ -8,6 +8,9 @@ import subprocess
 from pathlib import Path
 
 from ..setup import cleanup_stale_skills, create_canon_yaml, create_mcp_json, list_setup_files
+from ._output import prompt as _prompt
+from ._output import prompt_choice as _prompt_choice
+from ._output import prompt_confirm as _prompt_confirm
 
 
 def _add_setup_arguments(parser: argparse.ArgumentParser) -> None:
@@ -99,43 +102,6 @@ def _detect_project_key(root: Path) -> str:
     if result:
         return f"{result[0]}/{result[1]}"
     return ""
-
-
-def _prompt(message: str, default: str = "") -> str:
-    """Prompt user for input with an optional default."""
-    if default:
-        raw = input(f"{message} [{default}]: ").strip()
-        return raw or default
-    return input(f"{message}: ").strip()
-
-
-def _prompt_choice(message: str, choices: list[str], default: str) -> str:
-    """Prompt user to pick from a numbered menu."""
-    print(message)
-    for i, choice in enumerate(choices, 1):
-        marker = " (default)" if choice == default else ""
-        print(f"  {i}. {choice}{marker}")
-    raw = input(f"Choice [default: {default}]: ").strip()
-    if not raw:
-        return default
-    try:
-        idx = int(raw)
-        if 1 <= idx <= len(choices):
-            return choices[idx - 1]
-    except ValueError:
-        if raw in choices:
-            return raw
-    print(f"Invalid choice, using default: {default}")
-    return default
-
-
-def _prompt_confirm(message: str, default: bool = True) -> bool:
-    """Prompt for yes/no confirmation."""
-    hint = "Y/n" if default else "y/N"
-    raw = input(f"{message} [{hint}]: ").strip().lower()
-    if not raw:
-        return default
-    return raw in ("y", "yes")
 
 
 def _hint_claude_plugin(root: Path) -> None:

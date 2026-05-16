@@ -6,7 +6,6 @@ import argparse
 import json
 import logging
 import subprocess
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,6 +16,7 @@ from ._local import (
     load_local_config,
     parse_all_local_specs,
 )
+from ._output import get_stdout, print_error, print_success
 
 logger = logging.getLogger(__name__)
 
@@ -56,9 +56,9 @@ def run_verify(
                 unchecked=[], summary={"total": 0, "likely": 0, "not_started": 0, "unknown": 0}
             )
         else:
-            print("No spec files found.")
+            get_stdout().print("[muted]No spec files found.[/muted]")
             if gate:
-                print("PASS: no specs in scope")
+                print_success("PASS: no specs in scope")
                 _record_gate_run(root, config, section=section, unchecked=0)
         return 0
 
@@ -69,7 +69,7 @@ def run_verify(
             if json_output:
                 print(json.dumps({"error": msg, "unchecked": [], "summary": {}}))
             else:
-                print(msg, file=sys.stderr)
+                print_error(msg)
             if gate:
                 return 1
             return 2
@@ -94,7 +94,9 @@ def run_verify(
                 continue
 
             if not json_output:
-                print(f"\n{doc.frontmatter.title} > {sec.title}")
+                get_stdout().print(
+                    f"\n[bold]{doc.frontmatter.title}[/bold] > [bold]{sec.title}[/bold]"
+                )
 
             for ac in unchecked:
                 total += 1
@@ -118,8 +120,12 @@ def run_verify(
                 )
 
                 if not json_output:
-                    icon = {"likely": "+", "not_started": "-", "unknown": "?"}[status]
-                    print(f"  [{icon}] {ac.text}")
+                    if status == "likely":
+                        get_stdout().print(f"  [green]\\[+][/green] {ac.text}")
+                    elif status == "not_started":
+                        get_stdout().print(f"  [dim]\\[-][/dim] {ac.text}")
+                    else:
+                        get_stdout().print(f"  [yellow]\\[?][/yellow] {ac.text}")
 
     summary = {
         "total": total,
@@ -136,16 +142,16 @@ def run_verify(
         return 0
 
     if total == 0:
-        print("All ACs are checked. Nothing to verify.")
+        print_success("All ACs are checked. Nothing to verify.")
         if gate:
-            print("PASS: all in-scope ACs are checked")
+            print_success("PASS: all in-scope ACs are checked")
             _record_gate_run(root, config, section=None, unchecked=0)
         return 0
 
-    print(f"\nSummary: {total} unchecked ACs")
-    print(f"  Likely realized: {likely}")
-    print(f"  Not started:     {not_started}")
-    print(f"  Unknown:         {unknown}")
+    get_stdout().print(f"\nSummary: {total} unchecked ACs")
+    get_stdout().print(f"  [green]Likely realized: {likely}[/green]")
+    get_stdout().print(f"  [dim]Not started:     {not_started}[/dim]")
+    get_stdout().print(f"  [yellow]Unknown:         {unknown}[/yellow]")
 
     if gate:
         _record_gate_run(root, config, section=None, unchecked=total)
@@ -189,9 +195,11 @@ def _verify_section_json(root: Path, doc, section, *, gate: bool = False, config
 def _emit_gate_summary(unchecked_count: int) -> int:
     """Emit gate result. Returns exit code (0 = pass, 1 = fail)."""
     if unchecked_count == 0:
-        print("\nPASS: all in-scope ACs are checked")
+        print_success("\nPASS: all in-scope ACs are checked")
         return 0
-    print(f"\nFAIL: {unchecked_count} in-scope ACs lack realization (must be checked)")
+    get_stdout().print(
+        f"\n[error]FAIL:[/error] {unchecked_count} in-scope ACs lack realization (must be checked)"
+    )
     return 1
 
 
@@ -238,15 +246,21 @@ def _record_gate_run(
 
 def _verify_section(root: Path, section) -> int:
     """Verify all ACs in a single section. Returns the number of unchecked ACs."""
-    print(f"\n{section.title}")
-    print("-" * 40)
+    get_stdout().print(f"\n[bold]{section.title}[/bold]")
+    get_stdout().print("[muted]" + "-" * 40 + "[/muted]")
     unchecked = 0
     for ac in section.acceptance_criteria:
         if not ac.checked:
             unchecked += 1
         status_label = "checked" if ac.checked else _check_ac(root, ac.text)
-        icon = {"checked": "x", "likely": "+", "not_started": "-", "unknown": "?"}[status_label]
-        print(f"  [{icon}] {ac.text}")
+        if status_label == "checked":
+            get_stdout().print(f"  [green]\\[x][/green] {ac.text}")
+        elif status_label == "likely":
+            get_stdout().print(f"  [green]\\[+][/green] {ac.text}")
+        elif status_label == "not_started":
+            get_stdout().print(f"  [dim]\\[-][/dim] {ac.text}")
+        else:
+            get_stdout().print(f"  [yellow]\\[?][/yellow] {ac.text}")
     return unchecked
 
 

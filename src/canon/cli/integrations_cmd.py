@@ -12,6 +12,8 @@ from contextlib import suppress
 from pathlib import Path
 from urllib.parse import urlparse
 
+from ._output import prompt as _prompt
+from ._output import prompt_confirm as _prompt_confirm
 from .integration_manager import (
     SUPPORTED_PROVIDERS,
     IntegrationManager,
@@ -686,21 +688,6 @@ def _format_source(source: str) -> str:
         "env_var": "env var",
         "canon_yaml": "canon.yaml",
     }.get(source, source)
-
-
-def _prompt(message: str, default: str = "") -> str:
-    if default:
-        raw = input(f"  {message} [{default}]: ").strip()
-        return raw or default
-    return input(f"  {message}: ").strip()
-
-
-def _prompt_confirm(message: str, default: bool = True) -> bool:
-    hint = "Y/n" if default else "y/N"
-    raw = input(f"  {message} [{hint}]: ").strip().lower()
-    if not raw:
-        return default
-    return raw in ("y", "yes")
 
 
 def _env_or_fail(var: str, label: str) -> str:

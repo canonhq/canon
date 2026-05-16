@@ -17,6 +17,7 @@ from ._local import (
     load_local_config,
     parse_all_local_specs,
 )
+from ._output import get_stdout, make_table, print_warning, spinner
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ def run_audit(
                 summary=_audit_summary(0, 0, 0, 0, 0, 0, mode="none"),
             )
         else:
-            print("No spec files found.")
+            get_stdout().print("[muted]No spec files found.[/muted]")
         return
 
     # Backend routing — JSON mode only, transparent fallback on failure.
@@ -117,20 +118,19 @@ def run_audit(
                 # Fall through to local path with a stderr warning. The
                 # action layer should treat the response as
                 # authoritative regardless of which path produced it.
-                import sys
-
-                print(
-                    f"warning: Canon backend audit failed ({exc}); falling back to local audit",
-                    file=sys.stderr,
-                )
+                print_warning(f"Canon backend audit failed ({exc}); falling back to local audit")
 
     # Try to create Claude client
     client = ClaudeClient()
     use_claude = client.is_available
 
     if not use_claude and not json_output:
-        print("ANTHROPIC_API_KEY not set — using heuristic mode (grep-only).")
-        print("Heuristic mode can suggest in_progress but cannot confirm done.\n")
+        get_stdout().print(
+            "[warning]ANTHROPIC_API_KEY not set[/warning] — using heuristic mode (grep-only)."
+        )
+        get_stdout().print(
+            "  [muted]Heuristic mode can suggest in_progress but cannot confirm done.[/muted]"
+        )
 
     total_changes = 0
     total_input_tokens = 0
@@ -171,14 +171,17 @@ def run_audit(
 
         if not sections_to_audit and not context_promotions:
             if not json_output:
-                print(f"{doc.frontmatter.title}: all sections done/deprecated, skipping.")
+                get_stdout().print(
+                    f"[muted]{doc.frontmatter.title}: all sections done/deprecated, skipping.[/muted]"
+                )
             continue
 
         json_specs_scanned += 1
 
         if not json_output:
-            print(f"\n{doc.frontmatter.title} ({doc.file_path})")
-            print("-" * 50)
+            get_stdout().print(
+                f"\n[bold]{doc.frontmatter.title}[/bold] [muted]({doc.file_path})[/muted]"
+            )
 
         # Gather grep evidence
         evidence = _gather_evidence(root, sections_to_audit)
@@ -188,12 +191,15 @@ def run_audit(
             from canon.agent.client import AgentAPIError
 
             try:
-                recommendations, in_tok, out_tok = _audit_with_claude(
-                    client, doc, sections_to_audit, evidence
-                )
+                with spinner(f"Auditing {doc.file_path}..."):
+                    recommendations, in_tok, out_tok = _audit_with_claude(
+                        client, doc, sections_to_audit, evidence
+                    )
             except AgentAPIError as e:
                 if not json_output:
-                    print(f"  Claude API error: {e} — skipping this spec.")
+                    get_stdout().print(
+                        f"  [error]Claude API error:[/error] {e} — skipping this spec."
+                    )
                 continue
             total_input_tokens += in_tok
             total_output_tokens += out_tok
@@ -221,46 +227,47 @@ def run_audit(
             continue
 
         if not changes and not ac_eligible:
-            print("  No status changes recommended.")
+            get_stdout().print("  [muted]No status changes recommended.[/muted]")
             continue
 
         # Print per-section details for status changes
         for r in changes:
-            print(
-                f"  {r.section_number} {r.section_id}: {r.current_status} → {r.recommended_status} ({r.confidence})"
+            get_stdout().print(
+                f"  [bold]{r.section_number}[/bold] {r.section_id}: "
+                f"[dim]{r.current_status}[/dim] [yellow]->[/yellow] "
+                f"[green]{r.recommended_status}[/green] [muted]({r.confidence})[/muted]"
             )
             if r.reasoning:
-                print(f"    {r.reasoning}")
+                get_stdout().print(f"    [muted]{r.reasoning}[/muted]")
             for ae in r.ac_evaluations:
-                symbol = (
-                    "+"
-                    if ae.status == "realized"
-                    else "~"
-                    if ae.status == "partially_realized"
-                    else "-"
-                )
-                ev = f" ({ae.evidence})" if ae.evidence else ""
-                print(f"    [{symbol}] {ae.ac_text}{ev}")
+                ev = f" [muted]({ae.evidence})[/muted]" if ae.evidence else ""
+                if ae.status == "realized":
+                    get_stdout().print(f"    [green]\\[+][/green] {ae.ac_text}{ev}")
+                elif ae.status == "partially_realized":
+                    get_stdout().print(f"    [yellow]\\[~][/yellow] {ae.ac_text}{ev}")
+                else:
+                    get_stdout().print(f"    [red]\\[-][/red] {ae.ac_text}{ev}")
 
         # Print AC evaluations for sections without status changes
         unchanged_with_acs = [r for r in ac_eligible if r not in changes and r.ac_evaluations]
         for r in unchanged_with_acs:
             has_realized = any(ae.status == "realized" for ae in r.ac_evaluations)
             if has_realized:
-                print(f"  {r.section_number} {r.section_id}: status unchanged, ACs updated")
+                get_stdout().print(
+                    f"  [bold]{r.section_number}[/bold] {r.section_id}: "
+                    f"[muted]status unchanged, ACs updated[/muted]"
+                )
                 for ae in r.ac_evaluations:
-                    symbol = (
-                        "+"
-                        if ae.status == "realized"
-                        else "~"
-                        if ae.status == "partially_realized"
-                        else "-"
-                    )
-                    ev = f" ({ae.evidence})" if ae.evidence else ""
-                    print(f"    [{symbol}] {ae.ac_text}{ev}")
+                    ev = f" [muted]({ae.evidence})[/muted]" if ae.evidence else ""
+                    if ae.status == "realized":
+                        get_stdout().print(f"    [green]\\[+][/green] {ae.ac_text}{ev}")
+                    elif ae.status == "partially_realized":
+                        get_stdout().print(f"    [yellow]\\[~][/yellow] {ae.ac_text}{ev}")
+                    else:
+                        get_stdout().print(f"    [red]\\[-][/red] {ae.ac_text}{ev}")
 
         if not changes and not unchanged_with_acs:
-            print("  No status changes recommended.")
+            get_stdout().print("  [muted]No status changes recommended.[/muted]")
             continue
 
         # Apply after printing details — pass all eligible recs for AC updates
@@ -289,16 +296,28 @@ def run_audit(
         )
         return
 
-    # Summary
-    print(f"\nAudit complete: {total_changes} status change(s){' (dry run)' if dry_run else ''}.")
+    # Summary table
+    summary_table = make_table(
+        title="Audit Summary",
+        columns=[
+            {"name": "Metric", "style": "bold"},
+            {"name": "Value", "justify": "right"},
+        ],
+    )
+    dry_label = " [muted](dry run)[/muted]" if dry_run else ""
+    summary_table.add_row("Status changes", f"{total_changes}{dry_label}")
     if use_claude:
         # Approximate cost assuming Sonnet $3/$15 per MTok — informational only
         cost = (total_input_tokens * 3 + total_output_tokens * 15) / 1_000_000
-        print(f"Tokens: {total_input_tokens:,} in / {total_output_tokens:,} out (~${cost:.2f})")
+        summary_table.add_row("Input tokens", f"{total_input_tokens:,}")
+        summary_table.add_row("Output tokens", f"{total_output_tokens:,}")
+        summary_table.add_row("Est. cost", f"${cost:.2f}")
+    get_stdout().print()
+    get_stdout().print(summary_table)
 
     # Optional sync
     if do_sync and total_changes > 0 and not dry_run:
-        print("\nRunning ticket sync...")
+        get_stdout().print("\n[info]Running ticket sync...[/info]")
         from .sync_cmd import run_sync
 
         run_sync(local=True, root=root, spec=spec)
@@ -538,7 +557,9 @@ def _parse_audit_response(
                 logger.warning("Could not parse Claude response as JSON for %s", "spec")
                 return []
         else:
-            print("  Warning: Could not parse Claude response as JSON.")
+            get_stdout().print(
+                "  [warning]Warning:[/warning] Could not parse Claude response as JSON."
+            )
             return []
 
     # Build section lookup for current status
@@ -747,7 +768,7 @@ def _apply_recommendations(
     if updated_md != doc.raw:
         spec_path = root / doc.file_path
         spec_path.write_text(updated_md)
-        print(f"  Written: {doc.file_path}")
+        get_stdout().print(f"  [success]Written:[/success] {doc.file_path}")
         return max(len(updates) + len(inserts), 1)
 
     return 0

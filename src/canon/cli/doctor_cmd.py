@@ -623,6 +623,8 @@ def _mcp_checks(root: Path) -> list[CheckResult]:
 
 
 def _print_results(results: list[CheckResult]) -> None:
+    from ._output import get_stdout, result_badge
+
     categories = ["config", "auth", "integrations", "mcp"]
     category_labels = {
         "config": "Configuration",
@@ -631,23 +633,32 @@ def _print_results(results: list[CheckResult]) -> None:
         "mcp": "MCP Server",
     }
 
-    print("\nCanon Doctor\n")
+    get_stdout().print()
+    get_stdout().print("[heading]Canon Doctor[/heading]")
+    get_stdout().print()
 
     for cat in categories:
         cat_results = [r for r in results if r.category == cat]
         if not cat_results:
             continue
 
-        print(f"  {category_labels.get(cat, cat)}")
+        get_stdout().print(f"  [heading]{category_labels.get(cat, cat)}[/heading]")
+        get_stdout().print(f"  [muted]{'─' * 40}[/muted]")
         for r in cat_results:
-            icon = {"pass": "PASS", "warn": "WARN", "fail": "FAIL"}[r.status]
-            print(f"    {icon}  {r.name}: {r.message}")
+            badge = result_badge(r.status)
+            get_stdout().print("    ", badge, f" {r.name}: {r.message}", sep="")
             if r.fix_hint and r.status != "pass":
-                print(f"           {r.fix_hint}")
-        print()
+                get_stdout().print(f"           [muted]{r.fix_hint}[/muted]")
+        get_stdout().print()
 
     # Summary
     passed = sum(1 for r in results if r.status == "pass")
     warns = sum(1 for r in results if r.status == "warn")
     fails = sum(1 for r in results if r.status == "fail")
-    print(f"  {passed} passed, {warns} warnings, {fails} failures\n")
+    parts = [
+        f"[green]{passed} passed[/green]",
+        f"[yellow]{warns} warnings[/yellow]",
+        f"[red]{fails} failures[/red]",
+    ]
+    get_stdout().print(f"  {', '.join(parts)}")
+    get_stdout().print()

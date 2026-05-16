@@ -93,7 +93,7 @@ class TestRunTasks:
         _setup(tmp_path)
         run_tasks(root=tmp_path)
         output = capsys.readouterr().out
-        assert "1/2 ACs" in output  # Login Flow
+        assert "1/2" in output  # Login Flow AC progress
 
     def test_shows_ticket_link(self, tmp_path: Path, capsys):
         _setup(tmp_path)

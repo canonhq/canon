@@ -20,6 +20,7 @@ from ._local import (
     load_local_config,
     parse_all_local_specs,
 )
+from ._output import get_stdout, print_error, print_warning, progress_bar
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
@@ -143,13 +144,12 @@ def _try_local_or_remote(config: CanonConfig, root: Path) -> tuple[object, Ticke
         result = _try_remote_adapter(config, root)
         if result is not None:
             log.debug("Using Canon server proxy for %s", system)
-            print(f"Using Canon server proxy for {system}")
+            get_stdout().print(f"[muted]Using Canon server proxy for {system}[/muted]")
             return result
         log.warning("Server proxy unavailable for %s; falling back to local adapter", system)
-        print(
-            f"Warning: Canon server proxy unavailable for {system}. "
-            "Run 'canon login' or set local credentials.",
-            file=sys.stderr,
+        print_warning(
+            f"Canon server proxy unavailable for {system}.",
+            hint="Run 'canon login' or set local credentials.",
         )
         return create_adapter_local(config, root)
 
@@ -161,14 +161,15 @@ def _try_local_or_remote(config: CanonConfig, root: Path) -> tuple[object, Ticke
     result = _try_remote_adapter(config, root)
     if result is not None:
         log.debug("No local credentials, using Canon server proxy")
-        print("Using Canon server proxy (no local GITHUB_TOKEN detected)")
+        get_stdout().print(
+            "[muted]Using Canon server proxy (no local GITHUB_TOKEN detected)[/muted]"
+        )
         return result
 
     log.warning("No credentials found, falling back to local adapter (will likely fail)")
-    print(
-        "Warning: No GitHub credentials detected. "
-        "Set GITHUB_TOKEN, install gh CLI, or run 'canon login'.",
-        file=sys.stderr,
+    print_warning(
+        "No GitHub credentials detected.",
+        hint="Set GITHUB_TOKEN, install gh CLI, or run 'canon login'.",
     )
     return create_adapter_local(config, root)
 
@@ -191,9 +192,9 @@ def run_sync(
         result = _try_remote_adapter(config, root)
         if result is not None:
             adapter, mapping = result
-            print("Using Canon server proxy (--remote)")
+            get_stdout().print("[muted]Using Canon server proxy (--remote)[/muted]")
         else:
-            print("Error: --remote specified but server proxy is not available.")
+            print_error("--remote specified but server proxy is not available.")
             sys.exit(1)
     elif local:
         adapter, mapping = create_adapter_local(config, root)
@@ -202,8 +203,10 @@ def run_sync(
         adapter, mapping = _try_local_or_remote(config, root)
 
     if not adapter and mapping.is_empty():
-        print("Error: No ticket system configured and no GitHub token available.")
-        print("Set GITHUB_TOKEN, install gh CLI, or configure ticket_systems in CANON.yaml.")
+        print_error(
+            "No ticket system configured and no GitHub token available.",
+            hint="Set GITHUB_TOKEN, install gh CLI, or configure ticket_systems in CANON.yaml.",
+        )
         sys.exit(1)
 
     docs = parse_all_local_specs(root, config)
@@ -211,7 +214,7 @@ def run_sync(
         docs = [d for d in docs if spec in d.file_path]
 
     if not docs:
-        print("No spec files found.")
+        get_stdout().print("[muted]No spec files found.[/muted]")
         return
 
     from canon.sync.adapters.factory import from_config
@@ -224,9 +227,23 @@ def run_sync(
     )
 
     async def _sync_all() -> None:
-        for doc in docs:
-            print(f"\n{doc.frontmatter.title} ({doc.file_path})")
-            print("-" * 50)
+        total_created = 0
+        total_updated = 0
+        total_skipped = 0
+        total_errors = 0
+
+        if dry_run:
+            get_stdout().print("[bold]DRY RUN[/bold] — no changes will be written\n")
+
+        use_progress = not dry_run and len(docs) > 1
+        ctx = progress_bar(len(docs), "Syncing specs") if use_progress else None
+
+        async def _process_doc(doc, bar):
+            nonlocal total_created, total_updated, total_skipped, total_errors
+
+            get_stdout().print(
+                f"\n[bold]{doc.frontmatter.title}[/bold] [muted]({doc.file_path})[/muted]"
+            )
 
             # Resolve adapter per-doc via routing (when multiple systems exist).
             # Note: when an external adapter is provided, routing is skipped and
@@ -252,8 +269,11 @@ def run_sync(
                     project_key = sys_config.project or ""
 
             if not doc_adapter:
-                print("  Skipped: no adapter resolved for this spec")
-                continue
+                get_stdout().print("  [muted]Skipped: no adapter resolved for this spec[/muted]")
+                total_skipped += 1
+                if bar:
+                    bar.advance()
+                return
 
             # Resolve single-system config before the forward/reverse split so
             # both directions get the sys_config (not just forward).
@@ -277,8 +297,11 @@ def run_sync(
                         or ""
                     )
                 if not project_key:
-                    print("  Skipped: no project key configured")
-                    continue
+                    get_stdout().print("  [muted]Skipped: no project key configured[/muted]")
+                    total_skipped += 1
+                    if bar:
+                        bar.advance()
+                    return
 
                 # Resolve lifecycle_sync config
                 lifecycle_sync_cfg = config.specs.lifecycle_sync
@@ -296,27 +319,45 @@ def run_sync(
                 )
 
             # Report results
+            n_created = len(result.created) if result.created else 0
+            n_updated_items = len(result.updated) if result.updated else 0
+            n_skipped_items = len(result.skipped) if result.skipped else 0
+            n_errors = len(result.errors) if result.errors else 0
+
             if result.created:
                 for c in result.created:
-                    print(f"  Created: {c.section_id} → {c.ticket_id} ({c.ticket_url})")
+                    get_stdout().print(
+                        f"  [green]Created:[/green] {c.section_id} -> {c.ticket_id} ({c.ticket_url})"
+                    )
             if result.updated:
                 for u in result.updated:
-                    print(f"  Existing: {u.section_id} → {u.ticket_id}")
+                    get_stdout().print(
+                        f"  [muted]Existing:[/muted] {u.section_id} -> {u.ticket_id}"
+                    )
             if result.status_changed:
                 for sc in result.status_changed:
-                    print(f"  Updated: {sc.section_id} {sc.old_state} → {sc.new_state}")
+                    get_stdout().print(
+                        f"  [yellow]Updated:[/yellow] {sc.section_id} "
+                        f"[dim]{sc.old_state}[/dim] [yellow]->[/yellow] [green]{sc.new_state}[/green]"
+                    )
             if result.closed:
                 for cl in result.closed:
-                    print(f"  Closed: {cl.section_id} → {cl.ticket_id}")
+                    get_stdout().print(
+                        f"  [muted]Closed:[/muted] {cl.section_id} -> {cl.ticket_id}"
+                    )
             if result.reopened:
                 for ro in result.reopened:
-                    print(f"  Reopened: {ro.section_id} → {ro.ticket_id}")
+                    get_stdout().print(
+                        f"  [yellow]Reopened:[/yellow] {ro.section_id} -> {ro.ticket_id}"
+                    )
             if result.skipped:
                 for sk in result.skipped:
-                    print(f"  Skipped: {sk.section_id} — {sk.reason}")
+                    get_stdout().print(f"  [muted]Skipped:[/muted] {sk.section_id} — {sk.reason}")
             if result.errors:
                 for e in result.errors:
-                    print(f"  Error: {e.section_id}: {e.error}")
+                    get_stdout().print(
+                        f"  [error]Error:[/error] [bold]{e.section_id}[/bold]: {e.error}"
+                    )
             has_changes = (
                 result.created
                 or result.status_changed
@@ -325,14 +366,51 @@ def run_sync(
                 or result.errors
             )
             if not has_changes:
-                print("  No changes.")
+                get_stdout().print("  [muted]No changes.[/muted]")
 
             # Write back unless dry run
             if not dry_run and updated_md != doc.raw:
                 spec_path = root / doc.file_path
                 spec_path.write_text(updated_md)
-                print(f"  Written: {doc.file_path}")
+                get_stdout().print(f"  [success]Written:[/success] {doc.file_path}")
             elif dry_run and updated_md != doc.raw:
-                print("  (dry run — changes not written)")
+                get_stdout().print("  [muted](dry run — changes not written)[/muted]")
+
+            total_created += n_created
+            total_updated += n_updated_items
+            total_skipped += n_skipped_items
+            total_errors += n_errors
+
+            if bar:
+                bar.advance()
+
+        if use_progress:
+            with ctx as bar:
+                for doc in docs:
+                    await _process_doc(doc, bar)
+        else:
+            for doc in docs:
+                await _process_doc(doc, None)
+
+        # Summary line
+        get_stdout().print()
+        parts = []
+        if total_created:
+            parts.append(f"[green]Created {total_created}[/green]")
+        else:
+            parts.append(f"Created {total_created}")
+        if total_updated:
+            parts.append(f"updated {total_updated}")
+        else:
+            parts.append(f"updated {total_updated}")
+        if total_skipped:
+            parts.append(f"[muted]skipped {total_skipped}[/muted]")
+        else:
+            parts.append(f"skipped {total_skipped}")
+        if total_errors:
+            parts.append(f"[error]errors {total_errors}[/error]")
+        else:
+            parts.append(f"errors {total_errors}")
+        get_stdout().print(f"Sync complete: {', '.join(parts)}")
 
     asyncio.run(_sync_all())

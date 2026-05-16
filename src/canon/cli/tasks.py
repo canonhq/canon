@@ -27,6 +27,8 @@ def run_tasks(
     show_all: bool = False,
     root: Path | None = None,
 ) -> None:
+    from ._output import coverage_text, get_stdout, make_table, status_badge
+
     root = root or Path.cwd()
     config = load_local_config(root)
     docs = parse_all_local_specs(root, config)
@@ -35,7 +37,7 @@ def run_tasks(
         docs = [d for d in docs if spec in d.file_path]
 
     if not docs:
-        print("No spec files found.")
+        get_stdout().print("No spec files found.")
         return
 
     statuses = ALL_STATUSES if show_all else ACTIVE_STATUSES
@@ -50,22 +52,43 @@ def run_tasks(
             continue
 
         found = True
-        print(f"\n{doc.frontmatter.title} ({doc.file_path})")
-        print("-" * 60)
+        get_stdout().print()
+        get_stdout().print(
+            f"[heading]{doc.frontmatter.title}[/heading] [muted]({doc.file_path})[/muted]"
+        )
 
+        table_rows: list[list] = []
         for section in matching:
             total_ac = len(section.acceptance_criteria)
             done_ac = sum(1 for ac in section.acceptance_criteria if ac.checked)
-            ac_str = f"{done_ac}/{total_ac} ACs" if total_ac else "no ACs"
+            if total_ac:
+                pct = done_ac / total_ac * 100
+                ac_display = coverage_text(pct, label=f"{done_ac}/{total_ac}")
+            else:
+                ac_display = "no ACs"
 
             ticket = ""
             if section.ticket_link:
-                ticket = f"  [{section.ticket_link.system}:{section.ticket_link.ticket_id}]"
+                ticket = f"{section.ticket_link.system}:{section.ticket_link.ticket_id}"
 
             sid = section.section_number or section.id
-            state = section.status.state
-            blocked = f" (by: {section.status.blocked_by})" if section.status.blocked_by else ""
-            print(f"  {sid:<10} {section.title:<30} {state}{blocked:<14} {ac_str}{ticket}")
+            state_text = status_badge(section.status.state)
+            if section.status.blocked_by:
+                state_text.append(f" (by: {section.status.blocked_by})")
+
+            table_rows.append([sid, section.title, state_text, ac_display, ticket])
+
+        table = make_table(
+            columns=[
+                {"name": "ID", "min_width": 6},
+                {"name": "Section", "min_width": 20},
+                {"name": "Status", "min_width": 12},
+                {"name": "ACs", "justify": "right"},
+                {"name": "Ticket"},
+            ],
+            rows=table_rows,
+        )
+        get_stdout().print(table)
 
     if not found:
-        print("No matching tasks found.")
+        get_stdout().print("[green]No actionable tasks — all caught up![/green]")
