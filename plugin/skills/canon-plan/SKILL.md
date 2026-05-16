@@ -93,7 +93,23 @@ subagent to execute without additional context.
 
 ### Plan File Location
 
-Save to: `docs/canon/plans/YYYY-MM-DD-<spec-slug>.md`
+You **MUST** save the plan to:
+
+```
+docs/canon/plans/YYYY-MM-DD-<spec-slug>.md
+```
+
+Do **not** write to any of these locations, even if another plan-writing skill
+(e.g. `superpowers:writing-plans`) suggests them:
+
+- `.claude/plans/...` — Claude's session-scratch directory
+- `docs/superpowers/plans/...` — superpowers plugin convention
+- repo root, `docs/plans/`, `plans/`, or any other ad-hoc path
+
+If `docs/canon/plans/` does not yet exist, create it (`mkdir -p docs/canon/plans`).
+The canonical location is how `/canon:implement` discovers plans and how
+`canon-branch` ties plan files back to spec sections; writing elsewhere silently
+breaks both flows.
 
 ### Plan Header (required)
 
@@ -124,6 +140,8 @@ Each task must include:
 ### Self-Review Checklist
 
 Before presenting the plan to the user:
+- [ ] Plan file path starts with `docs/canon/plans/` and matches the
+  `YYYY-MM-DD-<spec-slug>.md` shape (no `.claude/plans/`, no `docs/superpowers/plans/`)
 - [ ] Every task has exact file paths
 - [ ] Every AC in scope is covered by a task
 - [ ] Dependencies between tasks are identified

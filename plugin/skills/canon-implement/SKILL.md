@@ -36,11 +36,37 @@ work. Use `canon-implement` for multi-section plans.
 
 ## Step 1: Load Plan
 
-Accept a plan file path as argument. If none provided, list available plans:
+Accept a plan file path as argument. If none provided, list available plans from
+both the canonical location and common misplaced locations:
 
 ```bash
+# Canonical location (always preferred)
 ls docs/canon/plans/*.md 2>/dev/null
+
+# Misplaced locations — surface them, but nudge migration
+ls .claude/plans/*.md docs/superpowers/plans/*.md 2>/dev/null
 ```
+
+If any plans are found outside `docs/canon/plans/`, print a single-line warning
+before the selection prompt that names the actual misplaced source paths:
+
+```
+⚠ Plans found outside docs/canon/plans/:
+    <list each misplaced plan, one per line>
+  To move them into the canonical location, run:
+    mkdir -p docs/canon/plans
+    git mv <misplaced-plan> docs/canon/plans/   # repeat per file
+  canon-implement can still run plans from their current location, but
+  canon-branch and the spec-coverage tooling expect them under docs/canon/plans/.
+```
+
+Generate the `git mv` commands from the actual hits — do not hard-code
+`.claude/plans/*.md` (the misplaced plan may be under `docs/superpowers/plans/`
+or any other non-canonical path that the scan picks up).
+
+Do **not** auto-migrate plans — the user may have intentional state in those
+locations from another plugin (e.g. `superpowers:writing-plans`). Detection +
+nudge keeps the canonical location authoritative without destroying user state.
 
 Parse the plan to extract:
 - Task list with dependencies
