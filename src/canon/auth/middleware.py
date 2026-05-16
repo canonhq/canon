@@ -29,6 +29,14 @@ _ORG_PATH_RE = re.compile(r"^/app/([^/]+)")
 # installation handler validates against this set.
 RESERVED_ORG_SLUGS = frozenset({"admin", "no-org", "choose-org", "setup"})
 
+# Path patterns from vulnerability scanners — used to tag auth_denied events
+# so dashboard charts can filter out bot noise.
+_SCANNER_PATH_RE = re.compile(
+    r"\.env|phpinfo\.php|\.cgi$|appsettings\.|parameters\.yml"
+    r"|apple-app-site-association|\.xml$|\.json$|wp-login|wp-admin",
+    re.IGNORECASE,
+)
+
 
 def _is_api_request(request: Request) -> bool:
     return request.headers.get("Accept", "").startswith("application/json")
@@ -88,9 +96,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
         has_bearer = request.headers.get("Authorization", "").startswith("Bearer ")
 
         if not session_user and not has_bearer:
+            path = request.url.path
             analytics.track(
                 "auth_denied",
-                properties={"reason": "no_session", "path": request.url.path},
+                properties={
+                    "reason": "no_session",
+                    "path": path,
+                    "is_scanner": bool(_SCANNER_PATH_RE.search(path)),
+                },
             )
             if _is_api_request(request):
                 return JSONResponse({"detail": "Not authenticated"}, status_code=401)
@@ -132,16 +145,48 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     except Exception:
                         pass
 
+            # When user has a session with empty org_login, check if the
+            # requested org is in their verified org_memberships.  This handles
+            # the case where org resolution failed during login callback but the
+            # provider confirmed membership (e.g. old browser tabs after re-login).
+            if not user_org and session_user:
+                memberships = session_user.get("org_memberships", [])
+                if requested_org.lower() in [m.lower() for m in memberships]:
+                    # Auto-heal the session: set org_login so subsequent
+                    # requests don't repeat this fallback.
+                    session_user["org_login"] = requested_org
+                    user_org = requested_org
+                    logger.info(
+                        "org_login auto-healed from org_memberships (org=%s, sub=%s)",
+                        requested_org,
+                        session_user.get("sub", ""),
+                    )
+                elif session_user.get("pending_org_choices") or len(memberships) > 1:
+                    # User has multiple orgs — redirect to chooser instead of
+                    # hard-denying.  This avoids the confusing org_mismatch
+                    # error for users who just need to pick an org.
+                    if not _is_api_request(request):
+                        return RedirectResponse(url="/app/choose-org")
+
             # Always enforce org isolation: user's verified org must match URL.
             # The auth_enabled guard at the top of dispatch() already skips
             # this entire middleware for dev/self-hosted with auth disabled.
             if not user_org or user_org.lower() != requested_org.lower():
+                # Include user identity for debugging — the default distinct_id
+                # is "canon-server" which makes all denials look like one user.
+                user_sub = ""
+                if session_user:
+                    user_sub = session_user.get("sub", "")
+                path = request.url.path
                 analytics.track(
                     "auth_denied",
+                    distinct_id=user_sub or analytics.SERVER_ACTOR,
                     properties={
                         "reason": "org_mismatch",
                         "requested_org": requested_org,
-                        "path": request.url.path,
+                        "user_org": user_org,
+                        "path": path,
+                        "is_scanner": bool(_SCANNER_PATH_RE.search(path)),
                     },
                 )
                 if _is_api_request(request):
