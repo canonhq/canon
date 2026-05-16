@@ -147,23 +147,29 @@ async def get_pr_review(
     owner: str,
     repo: str,
     pr_number: int,
+    sha: str | None = Query(default=None),
     _user: CurrentUser = Depends(require_permission(Permission.SPECS_READ)),
 ):
-    """Get the latest review for a PR with history."""
+    """Get a PR review with history. Returns the latest review by default,
+    or the review at a specific commit SHA when `sha` is provided."""
     _check_owner_matches_org(owner, org)
     store = _get_store(request)
     if store is None:
         return JSONResponse({"review": None, "history": []}, status_code=200)
 
     full_repo = f"{owner}/{repo}"
-    latest = await store.get_latest_review(full_repo, pr_number)
-    if latest is None:
-        return JSONResponse({"review": None, "history": []}, status_code=200)
+    selected = (
+        await store.get_review_by_sha(full_repo, pr_number, sha)
+        if sha
+        else await store.get_latest_review(full_repo, pr_number)
+    )
 
+    # Always return history when we have any rows for this PR — even if the
+    # requested SHA is unknown — so the UI lets the user pick a valid one.
     all_reviews = await store.list_reviews_for_pr(full_repo, pr_number)
     history = [ReviewSummary(**_review_to_summary(r)) for r in all_reviews]
 
     return PRReviewResponse(
-        review=ReviewDetail(**_review_to_detail(latest)),
+        review=ReviewDetail(**_review_to_detail(selected)) if selected else None,
         history=history,
     )

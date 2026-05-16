@@ -163,12 +163,14 @@ class TestGetPRReview:
     def test_returns_empty_when_no_review_found(self, app, client):
         mock_store = AsyncMock()
         mock_store.get_latest_review.return_value = None
+        mock_store.list_reviews_for_pr.return_value = []
         app.state.pr_review_store = mock_store
 
         resp = client.get("/app/test-org/api/reviews/test-org/test-repo/999")
         assert resp.status_code == 200
         data = resp.json()
         assert data["review"] is None
+        assert data["history"] == []
 
     def test_returns_review_with_history(self, app, client):
         mock_store = AsyncMock()
@@ -187,4 +189,42 @@ class TestGetPRReview:
         assert data["review"] is not None
         assert data["review"]["head_sha"] == "sha2"
         assert "analysis" in data["review"]
+        assert len(data["history"]) == 2
+        mock_store.get_latest_review.assert_awaited_once()
+        mock_store.get_review_by_sha.assert_not_awaited()
+
+    def test_sha_param_selects_specific_review(self, app, client):
+        mock_store = AsyncMock()
+        older = _make_review_row(id=1, head_sha="sha1")
+        history = [
+            _make_review_row(id=2, head_sha="sha2"),
+            _make_review_row(id=1, head_sha="sha1"),
+        ]
+        mock_store.get_review_by_sha.return_value = older
+        mock_store.list_reviews_for_pr.return_value = history
+        app.state.pr_review_store = mock_store
+
+        resp = client.get("/app/test-org/api/reviews/test-org/test-repo/42?sha=sha1")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["review"]["head_sha"] == "sha1"
+        # Make sure we didn't also hit the latest-review path.
+        mock_store.get_review_by_sha.assert_awaited_once_with("test-org/test-repo", 42, "sha1")
+        mock_store.get_latest_review.assert_not_awaited()
+
+    def test_sha_param_unknown_returns_history_so_user_can_recover(self, app, client):
+        # Don't strand the user with an empty sidebar: return the full history
+        # so they can pick a valid SHA. Only `review` is null.
+        mock_store = AsyncMock()
+        mock_store.get_review_by_sha.return_value = None
+        mock_store.list_reviews_for_pr.return_value = [
+            _make_review_row(id=2, head_sha="sha2"),
+            _make_review_row(id=1, head_sha="sha1"),
+        ]
+        app.state.pr_review_store = mock_store
+
+        resp = client.get("/app/test-org/api/reviews/test-org/test-repo/42?sha=ghost")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["review"] is None
         assert len(data["history"]) == 2
