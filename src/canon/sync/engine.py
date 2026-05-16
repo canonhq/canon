@@ -381,6 +381,16 @@ async def forward_sync(
                 if not section.ticket_link or not section.section_number:
                     continue
 
+                # Skip sections linked to a different ticket system
+                if section.ticket_link.system != system:
+                    result.skipped.append(
+                        SyncSkipped(
+                            section_id=section.id,
+                            reason=f"ticket {section.ticket_link.ticket_id} linked to {section.ticket_link.system}, adapter is {system}",
+                        )
+                    )
+                    continue
+
                 # Close tickets for done/deprecated sections
                 if section.status.state in _CLOSABLE_STATES:
                     if lifecycle_sync is True or lifecycle_sync == "close_only":
@@ -857,6 +867,16 @@ async def reverse_sync(
     try:
         for section in all_sections:
             if not section.ticket_link or not section.section_number:
+                continue
+
+            # Skip sections linked to a different ticket system
+            if section.ticket_link.system != system:
+                result.skipped.append(
+                    SyncSkipped(
+                        section_id=section.id,
+                        reason=f"ticket {section.ticket_link.ticket_id} linked to {section.ticket_link.system}, adapter is {system}",
+                    )
+                )
                 continue
 
             # Broken-ref pre-check. Fail-open if the ref store is unavailable —

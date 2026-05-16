@@ -27,7 +27,7 @@ from canon.parser.models import (
 )
 from canon.parser.parse import parse_spec
 from canon.sync.adapters.base import AdapterCapabilities
-from canon.sync.engine import backfill_fingerprints, forward_sync
+from canon.sync.engine import backfill_fingerprints, forward_sync, reverse_sync
 from canon.sync.models import (
     CreateTicketInput,
     CreateTicketResult,
@@ -568,6 +568,72 @@ Done section."""
         assert len(sync_result.closed) == 1
         assert len(adapter.updated) == 0  # Dry run: no write calls
         assert len(adapter.status_queries) == 1  # But status was checked
+
+    @pytest.mark.asyncio
+    async def test_forward_sync_skips_mismatched_ticket_system(self):
+        """Lifecycle sync skips sections linked to a different ticket system."""
+        raw = """---
+title: Test
+status: draft
+owner: test
+team: test
+---
+
+## 1. Jira Section
+
+<!-- canon:system:1 status:done -->
+<!-- canon:ticket:jira:PROJ-99 -->
+
+Done section linked to Jira."""
+        result = parse_spec(raw, ParseOptions(file_path="docs/specs/test.md"))
+        # MockAdapter.system_name is "github" — section is linked to "jira"
+        adapter = MockAdapter(
+            status_result=TicketStatusResult(
+                ticket_id="PROJ-99",
+                status=SectionStatus(state="todo"),
+                raw_status="open",
+            ),
+        )
+
+        _, sync_result = await forward_sync(
+            result.document, adapter, "test/repo", lifecycle_sync=True
+        )
+        # Should skip the Jira-linked section, not call the GitHub adapter
+        assert len(sync_result.closed) == 0
+        assert len(adapter.status_queries) == 0
+        skipped_reasons = [s.reason for s in sync_result.skipped]
+        assert any("jira" in r and "github" in r for r in skipped_reasons)
+
+    @pytest.mark.asyncio
+    async def test_reverse_sync_skips_mismatched_ticket_system(self):
+        """Reverse sync skips sections linked to a different ticket system."""
+        doc = _make_doc()
+        doc.sections = [
+            _make_section(
+                section_number="1",
+                title="Jira Task",
+                state="todo",
+                ticket_link=TicketLink(system="jira", ticket_id="PROJ-99", url=""),
+            ),
+        ]
+        doc.raw = "placeholder"
+        # MockAdapter.system_name is "github" — section is linked to "jira"
+        adapter = MockAdapter(
+            status_result=TicketStatusResult(
+                ticket_id="PROJ-99",
+                status=SectionStatus(state="in_progress"),
+                raw_status="In Progress",
+            ),
+        )
+
+        _, sync_result = await reverse_sync(
+            doc, adapter, repo="test/repo"
+        )
+        # Should skip the Jira-linked section, not call the GitHub adapter
+        assert len(sync_result.status_changed) == 0
+        assert len(adapter.status_queries) == 0
+        skipped_reasons = [s.reason for s in sync_result.skipped]
+        assert any("jira" in r and "github" in r for r in skipped_reasons)
 
 
 # ═══════════════════════════════════════════════════════════
