@@ -10,7 +10,7 @@
     {
       "name": "canon",
       "description": "AI-native spec documentation — verify code against specs, track coverage, maintain living docs. Powered by Canon.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "author": {
         "name": "Canon"
       },
