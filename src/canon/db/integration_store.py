@@ -61,7 +61,7 @@ class IntegrationStore:
                 provider,
                 display_name,
                 encrypted_config,
-                json.dumps(provider_metadata or {}),
+                provider_metadata or {},
                 connected_by,
             )
         return dict(row)
@@ -214,7 +214,7 @@ class IntegrationStore:
                     org_login,
                     provider,
                     encrypted_config,
-                    json.dumps(provider_metadata),
+                    provider_metadata,
                 )
         else:
             async with self._pool.acquire() as conn:

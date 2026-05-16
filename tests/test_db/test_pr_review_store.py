@@ -22,12 +22,14 @@ pytestmark = [
 @pytest.fixture
 async def store():
     """Create a PRReviewStore connected to a test database."""
-    import asyncpg
-
+    from canon.db.pool import create_pool
     from canon.db.pr_review_store import PRReviewStore
 
     dsn = os.environ["DATABASE_URL"]
-    pool = await asyncpg.create_pool(dsn, min_size=1, max_size=2)
+    # Use the project's pool factory so the JSONB codec is registered —
+    # otherwise asyncpg returns `analysis` as a raw string and the tests
+    # pass for the wrong reason (production hits the dict path).
+    pool = await create_pool(dsn, min_size=1, max_size=2)
 
     # Ensure the table exists (run migration or create manually)
     async with pool.acquire() as conn:
@@ -112,6 +114,14 @@ class TestGetLatestReview:
     async def test_returns_none_when_no_reviews(self, store):
         result = await store.get_latest_review("test-org/no-repo", 999)
         assert result is None
+
+    async def test_analysis_round_trips_as_dict(self, store):
+        # Regression: pre-codec, asyncpg returned `analysis` as a raw JSON
+        # string and every API consumer crashed on `analysis.get(...)`.
+        await store.upsert_review(**_REVIEW_DEFAULTS)
+        latest = await store.get_latest_review("test-org/test-repo", 42)
+        assert isinstance(latest["analysis"], dict)
+        assert latest["analysis"]["summary"] == "Test analysis"
 
 
 class TestGetReviewBySha:

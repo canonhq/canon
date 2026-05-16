@@ -81,7 +81,14 @@ async def run_refresh() -> int:
 
             # Check if refresh is needed based on last refresh timestamp.
             # Use a shorter threshold for broken integrations to speed recovery.
-            metadata = json.loads(row["provider_metadata"]) if row["provider_metadata"] else {}
+            try:
+                raw_metadata = row["provider_metadata"]
+                if isinstance(raw_metadata, str):
+                    raw_metadata = json.loads(raw_metadata)
+                metadata = raw_metadata or {}
+            except Exception:
+                logger.warning("Malformed provider_metadata for org %s — skipping", org_login)
+                continue
             last_refreshed = metadata.get("token_refreshed_at", 0)
             age = now - last_refreshed
             threshold = (
@@ -144,7 +151,7 @@ async def run_refresh() -> int:
                     WHERE id = $4
                     """,
                     encrypted,
-                    json.dumps(metadata),
+                    metadata,
                     new_status,
                     row["id"],
                 )
