@@ -44,6 +44,7 @@ class PRAnalysisContext(BaseModel):
         author: str
         base_branch: str
         head_branch: str
+        head_sha: str = ""
         url: str
 
     pr: PRInfo

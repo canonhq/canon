@@ -114,7 +114,11 @@ async def _handle_reanalyze(client, owner: str, repo: str, pr_number: int) -> No
         )
         return
 
+    from ...agent.analyzer import estimate_cost
     from ...agent.client import DEFAULT_AGENT_CONFIG
+
+    # Use PR data from the context (same API call that built the analysis input)
+    head_sha = context.pr.head_sha
 
     config = await load_repo_config(client, owner, repo)
     comment = format_analysis_comment(
@@ -123,9 +127,40 @@ async def _handle_reanalyze(client, owner: str, repo: str, pr_number: int) -> No
         base_url=_settings.platform_url,
         owner=owner,
         repo=repo,
+        pr_number=pr_number,
+        head_sha=head_sha,
         doc_patterns=config.specs.doc_paths,
     )
     await client.upsert_bot_comment(owner, repo, pr_number, comment)
+
+    # Persist review (best-effort)
+    try:
+        from .on_pull_request import _get_pr_review_store
+
+        pr_review_store = _get_pr_review_store()
+        if pr_review_store is not None and head_sha:
+            cost_str = estimate_cost(
+                result.tokens_used.input,
+                result.tokens_used.output,
+                DEFAULT_AGENT_CONFIG.model,
+            )
+            await pr_review_store.upsert_review(
+                org=owner,
+                repo=f"{owner}/{repo}",
+                pr_number=pr_number,
+                pr_url=context.pr.url,
+                pr_title=context.pr.title,
+                pr_author=context.pr.author,
+                head_sha=head_sha,
+                base_ref=context.pr.base_branch,
+                analysis=result.model_dump(mode="json"),
+                model=DEFAULT_AGENT_CONFIG.model,
+                tokens_in=result.tokens_used.input,
+                tokens_out=result.tokens_used.output,
+                cost_estimate=float(cost_str),
+            )
+    except Exception:
+        logger.warning("Failed to persist reanalyze review", exc_info=True)
 
 
 async def _handle_apply_docs(client, owner: str, repo: str, pr_number: int) -> None:
@@ -226,6 +261,7 @@ async def _build_pr_context(
                 author=pr["user"]["login"],
                 base_branch=pr["base"]["ref"],
                 head_branch=pr["head"]["ref"],
+                head_sha=pr["head"]["sha"],
                 url=pr["html_url"],
             ),
             files=files,

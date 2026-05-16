@@ -669,10 +669,10 @@ def format_analysis_comment(
     if preview_url:
         footer_parts.append(f"[preview]({preview_url})")
     if base_url and owner and repo and pr_number:
-        review_url = f"{base_url.rstrip('/')}/reviews/{owner}/{repo}/{pr_number}"
+        review_url = f"{base_url.rstrip('/')}/app/{owner}/reviews/{owner}/{repo}/{pr_number}"
         footer_parts.append(f"[View in Canon]({review_url})")
     elif base_url and owner and repo:
-        specs_url = f"{base_url.rstrip('/')}/{owner}/{repo}"
+        specs_url = f"{base_url.rstrip('/')}/app/{owner}/repos/{owner}/{repo}"
         footer_parts.append(f"[View in Canon]({specs_url})")
     footer_parts.extend(["dismiss", "reanalyze"])
 

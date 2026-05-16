@@ -10,7 +10,14 @@ from fastapi.responses import JSONResponse
 from ..auth.deps import require_permission
 from ..auth.models import CurrentUser
 from ..auth.permissions import Permission
-from .models import PRReviewResponse, RepoReviewListResponse, ReviewDetail, ReviewSummary
+from .models import (
+    OrgReviewListResponse,
+    OrgReviewSummary,
+    PRReviewResponse,
+    RepoReviewListResponse,
+    ReviewDetail,
+    ReviewSummary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +71,29 @@ def _check_owner_matches_org(owner: str, org: str) -> None:
             status_code=400,
             detail=f"Owner '{owner}' does not match organization '{org}'",
         )
+
+
+@router.get("/app/{org}/api/reviews")
+async def list_org_reviews(
+    request: Request,
+    org: str,
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    _user: CurrentUser = Depends(require_permission(Permission.SPECS_READ)),
+):
+    """List PR reviews across all repos in an org."""
+    store = _get_store(request)
+    if store is None:
+        return JSONResponse({"reviews": [], "total": 0}, status_code=200)
+
+    reviews = await store.list_reviews_for_org(org, limit=limit, offset=offset)
+    total = await store.count_reviews_for_org(org)
+    return OrgReviewListResponse(
+        reviews=[
+            OrgReviewSummary(repo=r.get("repo", ""), **_review_to_summary(r)) for r in reviews
+        ],
+        total=total,
+    )
 
 
 @router.get("/app/{org}/api/reviews/{owner}/{repo}")

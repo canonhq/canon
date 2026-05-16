@@ -1152,7 +1152,7 @@ class TestFormatCommentWithLinks:
             owner="acme",
             repo="myrepo",
         )
-        assert f"[View in Canon]({self.BASE}/acme/myrepo)" in comment
+        assert f"[View in Canon]({self.BASE}/app/acme/repos/acme/myrepo)" in comment
 
     def test_no_links_when_base_url_empty(self):
         result = self._make_result(

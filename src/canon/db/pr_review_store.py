@@ -165,12 +165,16 @@ class PRReviewStore:
         limit: int = 20,
         offset: int = 0,
     ) -> list[dict]:
-        """Paginated list of reviews across an org, newest first."""
+        """Paginated list of latest review per PR across an org, newest first."""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT * FROM pr_reviews
-                WHERE org = $1
+                SELECT * FROM (
+                    SELECT DISTINCT ON (repo, pr_number) *
+                    FROM pr_reviews
+                    WHERE org = $1
+                    ORDER BY repo, pr_number, created_at DESC
+                ) sub
                 ORDER BY created_at DESC
                 LIMIT $2 OFFSET $3
                 """,
@@ -190,5 +194,20 @@ class PRReviewStore:
                 WHERE repo = $1
                 """,
                 repo,
+            )
+        return row["cnt"] if row else 0
+
+    async def count_reviews_for_org(self, org: str) -> int:
+        """Count distinct PRs with reviews for an org."""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT COUNT(*) AS cnt FROM (
+                    SELECT DISTINCT repo, pr_number
+                    FROM pr_reviews
+                    WHERE org = $1
+                ) sub
+                """,
+                org,
             )
         return row["cnt"] if row else 0

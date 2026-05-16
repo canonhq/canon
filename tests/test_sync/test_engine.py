@@ -25,11 +25,13 @@ class MockAdapter:
         status_result: TicketStatusResult | None = None,
         create_error: Exception | None = None,
         status_error: Exception | None = None,
+        system: str = "jira",
     ) -> None:
         self.create_result = create_result
         self.status_result = status_result
         self.create_error = create_error
         self.status_error = status_error
+        self._system = system
         self.created: list[CreateTicketInput] = []
         self.updated: list[UpdateTicketInput] = []
         self.status_queries: list[str] = []
@@ -59,7 +61,7 @@ class MockAdapter:
 
     @property
     def system_name(self) -> str:
-        return "jira"
+        return self._system
 
     @property
     def capabilities(self):

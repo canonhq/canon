@@ -35,7 +35,7 @@ class TestDeepLink:
             repo="myrepo",
             pr_number=42,
         )
-        assert "[View in Canon](https://canonhq.co/reviews/acme/myrepo/42)" in comment
+        assert "[View in Canon](https://canonhq.co/app/acme/reviews/acme/myrepo/42)" in comment
 
     def test_fallback_to_repo_link_when_no_pr_number(self):
         result = _make_result()
@@ -46,7 +46,7 @@ class TestDeepLink:
             repo="myrepo",
             pr_number=0,
         )
-        assert "[View in Canon](https://canonhq.co/acme/myrepo)" in comment
+        assert "[View in Canon](https://canonhq.co/app/acme/repos/acme/myrepo)" in comment
 
     def test_no_link_when_no_base_url(self):
         result = _make_result()

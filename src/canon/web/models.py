@@ -333,3 +333,16 @@ class RepoReviewListResponse(BaseModel):
 
     reviews: list[ReviewSummary] = []
     total: int = 0
+
+
+class OrgReviewSummary(ReviewSummary):
+    """Review summary with repo context for org-level listings."""
+
+    repo: str = ""  # full owner/repo
+
+
+class OrgReviewListResponse(BaseModel):
+    """JSON response for GET /reviews (org-level)."""
+
+    reviews: list[OrgReviewSummary] = []
+    total: int = 0

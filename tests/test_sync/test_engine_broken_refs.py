@@ -91,7 +91,7 @@ def ref_store():
 
 class TestThreeFailuresFlipToBroken:
     async def test_flip(self, doc, ref_store):
-        adapter = MockAdapter(status_error=_http_404())
+        adapter = MockAdapter(status_error=_http_404(), system="github")
         for _ in range(3):
             await reverse_sync(
                 doc,
@@ -117,7 +117,7 @@ class TestBrokenRefIsSkipped:
             "consecutive_failures": 3,
             "last_recheck_at": recent,
         }
-        adapter = MockAdapter(status_error=_http_404())
+        adapter = MockAdapter(status_error=_http_404(), system="github")
         result = await reverse_sync(
             doc,
             adapter,
@@ -145,7 +145,8 @@ class TestSuccessClearsBroken:
                 ticket_id="456",
                 status=SectionStatus(state="done"),
                 raw_status="closed",
-            )
+            ),
+            system="github",
         )
         await reverse_sync(
             doc,
@@ -169,7 +170,7 @@ class TestDismissedRefIsSkipped:
             "consecutive_failures": 3,
             "last_recheck_at": old,
         }
-        adapter = MockAdapter(status_error=_http_404())
+        adapter = MockAdapter(status_error=_http_404(), system="github")
         await reverse_sync(
             doc,
             adapter,
@@ -188,7 +189,7 @@ class TestTransientFailureDoesNotIncrement:
             request=request,
             response=httpx.Response(500, request=request),
         )
-        adapter = MockAdapter(status_error=err)
+        adapter = MockAdapter(status_error=err, system="github")
         await reverse_sync(
             doc,
             adapter,
@@ -210,7 +211,8 @@ class TestStoreFailureFailsOpen:
                 ticket_id="456",
                 status=SectionStatus(state="done"),
                 raw_status="closed",
-            )
+            ),
+            system="github",
         )
         await reverse_sync(
             doc,

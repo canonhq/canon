@@ -570,6 +570,7 @@ async def on_pull_request(client, payload: dict) -> None:
                 author=pr["user"]["login"],
                 base_branch=pr["base"]["ref"],
                 head_branch=pr["head"]["ref"],
+                head_sha=pr["head"]["sha"],
                 url=pr["html_url"],
             ),
             files=files,

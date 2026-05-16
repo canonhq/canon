@@ -626,9 +626,7 @@ Done section linked to Jira."""
             ),
         )
 
-        _, sync_result = await reverse_sync(
-            doc, adapter, repo="test/repo"
-        )
+        _, sync_result = await reverse_sync(doc, adapter, repo="test/repo")
         # Should skip the Jira-linked section, not call the GitHub adapter
         assert len(sync_result.status_changed) == 0
         assert len(adapter.status_queries) == 0
