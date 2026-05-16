@@ -7,6 +7,10 @@ Write a spec, run Canon's tools against it, and see the feedback loop — all lo
 - Canon CLI installed (`pip install canonhq` — see [Installation](./installation))
 - A git repository (any repo works)
 
+::: tip Output Formatting
+Canon CLI output is colorized by default. Use `--no-color` for plain text (useful in CI pipelines or when piping output). Use `--json` on most commands for machine-readable output.
+:::
+
 ## Step 1: Initialize Canon
 
 ```bash
@@ -80,15 +84,15 @@ You'll see something like:
 
 ```
 Spec Coverage Dashboard
-═══════════════════════
+Overall: 1 specs | 3 sections | 8 ACs | 0% coverage
 
-user-notifications.md
-  §1 Background           — (no status)
-  §2 Email Notifications  — todo  (0/4 ACs checked)
-  §3 In-App Notifications — todo  (0/4 ACs checked)
-
-Overall: 0% realized
+Spec                         Status          Sections    ACs       Coverage
+User Notifications           draft           0/3         0/8       0%
 ```
+
+::: tip Quick Overview
+Run `canon dashboard` for a combined view of coverage, active tasks, and incomplete specs — all in one screen.
+:::
 
 ## Step 4: Lint It
 
@@ -105,21 +109,11 @@ canon tasks
 ```
 
 ```
-Tasks (from specs)
-══════════════════
+User Notifications (docs/specs/user-notifications.md)
 
-user-notifications.md
-  §2 Email Notifications  [todo]
-    - [ ] Email sent on new comment mentioning the user
-    - [ ] Email sent on spec status change (draft → in_progress)
-    - [ ] Unsubscribe link in every email
-    - [ ] Rate limit: max 10 emails per user per hour
-
-  §3 In-App Notifications  [todo]
-    - [ ] Notification bell shows unread count
-    - [ ] Click opens notification drawer
-    - [ ] Mark individual or all as read
-    - [ ] Notifications persist for 30 days
+ID          Section                        Status         ACs
+2           Email Notifications            todo           0/4
+3           In-App Notifications           todo           0/4
 ```
 
 ## Step 6: Start Work and Track Progress
@@ -167,6 +161,7 @@ You've seen the core loop: **write spec → track status → verify code → syn
 From here, layer on more automation:
 
 - **[GitHub App](./installation#github-app)** — automated PR analysis with spec realization comments
+- **[CLI Reference](/reference/cli)** — all commands, flags, and options
 - **[GitHub Actions](/guides/github-actions/)** — CI checks for spec lint, coverage, and sync
 - **[Claude Code Plugin](./installation#claude-code-plugin)** — spec-driven slash commands in your editor
 - **[Writing Specs](/guides/writing-specs)** — spec authoring best practices

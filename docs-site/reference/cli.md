@@ -1,12 +1,12 @@
 ---
 # This file is auto-generated. Do not edit manually.
-# Generated: 2026-04-23 00:00 UTC
+# Generated: 2026-05-15 00:00 UTC
 ---
 
 # CLI Reference
 
 ::: tip Auto-Generated
-This page was auto-generated from `canon --help` on 2026-04-23 00:00 UTC.
+This page was auto-generated from `canon --help` on 2026-05-15 00:00 UTC.
 See [source script](https://github.com/canonhq/canon/blob/main/docs-site/.vitepress/scripts/gen-cli-ref.py).
 :::
 
@@ -30,6 +30,16 @@ uvx --from canonhq canon --help
 ```
 usage: canon [-h]
 ```
+
+## Global Flags
+
+These flags are available on all commands:
+
+| Flag | Description |
+|------|-------------|
+| `--no-color` | Disable colored output (also respects `NO_COLOR` env var) |
+| `-q, --quiet` | Suppress non-essential output |
+| `-v, --verbose` | Enable debug-level logging |
 
 ### `canon setup`
 
@@ -752,3 +762,48 @@ usage: canon doctor [-h] [--json] [--fix]
 
 
 ---
+
+### `canon search`
+
+Search spec files by keyword. Searches section titles, body content, and acceptance criteria text.
+
+```bash
+usage: canon search [-h] [--status STATUS] [--spec SPEC] [--json] query
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `query` | Search terms (space-separated, case-insensitive) |
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--status STATUS` | Filter by section status (e.g. `todo`, `in_progress`, `done`) |
+| `--spec SPEC` | Limit search to a specific spec file |
+| `--json` | JSON output |
+
+**Exit codes:** 0 = results found, 1 = no results.
+
+
+---
+
+### `canon dashboard`
+
+Combined overview showing spec coverage, active tasks, and incomplete specs in a single view.
+
+```bash
+usage: canon dashboard [-h] [--json]
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | show this help message and exit |
+| `--json` | JSON output |
+
+Runs entirely locally — no network calls required.
