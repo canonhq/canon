@@ -11,7 +11,28 @@ from fastapi.testclient import TestClient
 
 from canon.auth.models import CurrentUser
 from canon.auth.permissions import Permission
-from canon.web.review_routes import router
+from canon.web.review_routes import _coerce_analysis, router
+
+
+class TestCoerceAnalysis:
+    def test_dict_passthrough(self):
+        d = {"summary": "x", "spec_references": [1]}
+        assert _coerce_analysis(d) is d
+
+    def test_json_string_decoded(self):
+        # Legacy rows occasionally have analysis stored as a JSON-encoded
+        # string — must decode rather than crash the whole list endpoint.
+        assert _coerce_analysis('{"summary": "x"}') == {"summary": "x"}
+
+    def test_garbage_string_returns_empty(self):
+        assert _coerce_analysis("not json at all") == {}
+
+    def test_json_string_of_list_returns_empty(self):
+        # A JSON-encoded array is valid JSON but not a dict — refuse it.
+        assert _coerce_analysis("[1, 2, 3]") == {}
+
+    def test_none_returns_empty(self):
+        assert _coerce_analysis(None) == {}
 
 
 def _fake_user():

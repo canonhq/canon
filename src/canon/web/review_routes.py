@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -24,9 +25,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _coerce_analysis(value: object) -> dict:
+    # JSONB rows usually return as dicts (via the pool's jsonb codec), but
+    # some legacy rows have analysis stored as a JSON-encoded string. Be
+    # tolerant of both so a single bad row can't 500 the whole list.
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except (ValueError, TypeError):
+            return {}
+    return {}
+
+
 def _review_to_summary(row: dict) -> dict:
     """Convert a pr_reviews DB row to a ReviewSummary dict."""
-    analysis = row.get("analysis") or {}
+    analysis = _coerce_analysis(row.get("analysis"))
     return {
         "id": row["id"],
         "pr_number": row["pr_number"],
@@ -55,7 +71,7 @@ def _review_to_summary(row: dict) -> dict:
 def _review_to_detail(row: dict) -> dict:
     """Convert a pr_reviews DB row to a ReviewDetail dict."""
     summary = _review_to_summary(row)
-    summary["analysis"] = row.get("analysis") or {}
+    summary["analysis"] = _coerce_analysis(row.get("analysis"))
     return summary
 
 
