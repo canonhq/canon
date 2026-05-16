@@ -27,7 +27,7 @@ _ORG_PATH_RE = re.compile(r"^/app/([^/]+)")
 # Org slugs reserved for internal routes.  If a GitHub org with one of these
 # names installs the app, tenant isolation will not work correctly — the
 # installation handler validates against this set.
-RESERVED_ORG_SLUGS = frozenset({"admin", "no-org", "choose-org", "setup"})
+RESERVED_ORG_SLUGS = frozenset({"admin", "api", "no-org", "choose-org", "setup"})
 
 # Path patterns from vulnerability scanners — used to tag auth_denied events
 # so dashboard charts can filter out bot noise.
@@ -38,7 +38,12 @@ _SCANNER_PATH_RE = re.compile(
 )
 
 
+_API_PATH_RE = re.compile(r"^/app/[^/]+/api/")
+
+
 def _is_api_request(request: Request) -> bool:
+    if _API_PATH_RE.search(request.url.path):
+        return True
     return request.headers.get("Accept", "").startswith("application/json")
 
 

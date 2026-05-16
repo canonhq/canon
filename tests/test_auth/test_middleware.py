@@ -62,6 +62,19 @@ class TestAuthMiddlewareEnabled:
         body = resp.json()
         assert body["detail"] == "Not authenticated"
 
+    async def test_api_path_returns_401_without_accept_header(self, client: AsyncClient):
+        """Unauthenticated /app/{org}/api/* returns 401 even without Accept header."""
+        resp = await client.get("/app/test-org/api/session")
+        assert resp.status_code == 401
+        body = resp.json()
+        assert body["detail"] == "Not authenticated"
+
+    async def test_non_api_path_still_redirects(self, client: AsyncClient):
+        """Non-API paths without Accept header still redirect to login."""
+        resp = await client.get("/app/test-org/dashboard")
+        assert resp.status_code == 307
+        assert resp.headers["location"] == "/auth/login"
+
     async def test_public_routes_unaffected(self, client: AsyncClient):
         """Health, readyz, and webhook routes remain public."""
         app.state.db_pool = None

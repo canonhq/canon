@@ -118,6 +118,62 @@ class TestDashboard:
                 assert resp.headers["location"] == "/app/my-org/"
 
 
+class TestApiSessionOrgResolution:
+    """Test org resolution in the /api/session endpoint."""
+
+    async def test_orgless_user_gets_empty_org_when_auth_enabled(self):
+        """Authenticated user with no orgs gets empty org in multi-tenant mode."""
+        from starlette.testclient import TestClient
+
+        from canon.settings import Settings
+
+        app.state.settings = Settings(
+            web_org="canonhq",
+            auth0_domain="test.us.auth0.com",
+            auth0_client_id="cid",
+            auth0_client_secret="csec",
+        )
+        user = {"sub": "auth0|123", "email": "new@example.com", "org_login": ""}
+        # Use sync TestClient to get a real session cookie past the middleware
+        with TestClient(app) as tc:
+            # Set session user so middleware doesn't block the request
+            tc.get("/app/")  # initialize session
+            with (
+                patch("canon.web.routes._get_user", return_value=user),
+                patch("canon.web.routes._get_user_orgs", return_value=[]),
+                patch(
+                    "canon.auth.middleware.AuthMiddleware.dispatch",
+                    side_effect=lambda self, req, call_next: call_next(req),
+                ),
+            ):
+                resp = tc.get("/app/canonhq/api/session")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["org"] == ""
+
+    async def test_orgless_user_gets_web_org_when_auth_disabled(self):
+        """Unauthenticated single-tenant user gets web_org fallback."""
+        from canon.settings import Settings
+
+        app.state.settings = Settings(web_org="my-company")
+        client = AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            follow_redirects=False,
+        )
+        with (
+            patch("canon.web.routes._get_user", return_value=None),
+            patch("canon.web.routes._get_user_orgs", return_value=[]),
+        ):
+            resp = await client.get(
+                "/app/my-company/api/session",
+                headers={"Accept": "application/json"},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["org"] == "my-company"
+
+
 class TestRepoDetail:
     async def test_not_found_returns_404(self, client: AsyncClient):
         resp = await client.get("/app/test-org/repos/org/nonexistent")

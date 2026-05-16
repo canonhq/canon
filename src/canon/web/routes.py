@@ -966,8 +966,12 @@ async def api_session(request: Request, org: str):
     github_user = request.session.get("github_user") if hasattr(request, "session") else None
 
     # Validate the route org against the user's orgs to prevent
-    # deep-links from injecting a wrong org into the session dict
-    resolved_org = org if org in orgs else (orgs[0] if orgs else settings.web_org)
+    # deep-links from injecting a wrong org into the session dict.
+    # In multi-tenant (auth_enabled) mode, orgless users get empty org
+    # so the SPA can route them to /app/no-org. In single-tenant mode,
+    # fall back to web_org so self-hosted installs work before registry setup.
+    fallback = "" if settings.auth_enabled else settings.web_org
+    resolved_org = org if (org and org in orgs) else (orgs[0] if orgs else fallback)
 
     return JSONResponse(
         content=_build_session_dict(user, resolved_org, orgs, github_user, settings)
@@ -1560,8 +1564,11 @@ async def _serve_spa(request: Request, org: str | None = None) -> HTMLResponse |
     github_user = request.session.get("github_user") if hasattr(request, "session") else None
     settings = request.app.state.settings
 
-    # Use the requested org if the user is a member, otherwise default
-    resolved_org = org if (org and org in orgs) else (orgs[0] if orgs else settings.web_org)
+    # Use the requested org if the user is a member, otherwise pick first org.
+    # In multi-tenant (auth_enabled) mode, orgless users must reach /app/no-org.
+    # In single-tenant mode, fall back to web_org for self-hosted installs.
+    fallback = "" if settings.auth_enabled else settings.web_org
+    resolved_org = org if (org and org in orgs) else (orgs[0] if orgs else fallback)
 
     session_data = json.dumps(_build_session_dict(user, resolved_org, orgs, github_user, settings))
 
