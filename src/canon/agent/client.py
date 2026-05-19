@@ -183,8 +183,6 @@ async def get_claude_client_for_org(
             return default_client
 
         sub = await billing_service.get_subscription(org_login)
-        if sub is None:
-            return default_client
 
         if sub.plan == Plan.STARTER:
             byok_key = await billing_service.get_anthropic_key(org_login)

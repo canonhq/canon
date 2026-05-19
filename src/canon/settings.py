@@ -219,6 +219,7 @@ class Settings(BaseSettings):
     stripe_starter_annual_price_id: str = ""
     stripe_pro_monthly_price_id: str = ""
     stripe_pro_annual_price_id: str = ""
+    stripe_internal_comp_coupon_id: str = ""
 
     # BYOK encryption
     byok_encryption_key: str = ""
