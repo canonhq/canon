@@ -266,6 +266,11 @@ class Settings(BaseSettings):
     # Admin audit log retention
     admin_audit_retention_days: int = Field(default=90, ge=1)
 
+    # Profile & Account hub — gates the tabbed /profile UI and the new
+    # editable account / security / preferences / notifications surfaces.
+    # See docs/specs/profile-account-management.md.
+    profile_hub_enabled: bool = False
+
     # Slack smarter-bot feature flag override
     slack_work_context_enabled_override: bool | None = Field(
         default=None,

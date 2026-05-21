@@ -301,6 +301,9 @@ def _serve_public_spa(request: Request, *, title: str, description: str) -> HTML
             "auth_enabled": settings.auth_enabled,
             "auth_mode": settings.auth_mode or "auth0",
             "environment": settings.environment,
+            "feature_flags": {
+                "profile_hub_enabled": settings.profile_hub_enabled,
+            },
         }
     )
     safe_data = session_data.replace("<", r"\u003c").replace(">", r"\u003e").replace("&", r"\u0026")
@@ -947,6 +950,9 @@ def _build_session_dict(
         "auth_enabled": settings.auth_enabled,
         "auth_mode": settings.auth_mode or "auth0",
         "environment": settings.environment,
+        "feature_flags": {
+            "profile_hub_enabled": settings.profile_hub_enabled,
+        },
     }
 
 

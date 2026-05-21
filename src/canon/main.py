@@ -64,6 +64,7 @@ from .db import (
     IntegrationStore,
     SessionStore,
     UserConnectionStore,
+    UserPreferencesStore,
     UserStore,
     close_pool,
     create_pool,
@@ -281,6 +282,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     app.state.registry = None
     app.state.agent_store = None
     app.state.user_store = None
+    app.state.user_preferences_store = None
     app.state.session_store = None
     app.state.session_evidence_store = None
     app.state.connection_store = None
@@ -302,6 +304,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
             app.state.session_evidence_store = SessionEvidenceStore(pool)
             app.state.user_store = UserStore(pool)
+            app.state.user_preferences_store = UserPreferencesStore(pool)
             app.state.session_store = SessionStore(pool)
             encryption_key = settings.byok_encryption_key
             if encryption_key:

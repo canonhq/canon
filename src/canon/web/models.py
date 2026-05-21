@@ -293,6 +293,102 @@ class ProfileResponse(BaseModel):
     inferred_role: str
 
 
+class LinkedGitHub(BaseModel):
+    login: str
+    name: str = ""
+
+
+class LinkedSlack(BaseModel):
+    team_id: str = ""
+    user_id: str = ""
+    user_name: str = ""
+
+
+class LinkedAccountsResponse(BaseModel):
+    """Linked identities for Profile → Linked accounts."""
+
+    github: LinkedGitHub | None = None
+    slack: LinkedSlack | None = None
+    idp_connection: str = ""
+
+
+class AccountResponse(BaseModel):
+    """Editable identity fields exposed by GET /api/profile/account."""
+
+    name: str
+    nickname: str = ""
+    picture: str = ""
+    email: str = ""
+    email_verified: bool = False
+
+
+class AccountPatch(BaseModel):
+    """Partial update for /api/profile/account."""
+
+    name: str | None = Field(default=None, max_length=100)
+    nickname: str | None = Field(default=None, max_length=100)
+    picture: str | None = Field(default=None, max_length=1024)
+
+
+class NotificationPreferences(BaseModel):
+    """Notification-related slice of user_preferences."""
+
+    slack_dm_enabled: bool
+    slack_dm_pr_comments: bool
+    slack_dm_spec_drift: bool
+    email_digest_cadence: Literal["off", "daily", "weekly"]
+    email_pr_comments: bool
+
+
+class NotificationPreferencesPatch(BaseModel):
+    """Partial update for notification preferences."""
+
+    slack_dm_enabled: bool | None = None
+    slack_dm_pr_comments: bool | None = None
+    slack_dm_spec_drift: bool | None = None
+    email_digest_cadence: Literal["off", "daily", "weekly"] | None = None
+    email_pr_comments: bool | None = None
+
+
+class AppearancePreferences(BaseModel):
+    """Appearance + locale slice of user_preferences."""
+
+    theme: Literal["system", "light", "dark"]
+    timezone: str
+    relative_time: bool
+
+
+class AppearancePreferencesPatch(BaseModel):
+    """Partial update for appearance preferences."""
+
+    theme: Literal["system", "light", "dark"] | None = None
+    timezone: str | None = None
+    relative_time: bool | None = None
+
+
+class ProfileSession(BaseModel):
+    """A single active web session for the current user."""
+
+    id: str
+    device_label: str
+    created_at: str  # ISO8601
+    last_used_at: str  # ISO8601
+    expires_at: str  # ISO8601
+    is_current: bool
+
+
+class ProfileSessionsResponse(BaseModel):
+    """JSON response for GET /api/profile/security/sessions."""
+
+    sessions: list[ProfileSession]
+
+
+class RevokeOthersResponse(BaseModel):
+    """JSON response for POST /api/profile/security/sessions/revoke-others."""
+
+    revoked: int
+
+
 class ReviewSummary(BaseModel):
     """Summary of a single PR review."""
 

@@ -13,6 +13,7 @@ from .registry import InstallationRegistry
 from .schema import ensure_schema
 from .session_store import SessionStore
 from .sync_history_store import SyncHistoryStore
+from .user_preferences_store import UserPreferencesStore
 from .user_store import UserStore
 
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     "SessionStore",
     "SyncHistoryStore",
     "UserConnectionStore",
+    "UserPreferencesStore",
     "UserStore",
     "close_pool",
     "create_pool",
