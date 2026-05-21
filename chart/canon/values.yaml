@@ -184,7 +184,11 @@ secrets:
   ## @param secrets.smtp.existingSecret Use existing secret
   smtp:
     host: ""
-    port: "587"
+    # Default 2587 (alternate SES STARTTLS port). DigitalOcean blocks
+    # outbound 25/465/587 on all Droplets/DOKS nodes as anti-spam policy.
+    # SES exposes 2587 and 2465 specifically for this case. If running on
+    # infra that allows 587, override here or in values-production.yaml.
+    port: "2587"
     user: ""
     password: ""
     from: ""
