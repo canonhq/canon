@@ -278,6 +278,15 @@ class Settings(BaseSettings):
     # safety check; this flag is the additional kill-switch.
     allow_self_serve_delete: bool = True
 
+    # HMAC secret for the Auth0 post-email-change Action (§T9 of
+    # profile-account-management). When unset,
+    # POST /webhooks/auth0/email-changed returns 503 — the email-change
+    # endpoint still works (Auth0 dispatches the verification mail), but
+    # Canon's `users.email` only updates on the user's next login instead
+    # of on Auth0's webhook callback. The Auth0 Action source +
+    # Terraform wiring live in a follow-up infra PR.
+    auth0_action_secret: SecretStr | None = None
+
     # Slack smarter-bot feature flag override
     slack_work_context_enabled_override: bool | None = Field(
         default=None,

@@ -99,4 +99,26 @@ class OIDCProvider(Protocol):
     async def remove_org_member(self, *, org_id: str, user_id: str) -> None:
         return None
 
+    async def send_email_change_verification(self, user_id: str, new_email: str) -> None:
+        """Begin an email-change verification flow for ``user_id``.
+
+        Implementations should:
+
+        1. Update the IdP record so the new email is staged but marked
+           unverified (so the user can't log in with it yet).
+        2. Dispatch a verification mail to ``new_email`` containing a
+           one-time link that, when clicked, marks the address verified.
+
+        The Auth0 implementation additionally triggers a post-verification
+        Action (configured separately) that POSTs to Canon's
+        ``/webhooks/auth0/email-changed`` so the ``users.email`` mirror
+        updates immediately rather than waiting for next login.
+
+        Default raises NotImplementedError so a misconfigured provider
+        surfaces clearly instead of silently no-op'ing.
+        """
+        raise NotImplementedError(
+            "send_email_change_verification is not implemented by this provider"
+        )
+
     async def aclose(self) -> None: ...

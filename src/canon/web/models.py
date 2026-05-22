@@ -335,6 +335,31 @@ class AccountPatch(BaseModel):
     picture: str | None = Field(default=None, max_length=1024)
 
 
+class AccountEmailChangeRequest(BaseModel):
+    """Body for POST /api/profile/account/email — initiate IdP-side email change.
+
+    Email format is validated by the route (the route's existing email
+    regex is the project's canonical check; centralising it in the model
+    would split that contract). Min/max bounds here reject empty and
+    pathological inputs at the boundary.
+    """
+
+    new_email: str = Field(min_length=3, max_length=320)
+
+
+class AccountEmailChangeResponse(BaseModel):
+    """Acknowledgement that the IdP verification email has been dispatched.
+
+    The ``users.email`` mirror updates later — either when the user's
+    Auth0 verification triggers the post-email-change Action webhook, or
+    (if the Action isn't wired) on the user's next login via the standard
+    OIDC upsert path.
+    """
+
+    verification_sent: Literal[True] = True
+    new_email: str
+
+
 class NotificationPreferences(BaseModel):
     """Notification-related slice of user_preferences."""
 

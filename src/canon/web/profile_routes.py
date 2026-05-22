@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
@@ -18,6 +19,8 @@ from ..auth.permissions import (
     Role,
 )
 from .models import (
+    AccountEmailChangeRequest,
+    AccountEmailChangeResponse,
     AccountPatch,
     AccountResponse,
     AppearancePreferences,
@@ -705,6 +708,86 @@ async def update_account(
         email=user.email or "",
         email_verified=bool((updated or {}).get("email_verified", True)),
     )
+
+
+# RFC 5321 — practical limit; full RFC 5322 grammar is intentionally not
+# implemented (90%+ of validation value at <1% of edge-case cost).
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+@profile_router.post(
+    "/app/{org}/api/profile/account/email",
+    response_model=AccountEmailChangeResponse,
+    status_code=202,
+)
+async def change_account_email(
+    request: Request,
+    org: str,
+    body: AccountEmailChangeRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> AccountEmailChangeResponse:
+    """Initiate an IdP-side email-change verification flow (§T9).
+
+    Dispatches the verification mail via the auth provider. Canon's
+    ``users.email`` mirror does NOT update here — it lands later, either:
+
+    - immediately when the user's Auth0 verification triggers the
+      post-email-change Action webhook (``POST /webhooks/auth0/email-changed``);
+    - or on their next login via the standard OIDC upsert path, if the
+      Action isn't wired (e.g. ``auth0_action_secret`` unset).
+    """
+    if user.is_anonymous:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    new_email = body.new_email.strip().lower()
+    if not _EMAIL_RE.fullmatch(new_email):
+        raise HTTPException(status_code=422, detail="Valid email required")
+    if user.email and new_email == user.email.strip().lower():
+        # No-op request — Auth0 would silently succeed but we'd burn a
+        # verification email send. Surface as 409 so the UI can branch.
+        raise HTTPException(
+            status_code=409,
+            detail="New email is the same as the current email",
+        )
+
+    provider = getattr(request.app.state, "oidc_provider", None)
+    candidate = (
+        getattr(provider, "send_email_change_verification", None) if provider is not None else None
+    )
+    if not callable(candidate):
+        raise HTTPException(
+            status_code=501,
+            detail="Email-change verification is not supported by this identity provider",
+        )
+
+    try:
+        await candidate(user.sub, new_email)
+    except NotImplementedError as exc:
+        # Provider declared the method but raised — treat as 501 so the UI
+        # branches the same way as a missing-method provider.
+        raise HTTPException(
+            status_code=501,
+            detail="Email-change verification is not supported by this identity provider",
+        ) from exc
+    except Exception as exc:
+        # Same anti-pattern guard as update_account: don't leak provider
+        # response bodies (Auth0 errors can include user-existence oracles).
+        logger.warning("Provider send_email_change_verification failed", exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to send verification email. Please try again later.",
+        ) from exc
+
+    await _emit_profile_audit(
+        request,
+        event_type="profile.account.email_change_requested",
+        user=user,
+        # Length only — never persist the raw new email in audit detail
+        # (it lives in the provider's mail server and the webhook payload).
+        detail={"new_email_length": len(new_email)},
+    )
+
+    return AccountEmailChangeResponse(new_email=new_email)
 
 
 # --- Linked accounts --------------------------------------------------------

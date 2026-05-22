@@ -83,6 +83,27 @@ class UserStore:
             )
         return dict(row) if row else None
 
+    async def update_email_by_sub(self, oidc_sub: str, new_email: str) -> bool:
+        """Update ``users.email`` for the given OIDC subject.
+
+        Used by the Auth0 post-email-change webhook (§T9). Returns True if
+        a row was updated, False if no user with that sub exists (which
+        the webhook caller logs but tolerates — the user could have been
+        deleted between the Auth0 verification and the webhook fire).
+
+        Distinct from ``upsert_user`` because the webhook payload only
+        carries ``oidc_sub`` + ``new_email``; we don't want to clobber
+        ``name``/``picture`` with empty strings or fabricate a new row
+        for a sub we've never seen.
+        """
+        async with self._pool.acquire() as conn:
+            result = await conn.execute(
+                "UPDATE users SET email = $1 WHERE oidc_sub = $2",
+                new_email,
+                oidc_sub,
+            )
+        return result == "UPDATE 1"
+
     async def count_users(self) -> int:
         """Return the total number of users in the database."""
         async with self._pool.acquire() as conn:

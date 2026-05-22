@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 from canon.webhooks.processor import ProcessResult, TicketEvent, process_ticket_event
 from canon.webhooks.verify import (
     verify_asana_signature,
+    verify_hmac_sha256,
     verify_jira_signature,
     verify_linear_signature,
 )
@@ -336,3 +337,101 @@ async def asana_webhook(request: Request) -> Response:
         content="Asana reverse sync not yet implemented",
         status_code=501,
     )
+
+
+# ── Auth0 post-email-change Action callback ────────────────────────
+
+
+@router.post("/auth0/email-changed")
+async def auth0_email_changed_webhook(request: Request) -> Response:
+    """Receive the post-email-change callback from an Auth0 Action.
+
+    The Action runs after Auth0 finishes its own email-verification flow
+    and POSTs ``{user_id, new_email, verified_at}`` here, signed with an
+    HMAC-SHA256 of the raw body using ``settings.auth0_action_secret``
+    as the key. On valid signature + matching user we update
+    ``users.email`` and emit a ``profile.email.verified`` audit row.
+
+    Returns:
+        * 503 if ``auth0_action_secret`` is unset — feature disabled.
+          (The IdP-side email change still works; Canon's DB mirror just
+          updates lazily on next login until the secret + Action are
+          deployed via the follow-up infra PR.)
+        * 401 if the HMAC signature is missing or mismatched.
+        * 400 if the body is malformed or required fields are missing.
+        * 404 if no Canon user matches the OIDC sub (the user may have
+          been deleted between the verification click and this callback).
+        * 200 on success.
+    """
+    settings = request.app.state.settings
+    secret_obj = getattr(settings, "auth0_action_secret", None)
+    if secret_obj is None:
+        _record_misconfigured_503("auth0/email-changed", request)
+        return Response(
+            content="Auth0 Action secret not configured",
+            status_code=503,
+        )
+
+    body = await request.body()
+    if len(body) > _MAX_BODY_BYTES:
+        return Response(content="Payload too large", status_code=413)
+
+    sig = request.headers.get("x-canon-signature", "")
+    if not sig or not verify_hmac_sha256(body, sig, secret_obj.get_secret_value()):
+        return Response(content="Invalid signature", status_code=401)
+
+    try:
+        payload = json.loads(body or b"{}")
+    except json.JSONDecodeError:
+        return Response(content="Malformed JSON", status_code=400)
+
+    user_id = payload.get("user_id", "")
+    new_email = payload.get("new_email", "")
+    if not user_id or not new_email:
+        return Response(
+            content="Required fields missing: user_id, new_email",
+            status_code=400,
+        )
+
+    user_store = getattr(request.app.state, "user_store", None)
+    if user_store is None:
+        # Misconfigured deployment — surface explicitly, don't silently 200.
+        return Response(
+            content="user_store not configured",
+            status_code=503,
+        )
+
+    updated = await user_store.update_email_by_sub(user_id, new_email)
+    if not updated:
+        # No Canon row for this sub. The most likely cause is that the
+        # user self-deleted between Auth0 verification and this callback.
+        # Log + 404 so Auth0 stops retrying.
+        logger.warning(
+            "auth0/email-changed: no Canon user for sub=%s — verification ignored",
+            user_id,
+        )
+        return Response(content="User not found", status_code=404)
+
+    # Audit AFTER the DB mirror update so a verified-email row in
+    # audit_events always corresponds to a real users.email change.
+    audit_store = getattr(request.app.state, "audit_store", None)
+    if audit_store is not None:
+        try:
+            await audit_store.log(
+                event_type="profile.email.verified",
+                resource_type="user",
+                resource_id=user_id,
+                actor_id=None,
+                actor_sub=user_id,
+                org="",  # Auth0 Actions fire outside any org context.
+                detail={"new_email_length": len(new_email)},
+                ip_address=None,
+            )
+        except Exception:
+            logger.error(
+                "Failed to record profile.email.verified audit event for %s",
+                user_id,
+                exc_info=True,
+            )
+
+    return Response(content="OK", status_code=200)

@@ -269,6 +269,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
                 name,
                 name.replace("_webhook_secret", ""),
             )
+    if getattr(settings, "auth0_action_secret", None) is None:
+        logger.info(
+            "auth0_action_secret is not set — /webhooks/auth0/email-changed will return 503"
+        )
 
     # Shared async HTTP client (kept for backward compatibility; provider uses its own)
     import httpx as _httpx

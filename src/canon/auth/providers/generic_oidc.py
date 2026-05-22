@@ -304,6 +304,17 @@ class GenericOIDCProvider:
         """Generic OIDC has no management API — raises to surface the gap."""
         raise RuntimeError("Generic OIDC provider does not support remove_org_member")
 
+    async def send_email_change_verification(self, user_id: str, new_email: str) -> None:
+        """Generic OIDC has no Management API — surface the gap loudly.
+
+        The profile route catches NotImplementedError and returns 501 so the
+        UI prompts the user to change their email through the IdP's own
+        account settings instead of through Canon.
+        """
+        raise NotImplementedError(
+            "Generic OIDC provider does not support email-change verification"
+        )
+
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self._http.aclose()
