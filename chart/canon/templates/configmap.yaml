@@ -28,6 +28,7 @@ data:
   SRE_WEEKLY_DIGEST_ENABLED: {{ .Values.config.sreWeeklyDigestEnabled | quote }}
   DEPLOYMENT_MODE: {{ .Values.config.deploymentMode | quote }}
   ADMIN_AUDIT_RETENTION_DAYS: {{ .Values.config.adminAuditRetentionDays | quote }}
+  PROFILE_HUB_ENABLED: {{ .Values.config.profileHubEnabled | quote }}
   {{- /*
     Use ne (toString …) "" instead of a bare truthiness check: Go templates
     treat the YAML boolean `false` (unquoted) as falsy, which would silently

@@ -103,6 +103,16 @@ class TestDefaultValues:
         smtp_secrets = [s for s in secrets if "smtp" in s.get("metadata", {}).get("name", "")]
         assert len(smtp_secrets) == 0, "SMTP Secret should not be created with empty smtp values"
 
+    def test_profile_hub_disabled_by_default(self):
+        """T13 — OSS / self-hosted default ships with the hub gated off."""
+        data = _configmap_data(self._manifests)
+        assert data.get("PROFILE_HUB_ENABLED") == "false", (
+            "Profile hub must default OFF in the base chart so a fresh "
+            "OSS deploy doesn't expose self-serve delete + email-change "
+            "UI before the operator has vetted them. Got "
+            f"{data.get('PROFILE_HUB_ENABLED')!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestProductionValues
@@ -143,6 +153,22 @@ class TestProductionValues:
         data = _configmap_data(self._manifests)
         assert data.get("ENVIRONMENT") == "production", (
             f"Expected ENVIRONMENT=production, got {data.get('ENVIRONMENT')!r}"
+        )
+
+    def test_profile_hub_enabled_in_production(self):
+        """T13 — production overlay flips the Profile & Account hub on.
+
+        If this assertion ever fails, the gated tabs (Account, Security,
+        Notifications, Preferences, Linked, Danger) silently disappear
+        from the UI in prod with no other signal. The default-off case
+        is covered separately in TestDefaultValues so we know the OSS
+        chart still ships gated.
+        """
+        data = _configmap_data(self._manifests)
+        assert data.get("PROFILE_HUB_ENABLED") == "true", (
+            "Profile hub must be ON in production — T13 of "
+            "profile-account-management. Got "
+            f"{data.get('PROFILE_HUB_ENABLED')!r}"
         )
 
 

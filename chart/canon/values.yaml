@@ -247,6 +247,12 @@ config:
   sreWeeklyDigestEnabled: "false"
   deploymentMode: "development"
   adminAuditRetentionDays: "90"
+  ## Profile & Account hub (T13 of profile-account-management). Default
+  ## off in OSS / self-hosted so a fresh deploy doesn't expose self-serve
+  ## delete + email-change + linked-accounts UI until the operator has
+  ## had a chance to vet them. The production overlay flips this to
+  ## "true" — see values-production.yaml.
+  profileHubEnabled: "false"
 
 ## @section Service parameters
 ## @param service.type Kubernetes service type
