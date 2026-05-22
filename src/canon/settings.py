@@ -271,6 +271,13 @@ class Settings(BaseSettings):
     # See docs/specs/profile-account-management.md.
     profile_hub_enabled: bool = False
 
+    # Self-serve account delete (§8.2). Default True in cloud; OSS operators
+    # who don't want users wiping themselves out of a single-tenant deploy
+    # can set CANON_ALLOW_SELF_SERVE_DELETE=false (or override in CANON.yaml).
+    # The endpoint still requires typed-email confirmation and a sole-admin
+    # safety check; this flag is the additional kill-switch.
+    allow_self_serve_delete: bool = True
+
     # Slack smarter-bot feature flag override
     slack_work_context_enabled_override: bool | None = Field(
         default=None,

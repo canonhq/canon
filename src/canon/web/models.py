@@ -5,10 +5,15 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from ..admin.models import BlockedOrg
 from ..config.parse import CanonConfig
 from ..parser.models import SpecDocument
+
+# Re-export so the web-facing response shape lives in this module while the
+# domain type stays with the admin store that produces it.
+__all_blocked_org__ = BlockedOrg
 
 
 class SpecSummary(BaseModel):
@@ -387,6 +392,45 @@ class RevokeOthersResponse(BaseModel):
     """JSON response for POST /api/profile/security/sessions/revoke-others."""
 
     revoked: int
+
+
+class DangerDeleteRequest(BaseModel):
+    """Body for DELETE /api/profile/danger — typed-email confirmation.
+
+    ``confirm`` is bounded so blank / whitespace-only / pathological inputs
+    fail Pydantic validation (422) before reaching the route. The route
+    still owns the equality check vs the session user's email; this model
+    just rejects values that couldn't possibly be an email address.
+    """
+
+    confirm: str = Field(min_length=3, max_length=320)
+
+
+class DangerDeleteResponse(BaseModel):
+    """Success body. UI hard-redirects to logout_url after receiving this.
+
+    Frozen + both fields defaulted because the route always returns the
+    same response on success; the type exists for OpenAPI/TS-codegen.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    deleted: Literal[True] = True
+    logout_url: str = "/auth/logout"
+
+
+# DangerDeleteBlockedOrg is the same shape as canon.admin.models.BlockedOrg;
+# we re-export the domain type as the response model so the in-transaction
+# sole-admin recheck can hand its typed list directly to the response
+# without re-validating.
+DangerDeleteBlockedOrg = BlockedOrg
+
+
+class DangerDeleteBlockedResponse(BaseModel):
+    """409 body when sole-admin check refuses the delete."""
+
+    error: Literal["sole_admin_block"] = "sole_admin_block"
+    sole_admin_of: list[BlockedOrg]
 
 
 class ReviewSummary(BaseModel):

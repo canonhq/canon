@@ -7,6 +7,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
+from ..admin.store import SoleAdminBlockedError
 from ..auth.deps import get_current_user, require_permission
 from ..auth.models import CurrentUser
 from ..auth.permissions import (
@@ -21,6 +22,9 @@ from .models import (
     AccountResponse,
     AppearancePreferences,
     AppearancePreferencesPatch,
+    DangerDeleteBlockedResponse,
+    DangerDeleteRequest,
+    DangerDeleteResponse,
     LinkedAccountsResponse,
     LinkedGitHub,
     LinkedSlack,
@@ -104,6 +108,12 @@ async def api_profile(
 #: future code path that *does* present the refresh cookie (e.g. an API
 #: client calling these routes from the auth-scoped path) gets correct
 #: `is_current` flagging without further changes.
+#:
+#: The self-serve delete route (`delete_account` below) mirrors this split:
+#: the `users` row cascade only wipes CLI-tracked `sessions` rows, so the
+#: route additionally calls `request.session.clear()` to invalidate the
+#: browser's Starlette session cookie. Two places to touch on any future
+#: logout/session model rework.
 _REFRESH_COOKIE = "sw_refresh"
 
 
@@ -152,9 +162,29 @@ async def _emit_profile_audit(
     resource_id: str | None = None,
     detail: dict | None = None,
 ) -> None:
-    """Best-effort audit-log emission for self-service profile actions."""
+    """Best-effort audit-log emission for self-service profile actions.
+
+    ``audit_events.resource_id`` is ``TEXT NOT NULL`` at the DB layer, so
+    callers that omit ``resource_id`` would silently fail the INSERT and
+    get swallowed below. For profile actions the natural subject is the
+    user themselves, so we default ``resource_id`` to ``user.sub`` —
+    matches the actor and keeps the not-null constraint satisfied without
+    forcing every caller to pass the same value.
+
+    ``profile.account.*`` failures are logged at ``error`` (vs ``warning``
+    for the rest) because the account-delete audit row is the only
+    forensic trace of a deleted user — losing it is a far bigger deal
+    than missing one of the more granular events.
+    """
     audit_store = getattr(request.app.state, "audit_store", None)
     if audit_store is None:
+        if event_type.startswith("profile.account."):
+            logger.error(
+                "Audit store not configured — %s event lost (user=%s, detail=%s)",
+                event_type,
+                user.sub,
+                detail,
+            )
         return
     try:
         # Local import to avoid a circular dependency with admin.routes.
@@ -165,7 +195,7 @@ async def _emit_profile_audit(
         await audit_store.log(
             event_type=event_type,
             resource_type="user_session",
-            resource_id=resource_id,
+            resource_id=resource_id or user.sub or "anonymous",
             actor_id=None,
             actor_sub=user.sub,
             org=user.org_login,
@@ -173,7 +203,8 @@ async def _emit_profile_audit(
             ip_address=_client_ip(request),
         )
     except Exception:
-        logger.warning("Failed to record audit event %s", event_type, exc_info=True)
+        log = logger.error if event_type.startswith("profile.account.") else logger.warning
+        log("Failed to record audit event %s", event_type, exc_info=True)
 
 
 def _serialize_session(row: dict, *, current_id: str | None) -> ProfileSession:
@@ -744,3 +775,187 @@ async def unlink_slack(
         user=user,
     )
     return Response(status_code=204)
+
+
+# ─── §8.2 Danger zone: self-serve account delete ─────────────────────────
+
+
+@profile_router.delete("/app/{org}/api/profile/danger")
+async def delete_account(
+    request: Request,
+    org: str,
+    body: DangerDeleteRequest,
+    user: CurrentUser = Depends(get_current_user),
+) -> Response:
+    """Hard-delete the caller's account from Canon and then from Auth0.
+
+    Guarded by:
+
+    1. ``settings.allow_self_serve_delete`` — operator kill-switch (default
+       True in cloud).
+    2. ``body.confirm`` must equal the caller's email — typed-confirmation.
+    3. ``check_sole_admin_orgs`` — refuse with 409 if removing this user
+       would leave the deployment without any admin.
+
+    On success the user row is gone from Canon (cascades wipe sessions and
+    api_keys) and the Auth0 user is deleted; the response carries a logout
+    URL so the frontend can hard-redirect.
+    """
+    if user.is_anonymous:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    settings = getattr(request.app.state, "settings", None)
+    if settings is None:
+        # Lifespan didn't run (test path that bypassed _setup, or a
+        # misconfigured deployment). Surface explicitly rather than letting
+        # an AttributeError become an opaque 500.
+        raise HTTPException(
+            status_code=503,
+            detail="Account delete is unavailable: settings not initialized",
+        )
+    if not settings.allow_self_serve_delete:
+        raise HTTPException(
+            status_code=403,
+            detail="Self-serve account delete is disabled on this deployment",
+        )
+
+    # Typed-email confirmation. Compare case-insensitively because users
+    # may type their email differently than the IdP stored it, but block
+    # blank/whitespace-only inputs that would always match an empty email.
+    expected = (user.email or "").strip().lower()
+    submitted = (body.confirm or "").strip().lower()
+    if not expected or submitted != expected:
+        raise HTTPException(
+            status_code=400,
+            detail="Confirmation does not match your email address",
+        )
+
+    admin_store = getattr(request.app.state, "admin_store", None)
+    user_store = getattr(request.app.state, "user_store", None)
+    if admin_store is None or user_store is None:
+        # Misconfigured deployment (no DB pool). Don't silently 200.
+        raise HTTPException(
+            status_code=503,
+            detail="Account delete is unavailable: database not configured",
+        )
+
+    # User may have authenticated via Auth0 but have no canon DB row yet
+    # (e.g. first-login pre-mirror). Skip the DB delete in that case but
+    # still attempt the Auth0 delete so they're not stuck.
+    db_row = await user_store.get_user_by_sub(user.sub)
+    user_db_id: int | None = None
+    if db_row is not None:
+        user_db_id = db_row.get("id")
+        if user_db_id is None:
+            # db_row exists but lacks an id — UserStore contract violation.
+            # Don't silently skip the DB delete and pretend it was a
+            # pre-mirror case; the actual user record might still be there.
+            logger.error("user_store.get_user_by_sub returned row without id: %s", db_row)
+            raise HTTPException(
+                status_code=500,
+                detail="Could not delete account. Please try again.",
+            )
+
+    if user_db_id is not None:
+        blocked = await admin_store.check_sole_admin_orgs(user_db_id)
+        if blocked:
+            return Response(
+                content=DangerDeleteBlockedResponse(sole_admin_of=blocked).model_dump_json(),
+                status_code=409,
+                media_type="application/json",
+            )
+
+    provider = getattr(request.app.state, "oidc_provider", None)
+    auth0_delete = None
+    # callable() rather than hasattr() so a non-callable attribute (mock,
+    # NotImplementedError stub, partial provider) doesn't slip through and
+    # raise TypeError that gets swallowed below as a generic Auth0 failure.
+    candidate = getattr(provider, "delete_user", None) if provider is not None else None
+    if callable(candidate):
+        auth0_delete = candidate
+
+    # Split the DB delete from the Auth0 delete so we can distinguish
+    # "DB never committed" (user still exists — must 500) from "DB
+    # committed but Auth0 cleanup failed" (user gone from Canon — log
+    # and continue, a retry from any admin endpoint clears Auth0).
+    #
+    # block_if_sole_admin=True re-runs the sole-admin check inside the
+    # delete transaction, after the FOR UPDATE row lock — this closes
+    # the TOCTOU race where two admins simultaneously pass the
+    # pre-delete check_sole_admin_orgs gate and both commit, leaving
+    # zero admins.
+    snapshot = None
+    if user_db_id is not None:
+        try:
+            snapshot = await admin_store.delete_user_atomic(
+                user_db_id,
+                auth0_delete=None,
+                block_if_sole_admin=True,
+            )
+        except SoleAdminBlockedError as exc:
+            return Response(
+                content=DangerDeleteBlockedResponse(
+                    sole_admin_of=exc.blocked_orgs
+                ).model_dump_json(),
+                status_code=409,
+                media_type="application/json",
+            )
+        except Exception as exc:
+            logger.error("DB delete failed for user_id=%s", user_db_id, exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail="Could not delete account. Please try again.",
+            ) from exc
+        if snapshot is None:
+            # Row vanished mid-transaction (concurrent delete by an admin
+            # endpoint, or the row was already gone). Don't pretend the
+            # delete just happened — surface so the caller can retry as a
+            # logged-out user.
+            raise HTTPException(
+                status_code=404,
+                detail="Account not found",
+            )
+
+    target_sub = (snapshot or {}).get("oidc_sub") or user.sub
+    if auth0_delete is not None and target_sub:
+        try:
+            await auth0_delete(target_sub)
+        except Exception:
+            logger.error(
+                "Auth0 delete failed for sub=%s after DB delete committed",
+                target_sub,
+                exc_info=True,
+            )
+
+    # Snapshot fields are intentionally minimized: just enough to recover
+    # an orphaned Auth0 user (oidc_sub) and to attribute the audit row
+    # (email, role). `email` lands in audit_events.detail JSONB and
+    # outlives the users-table delete — that's the right trade-off for
+    # an account-deletion audit trail (GDPR "right to be forgotten" still
+    # leaves an audit row by design) but worth knowing for downstream
+    # compliance reviews. `oidc_sub` is duplicated to actor_sub_snapshot
+    # by the audit store, kept here so the JSON payload is self-contained.
+    await _emit_profile_audit(
+        request,
+        event_type="profile.account.deleted",
+        user=user,
+        resource_id=str(user_db_id) if user_db_id is not None else user.sub,
+        detail={
+            "snapshot": {
+                "email": (snapshot or {}).get("email") or user.email,
+                "role": (snapshot or {}).get("role"),
+                "oidc_sub": user.sub,
+            },
+            "had_db_row": user_db_id is not None,
+        },
+    )
+
+    # Clear the Starlette session so the next page doesn't see stale auth.
+    if hasattr(request, "session"):
+        request.session.clear()
+
+    return Response(
+        content=DangerDeleteResponse().model_dump_json(),
+        status_code=200,
+        media_type="application/json",
+    )
